@@ -1,0 +1,21 @@
+{
+  "manifest_version": 1,
+  "bindings": [
+    {
+      "hardware": "ntc_1",
+      "driver": "ntc",
+      "role": "air_temp",
+      "module": "equipment",
+      "settings": {
+        "beta": 3900,
+        "offset": 0.5
+      }
+    },
+    {
+      "hardware": "relay_1",
+      "driver": "relay",
+      "role": "second",
+      "module": "equipment"
+    }
+  ]
+}

@@ -1,0 +1,853 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "modesp/board.schema.json",
+  "title": "ModESP board.json",
+  "$defs": {
+    "remote_device_array": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 16
+          },
+          "label": {
+            "type": "string"
+          },
+          "transport": {
+            "type": "string"
+          },
+          "identity": {
+            "type": "string"
+          },
+          "mac": {
+            "type": "string",
+            "pattern": "^([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}$"
+          },
+          "name": {
+            "type": "string"
+          },
+          "format": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "patternProperties": {
+          "^_": {}
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "type": "object",
+  "properties": {
+    "manifest_version": {
+      "const": 1
+    },
+    "board": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 23
+    },
+    "display_name": {
+      "type": "string"
+    },
+    "version": {
+      "type": "string",
+      "maxLength": 7
+    },
+    "description": {
+      "type": "string"
+    },
+    "gpio_outputs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 16
+          },
+          "label": {
+            "type": "string"
+          },
+          "gpio": {
+            "type": "integer"
+          },
+          "active_high": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "patternProperties": {
+          "^_": {}
+        },
+        "additionalProperties": false
+      }
+    },
+    "gpio_inputs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 16
+          },
+          "label": {
+            "type": "string"
+          },
+          "gpio": {
+            "type": "integer"
+          },
+          "pull": {
+            "enum": [
+              "up",
+              "down"
+            ]
+          },
+          "invert": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "patternProperties": {
+          "^_": {}
+        },
+        "additionalProperties": false
+      }
+    },
+    "onewire_buses": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 16
+          },
+          "label": {
+            "type": "string"
+          },
+          "gpio": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "patternProperties": {
+          "^_": {}
+        },
+        "additionalProperties": false
+      }
+    },
+    "adc_channels": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 16
+          },
+          "label": {
+            "type": "string"
+          },
+          "gpio": {
+            "type": "integer"
+          },
+          "atten": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "patternProperties": {
+          "^_": {}
+        },
+        "additionalProperties": false
+      }
+    },
+    "encoders": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 16
+          },
+          "label": {
+            "type": "string"
+          },
+          "clk": {
+            "type": "integer"
+          },
+          "dt": {
+            "type": "integer"
+          },
+          "pull": {
+            "enum": [
+              "up",
+              "down"
+            ]
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "patternProperties": {
+          "^_": {}
+        },
+        "additionalProperties": false
+      }
+    },
+    "i2c_buses": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 16
+          },
+          "label": {
+            "type": "string"
+          },
+          "sda": {
+            "type": "integer"
+          },
+          "scl": {
+            "type": "integer"
+          },
+          "freq_hz": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "patternProperties": {
+          "^_": {}
+        },
+        "additionalProperties": false
+      }
+    },
+    "i2c_expanders": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 16
+          },
+          "label": {
+            "type": "string"
+          },
+          "bus": {
+            "type": "string"
+          },
+          "chip": {
+            "type": "string"
+          },
+          "address": {
+            "type": "string",
+            "pattern": "^0x[0-9a-fA-F]+$"
+          },
+          "pins": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "patternProperties": {
+          "^_": {}
+        },
+        "additionalProperties": false
+      }
+    },
+    "expander_outputs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 16
+          },
+          "label": {
+            "type": "string"
+          },
+          "expander": {
+            "type": "string"
+          },
+          "pin": {
+            "type": "integer"
+          },
+          "active_high": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "patternProperties": {
+          "^_": {}
+        },
+        "additionalProperties": false
+      }
+    },
+    "expander_inputs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 16
+          },
+          "label": {
+            "type": "string"
+          },
+          "expander": {
+            "type": "string"
+          },
+          "pin": {
+            "type": "integer"
+          },
+          "invert": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "patternProperties": {
+          "^_": {}
+        },
+        "additionalProperties": false
+      }
+    },
+    "i2c_displays": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 16
+          },
+          "label": {
+            "type": "string"
+          },
+          "bus": {
+            "type": "string"
+          },
+          "chip": {
+            "type": "string"
+          },
+          "cols": {
+            "type": "integer"
+          },
+          "rows": {
+            "type": "integer"
+          },
+          "cal_x": {
+            "type": "integer"
+          },
+          "cal_y": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "patternProperties": {
+          "^_": {}
+        },
+        "additionalProperties": false
+      }
+    },
+    "dsi_displays": {
+      "$comment": "player-fork: MIPI-DSI panel (config-only in HAL; the lcd driver owns the DSI bus, DPI panel, LDO, reset and backlight).",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 16
+          },
+          "label": {
+            "type": "string"
+          },
+          "chip": {
+            "type": "string"
+          },
+          "lanes": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 2
+          },
+          "lane_mbps": {
+            "type": "integer"
+          },
+          "dpi_mhz": {
+            "type": "integer"
+          },
+          "h_res": {
+            "type": "integer"
+          },
+          "v_res": {
+            "type": "integer"
+          },
+          "hsync": {
+            "type": "integer"
+          },
+          "hbp": {
+            "type": "integer"
+          },
+          "hfp": {
+            "type": "integer"
+          },
+          "vsync": {
+            "type": "integer"
+          },
+          "vbp": {
+            "type": "integer"
+          },
+          "vfp": {
+            "type": "integer"
+          },
+          "color_bits": {
+            "enum": [
+              16,
+              24
+            ]
+          },
+          "reset_gpio": {
+            "type": "integer"
+          },
+          "backlight_gpio": {
+            "type": "integer"
+          },
+          "backlight_active_high": {
+            "type": "boolean"
+          },
+          "backlight_pwm_hz": {
+            "type": "integer"
+          },
+          "ldo_chan": {
+            "type": "integer"
+          },
+          "ldo_mv": {
+            "type": "integer"
+          },
+          "rotation": {
+            "enum": [
+              0,
+              90,
+              180,
+              270
+            ],
+            "$comment": "player-fork: UI rotation in degrees; the DPI panel has no hardware swap_xy, LVGL rotates via the PPA"
+          }
+        },
+        "required": [
+          "id",
+          "lanes",
+          "lane_mbps",
+          "dpi_mhz",
+          "h_res",
+          "v_res",
+          "hsync",
+          "hbp",
+          "hfp",
+          "vsync",
+          "vbp",
+          "vfp",
+          "color_bits"
+        ],
+        "patternProperties": {
+          "^_": {}
+        },
+        "additionalProperties": false
+      }
+    },
+    "i2c_touch": {
+      "$comment": "player-fork: capacitive touch controller on an i2c_buses entry (GT911 etc.); -1 = pin not connected.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 16
+          },
+          "label": {
+            "type": "string"
+          },
+          "bus": {
+            "type": "string"
+          },
+          "chip": {
+            "type": "string"
+          },
+          "address": {
+            "type": "string",
+            "pattern": "^0x[0-9a-fA-F]+$"
+          },
+          "int_gpio": {
+            "type": "integer"
+          },
+          "rst_gpio": {
+            "type": "integer"
+          },
+          "x_max": {
+            "type": "integer"
+          },
+          "y_max": {
+            "type": "integer"
+          },
+          "swap_xy": {
+            "type": "boolean"
+          },
+          "mirror_x": {
+            "type": "boolean"
+          },
+          "mirror_y": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "address"
+        ],
+        "patternProperties": {
+          "^_": {}
+        },
+        "additionalProperties": false
+      }
+    },
+    "spi_displays": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 16
+          },
+          "label": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "patternProperties": {
+          "^_": {}
+        },
+        "additionalProperties": false
+      }
+    },
+    "spi_buses": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 16
+          },
+          "label": {
+            "type": "string"
+          },
+          "host": {
+            "type": "integer"
+          },
+          "mosi": {
+            "type": "integer"
+          },
+          "miso": {
+            "type": "integer"
+          },
+          "sclk": {
+            "type": "integer"
+          },
+          "freq_hz": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "patternProperties": {
+          "^_": {}
+        },
+        "additionalProperties": false
+      }
+    },
+    "pwm_outputs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 16
+          },
+          "label": {
+            "type": "string"
+          },
+          "gpio": {
+            "type": "integer"
+          },
+          "channel": {
+            "type": "integer"
+          },
+          "freq_hz": {
+            "type": "integer"
+          },
+          "resolution_bits": {
+            "type": "integer"
+          },
+          "active_high": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "patternProperties": {
+          "^_": {}
+        },
+        "additionalProperties": false
+      }
+    },
+    "uart_buses": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 16
+          },
+          "label": {
+            "type": "string"
+          },
+          "port": {
+            "type": "integer"
+          },
+          "tx": {
+            "type": "integer"
+          },
+          "rx": {
+            "type": "integer"
+          },
+          "baud": {
+            "type": "integer"
+          },
+          "rx_buffer": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "patternProperties": {
+          "^_": {}
+        },
+        "additionalProperties": false
+      }
+    },
+    "i2s_buses": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 16
+          },
+          "label": {
+            "type": "string"
+          },
+          "bclk": {
+            "type": "integer"
+          },
+          "ws": {
+            "type": "integer"
+          },
+          "dout": {
+            "type": "integer"
+          },
+          "sd": {
+            "type": "integer"
+          },
+          "sample_rate_hz": {
+            "type": "integer"
+          },
+          "port": {
+            "type": "integer",
+            "$comment": "player-fork: I2S controller index; omit = by order of appearance"
+          },
+          "role": {
+            "enum": [
+              "master",
+              "slave"
+            ],
+            "$comment": "player-fork: slave = BCLK/WS driven by the external device (BT module)"
+          },
+          "mclk": {
+            "type": "integer",
+            "$comment": "player-fork: MCLK output GPIO (ADC SCKI), -1 = none"
+          },
+          "din": {
+            "type": "integer",
+            "$comment": "player-fork: data in GPIO → full-duplex on one controller (one clock domain)"
+          },
+          "slot_bits": {
+            "enum": [
+              16,
+              32
+            ]
+          },
+          "mclk_multiple": {
+            "enum": [
+              128,
+              256,
+              384,
+              512
+            ]
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "patternProperties": {
+          "^_": {}
+        },
+        "additionalProperties": false
+      }
+    },
+    "ble_devices": {
+      "$comment": "Legacy key alias for remote_devices (BLE-only seed).",
+      "$ref": "#/$defs/remote_device_array"
+    },
+    "remote_devices": {
+      "$comment": "Off-board devices seeded at factory (transport-generic). Runtime subscriptions live in /data/devices.json.",
+      "$ref": "#/$defs/remote_device_array"
+    },
+    "sdmmc_slots": {
+      "$comment": "player-fork: microSD/TF slot on the SDMMC peripheral (CONCEPT 3a). Pins are config because the panel's wiring still needs confirming against the schematic, and because ESP-Hosted owns the other slot.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "clk",
+          "cmd",
+          "d0"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "slot": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "width": {
+            "enum": [
+              1,
+              4
+            ]
+          },
+          "clk": {
+            "type": "integer"
+          },
+          "cmd": {
+            "type": "integer"
+          },
+          "d0": {
+            "type": "integer"
+          },
+          "d1": {
+            "type": "integer"
+          },
+          "d2": {
+            "type": "integer"
+          },
+          "d3": {
+            "type": "integer"
+          },
+          "cd": {
+            "type": "integer"
+          },
+          "freq_khz": {
+            "type": "integer",
+            "minimum": 400,
+            "maximum": 80000
+          },
+          "mount_point": {
+            "type": "string"
+          },
+          "ldo_chan": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 4,
+            "$comment": "player-fork: internal LDO channel powering the socket; 0 = none"
+          },
+          "ldo_mv": {
+            "type": "integer",
+            "minimum": 1800,
+            "maximum": 3300
+          }
+        }
+      }
+    }
+  },
+  "required": [
+    "board"
+  ],
+  "patternProperties": {
+    "^_": {}
+  },
+  "additionalProperties": false
+}

@@ -1,0 +1,9 @@
+{
+  "_comment": "A binding with no 'driver' is a plain hardware ASSIGNMENT (item 8.8): it says which board resource plays a role for a module, and the module then uses the HAL resource directly. boards/p4_player used to have two of these; item 8.9 gave both a driver, so this fixture is what keeps the driver-less path covered.",
+  "manifest_version": 1,
+  "bindings": [
+    {"hardware": "relay_1", "driver": "relay", "role": "compressor", "module": "equipment"},
+    {"hardware": "uart_1", "role": "sat_link", "module": "bt"},
+    {"hardware": "sd_0", "role": "card", "module": "storage"}
+  ]
+}

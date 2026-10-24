@@ -1,0 +1,12 @@
+{
+  "manifest_version": 1,
+  "driver": "gpio_output",
+  "description": "Дискретний вихід GPIO (enable/mute-лінія підсилювача, керування живленням модуля)",
+  "category": "actuator",
+  "hardware_type": "gpio_output",
+  "transport": "wired",
+  "requires_address": false,
+  "multiple_per_bus": false,
+  "provides": {"capability": "binary_out", "type": "bool"},
+  "settings": []
+}

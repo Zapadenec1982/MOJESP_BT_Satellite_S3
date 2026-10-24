@@ -1,0 +1,46 @@
+# Host tests: the pytest suite in tools/tests/ plus the native C++ doctest runner in
+# tests/host/ (built by tools/tests/test_cpp_host.py). This is the per-commit gate of
+# CLAUDE.md rule 3, run on Linux; the C++ runner is included by default since 2026-09-21.
+#
+# Not covered here: tools/check_protocol_mirror.py needs a checkout of the satellite
+# repository (P4_SATELLITE_ROOT) and that repository has no remote yet (plan 5.1); its
+# test skips with a visible reason until one exists.
+name: host-tests
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: host-tests-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  host-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # components/etl/etl — tests/host/CMakeLists.txt refuses to configure without the ETL headers
+          submodules: recursive
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install the host toolchain and the Python deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends g++ cmake ninja-build
+          python -m pip install --upgrade pip
+          python -m pip install -r tools/requirements.txt
+
+      - name: Generate the headers the C++ host build includes (what idf.py does at configure time)
+        # components/modesp_core/include/modesp/{base_module,shared_state}.h include
+        # generated/features_config.h and generated/state_meta.h; generated/ is not tracked.
+        # Same invocation as the root CMakeLists.txt.
+        run: python tools/generate_ui.py --project project.json --modules-dir modules --output-data data --output-gen generated
+
+      - name: Host tests (pytest + C++ doctest runner)
+        run: python tools/run_host_tests.py

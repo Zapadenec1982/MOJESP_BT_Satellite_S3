@@ -1,0 +1,55 @@
+# SPDX-FileContributor: 2026 Zapadenec1982
+# tools/c6_updater — one-shot ESP32-P4 firmware that pushes the ESP-Hosted co-processor image
+# from the slave_fw flash partition to the ESP32-C6 over SDIO (docs/C6_UPDATE.md).
+# Derived from esp_hosted 3.0.7 examples/ota/coprocessor_ota/mcu_host; the SDIO block below
+# is the same as boards/p4_player/sdkconfig.board — keep them in sync.
+
+# ── Chip revision: the Guition panel ships ESP32-P4 v1.3 (engineering-sample silicon; the factory
+#    firmware was built with min rev v1.0). IDF 5.5 defaults to v3.1 and its bootloader/app refuse
+#    to run on v1.x — select the pre-v3 range explicitly. Verified on the bench 2026-09-15. ──
+CONFIG_ESP32P4_SELECTS_REV_LESS_V3=y
+CONFIG_ESP32P4_REV_MIN_100=y
+
+# Role: HOST (MCU / ESP-IDF)
+CONFIG_ESP_HOSTED=y
+CONFIG_ESP_HOSTED_HOST_FEAT_WIFI=y
+
+# ── Guition JC4880P443C: C6 on SDIO slot 1, 4-bit, 40 MHz; C6 reset GPIO54 (3.x "active low" = direct CHIP_PU) ──
+CONFIG_SLAVE_IDF_TARGET_ESP32C6=y
+CONFIG_ESP_HOSTED_CP_TARGET_ESP32C6=y
+CONFIG_ESP_HOSTED_HOST_TRANSPORT_BUS_SDIO=y
+CONFIG_ESP_HOSTED_P4_DEV_BOARD_NONE=y
+CONFIG_ESP_HOSTED_SDIO_SLOT_1=y
+CONFIG_ESP_HOSTED_HOST_SDIO_BUS_WIDTH_4=y
+CONFIG_ESP_HOSTED_HOST_SDIO_CLK_KHZ=40000
+CONFIG_ESP_HOSTED_HOST_SDIO_PIN_CLK=18
+CONFIG_ESP_HOSTED_HOST_SDIO_PIN_CMD=19
+CONFIG_ESP_HOSTED_HOST_SDIO_PIN_D0=14
+CONFIG_ESP_HOSTED_HOST_SDIO_PIN_D1=15
+CONFIG_ESP_HOSTED_HOST_SDIO_PIN_D2=16
+CONFIG_ESP_HOSTED_HOST_SDIO_PIN_D3=17
+CONFIG_ESP_HOSTED_HOST_RESET_GPIO=54
+CONFIG_ESP_HOSTED_SDIO_RESET_ACTIVE_LOW=y
+CONFIG_ESP_HOSTED_HOST_SDIO_RX_STREAMING_MODE=y
+CONFIG_ESP_HOSTED_HOST_FEAT_WIFI_EXT_ITWT=n
+
+# ── OTA source: raw partition slave_fw (the CP .bin is dropped into components/ota_partition/slave_fw_bin/) ──
+CONFIG_OTA_METHOD_PARTITION=y
+CONFIG_OTA_PARTITION_LABEL="slave_fw"
+# The example's host/CP major.minor check uses the legacy compat constants (2.12.x) and mis-reports a
+# 3.0.7 host as "older"; the partition check (image version vs CP version) is the reliable gate.
+CONFIG_OTA_VERSION_CHECK_HOST_SLAVE=n
+
+# ── Flash layout: identical to the product firmware (partitions_p4_16mb.csv, table at 0x10000),
+#    so the slave_fw partition survives flashing the player afterwards ──
+CONFIG_ESPTOOLPY_FLASHSIZE_16MB=y
+CONFIG_ESPTOOLPY_FLASHSIZE="16MB"
+CONFIG_ESPTOOLPY_FLASHMODE_QIO=y
+CONFIG_ESPTOOLPY_FLASHFREQ_80M=y
+CONFIG_PARTITION_TABLE_CUSTOM=y
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
+CONFIG_PARTITION_TABLE_FILENAME="partitions.csv"
+CONFIG_PARTITION_TABLE_OFFSET=0x10000
+
+CONFIG_FREERTOS_HZ=1000
+CONFIG_SPI_FLASH_SUPPORT_BOYA_CHIP=y

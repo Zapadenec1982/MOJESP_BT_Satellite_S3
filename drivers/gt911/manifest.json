@@ -1,0 +1,12 @@
+{
+  "manifest_version": 1,
+  "driver": "gt911",
+  "description": "Ємнісний тач GT911 на шині I2C (esp_lcd_touch_gt911); INT/RST опційні — без них опитування",
+  "category": "lcd",
+  "hardware_type": "i2c_touch",
+  "transport": "wired",
+  "requires_address": false,
+  "multiple_per_bus": false,
+  "provides": {"capability": "touch", "type": "blob", "description": "esp_lcd_touch handle for the UI module (lcd_port.h)"},
+  "settings": []
+}

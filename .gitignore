@@ -1,0 +1,99 @@
+# === Build ===
+/build/
+tests/host/build/
+*.elf
+*.map
+
+# === Generated (regenerated on every build) ===
+/generated/
+data/ui.json
+data/board.json
+data/bindings.json
+# Runtime device registry — written by the device to /data/devices.json at runtime, NEVER a
+# build input. Must not be committed or left in data/ during a build, or a stray/test file gets
+# baked into data.bin and flashed, clobbering the device's real subscriptions.
+data/devices.json
+# Per-driver menuconfig toggles, generated from drivers/*/manifest.json
+components/modesp_hal/Kconfig
+# Board choice, generated from boards/*/board.json
+main/Kconfig.boards
+
+# === ESP-IDF managed dependencies ===
+/managed_components/
+# dependencies.lock IS committed (also under tools/c6_updater and tools/sdio_soak): it pins the
+# resolved component set so a fresh clone builds the bench-verified firmware (plan 5.2).
+
+# === SDK config (keep sdkconfig.defaults, ignore generated) ===
+sdkconfig
+sdkconfig.old
+
+# === Python ===
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# === Claude Code local settings ===
+.claude/
+
+# === OS ===
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# === Editor ===
+*.swp
+*.swo
+*~
+*.orig
+*.bak
+
+# === Working notes (Claude Code sessions) ===
+first_prompt.md
+next_prompt*.md
+CLAUDE_TASK.md
+CLAUDE_TASK_*.md
+ACTION_PLAN.md
+test_out.txt
+prompts/
+
+# === Dev artifacts ===
+build_err*.txt
+/build*.log
+gcc_err*.txt
+gcc_out*.txt
+gcc_stdout.txt
+gcc_stderr.txt
+test_err.txt
+commit_msg.txt
+*.ps1
+# ...except the one tracked tooling script (dry-run cleanup of the working root, plan 5.7)
+!tools/cleanup_root.ps1
+
+# === Confidential docs ===
+docs/13_monetization_strategy.md
+docs/ModESP_Proposal_UBC_Group.docx
+docs/ubc_pitch_v2.js
+
+# === Misc ===
+.clangd
+nul
+tools/node_modules/
+tools/package-lock.json
+tools/package.json
+ota_test/
+sdkconfig.esp32.bak
+
+# === tools/c6_updater (standalone IDF project) ===
+tools/c6_updater/build/
+tools/c6_updater/managed_components/
+tools/c6_updater/sdkconfig
+tools/c6_updater/sdkconfig.old
+# CP images are built from the pinned esp_hosted tag (docs/C6_UPDATE.md), not committed
+tools/c6_updater/components/ota_partition/slave_fw_bin/*.bin
+tools/c6_updater/components/ota_littlefs/slave_fw_bin/*.bin
+
+# === tools/sdio_soak (standalone IDF project) ===
+tools/sdio_soak/build/
+tools/sdio_soak/managed_components/
+tools/sdio_soak/sdkconfig
+tools/sdio_soak/sdkconfig.old

@@ -1,0 +1,4 @@
+dependencies:
+  # Biquad IIR kernels with the ESP32-P4 RISC-V assembly path (CONFIG_DSP_OPTIMIZED);
+  # coefficient design (RBJ) lives in src/dsp_chain.cpp.
+  espressif/esp-dsp: "^1.8.0"

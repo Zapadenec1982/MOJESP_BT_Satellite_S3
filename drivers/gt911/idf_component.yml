@@ -1,0 +1,3 @@
+dependencies:
+  # Pulls espressif/esp_lcd_touch (the generic touch API esp_lvgl_port hooks into).
+  espressif/esp_lcd_touch_gt911: "^1.2.1"

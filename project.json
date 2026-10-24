@@ -1,0 +1,26 @@
+{
+  "project": "p4_dsp",
+  "version": "0.1.0",
+  "description": "P4_DSP — ESP32-P4 network stereo player with DSP (Guition JC4880P443C)",
+  "modules": [
+    "ui_lvgl",
+    "audio",
+    "storage",
+    "player",
+    "radio",
+    "dlna", "bt",
+    "airplay",
+    "usb_audio"
+  ],
+  "system": {
+    "device_name": "P4 Player",
+    "mqtt_topic_root": "player",
+    "source_lang": "uk",
+    "pages": {
+      "dashboard": true,
+      "network": true,
+      "firmware": true,
+      "system": true
+    }
+  }
+}

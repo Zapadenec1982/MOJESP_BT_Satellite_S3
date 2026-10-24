@@ -1,0 +1,13 @@
+{
+  "bindings": [
+    {
+      "hardware": "ntc_1",
+      "driver": "ntc",
+      "role": "air_temp",
+      "module": "equipment",
+      "settings": {
+        "beta" 3900
+      }
+    }
+  ]
+}

@@ -1,0 +1,69 @@
+menu "SDIO soak test"
+
+    config SOAK_URL
+        string "Stream URL (http:// or https://)"
+        default "https://icecast.radiofrance.fr/fip-midfi.mp3"
+        help
+            The stream to pull continuously. Run A (control): a FLAC/any large file on a
+            LAN HTTP server (no internet, no TLS). Run B (real path): a public MP3 station
+            over HTTPS. A finite file is re-opened when it ends (counted as `restart`).
+
+    config SOAK_DURATION_MIN
+        int "Test duration, minutes (0 = until reset)"
+        default 120
+
+    config SOAK_REPORT_SEC
+        int "Report period, seconds"
+        default 30
+
+    config SOAK_RING_KB
+        int "PSRAM ring buffer, KB"
+        default 512
+        help
+            The consumer drains the ring at SOAK_DRAIN_KBPS; a stall shows up as the ring
+            running empty. Big enough to hide short hiccups, small enough to expose stalls.
+
+    config SOAK_DRAIN_KBPS
+        int "Consumer drain rate, kbit/s (0 = drain as fast as data arrives)"
+        default 128
+        help
+            Emulates the decoder pace. For the LAN file test set 0 (pure throughput) or a
+            realistic FLAC rate (~1000).
+
+    config SOAK_STALL_SEC
+        int "Stall threshold: seconds without any received byte"
+        default 5
+
+    config SOAK_HTTP_TIMEOUT_MS
+        int "HTTP socket timeout, ms"
+        default 10000
+
+    config SOAK_PHASE_MIN
+        int "Phase length, minutes (0 = no phases, one steady run)"
+        default 0
+        help
+            With phases enabled the test walks SOAK_BALLAST_TARGETS, holding each for this
+            long and printing a SOAK PHASE line at the start and a SOAK PHASE END summary at
+            the finish. The bit-rate axis is driven from the other end (rate_server.py), so
+            one run can cover a whole grid without a reflash.
+
+    config SOAK_BALLAST_TARGETS
+        string "Free DMA-SRAM targets per phase, KB, comma separated (0 = no ballast)"
+        default "0"
+        help
+            Before each phase the test allocates DMA-capable internal SRAM until no more than
+            this much is free, emulating the memory pressure the display, LVGL and the audio
+            core put on the same pool. The player itself runs at about 27 KB free
+            (docs/CONCEPT.md section 8), which is the point of the exercise: the link is not
+            measured in isolation on the real device. List the targets from most free to
+            least, because the tight ones are the ones that can end the run.
+
+    config SOAK_WIFI_SSID
+        string "Wi-Fi SSID override (empty = take from the player's NVS)"
+        default ""
+
+    config SOAK_WIFI_PASS
+        string "Wi-Fi password override (empty = take from the player's NVS)"
+        default ""
+
+endmenu

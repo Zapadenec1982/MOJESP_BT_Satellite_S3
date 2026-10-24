@@ -1,0 +1,5 @@
+dependencies:
+  # The same decoder the card player uses — one "simple decoder" interface over MP3 and AAC,
+  # which is what internet radio is carried in. See modules/player/idf_component.yml for why
+  # the version is pinned below 2.6 (this panel's P4 is revision v1.3).
+  espressif/esp_audio_codec: ">=2.0.0,<2.6.0"

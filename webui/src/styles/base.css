@@ -1,0 +1,130 @@
+/*
+ * Base of the web UI: the panel's look on a page (docs/PLAN_WEBUI_2026-10-11.md §3).
+ * Colours come from m3_schemes.css (generated from ui_m3.cpp); nothing here names a hex.
+ */
+
+:root {
+  color-scheme: dark;
+  /* The panel draws Roboto; the web takes the system face (customer, 11.10.2026): Roboto
+     on Android, San Francisco on Apple, no font in the bundle. */
+  --font: Roboto, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: ui-monospace, Menlo, Consolas, "DejaVu Sans Mono", monospace;
+
+  /* the panel's corner radii (ui_m3.h, namespace shape) */
+  --r-xs: 8px;
+  --r-s: 16px;
+  --r-m: 20px;
+  --r-l: 24px;
+  --r-xl: 28px;
+  --r-xxl: 32px;
+
+  /* shell geometry */
+  --topbar-h: 64px;
+  /* the page reaches under the iPhone's home indicator (viewport-fit=cover): the bottom bar takes
+     that strip too, and everything placed above the bar moves up with it */
+  --safe-b: env(safe-area-inset-bottom, 0px);
+  --navbar-h: calc(80px + var(--safe-b));
+  --rail-w: 96px;
+  --mini-h: 64px;
+  --gutter: 16px;
+  --content-max: 1080px;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html,
+body {
+  background: var(--surface);
+  color: var(--on-surface);
+  font-family: var(--font);
+  font-size: 16px;
+  line-height: 1.4;
+}
+
+body {
+  min-height: 100vh;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+a {
+  color: var(--primary);
+}
+
+/* The panel shows encoder focus as a 2 px primary ring; the keyboard gets the same. */
+:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+/* The Player's background colour (shell/Shell.svelte): registered, so a new cover fades in. */
+@property --tint {
+  syntax: '<color>';
+  inherits: false;
+  initial-value: transparent;
+}
+
+::selection {
+  background: var(--primary-container);
+  color: var(--on-primary-container);
+}
+
+/* Type roles: the panel's (ui_m3.h) one step smaller — a phone is held, the panel stands across
+   the room. Nothing under 14 px. */
+.t-label-s { font-size: 14px; line-height: 20px; font-weight: 500; }
+.t-label-m { font-size: 16px; line-height: 22px; font-weight: 500; }
+.t-body-m  { font-size: 15px; line-height: 22px; font-weight: 400; }
+.t-body-l  { font-size: 16px; line-height: 24px; font-weight: 400; }
+.t-title-m { font-size: 20px; line-height: 26px; font-weight: 400; }
+.t-title-l { font-size: 22px; line-height: 28px; font-weight: 400; }
+.t-headline { font-size: 28px; line-height: 36px; font-weight: 500; }
+.t-display { font-size: 40px; line-height: 48px; font-weight: 600; }
+
+.c-dim { color: var(--on-surface-var); }
+.c-faint { color: var(--outline); }
+.c-primary { color: var(--primary); }
+.c-error { color: var(--error); }
+
+.ellipsis {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+}

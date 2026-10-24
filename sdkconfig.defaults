@@ -1,0 +1,46 @@
+# P4_DSP — shared sdkconfig defaults (target-independent).
+# Board selection lives in sdkconfig.defaults.<target>; everything board-specific
+# (flash, PSRAM, partitions, ESP-Hosted pins) lives in boards/<board>/sdkconfig.board.
+
+# Optimize for size (-Os): dual-OTA layout, the 100 Hz control loop is not CPU-bound.
+# (IDF default is -Og/DEBUG.) Override via menuconfig → Compiler options.
+CONFIG_COMPILER_OPTIMIZATION_SIZE=y
+
+# OTA rollback support
+CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE=y
+CONFIG_APP_ROLLBACK_ENABLE=y
+
+# Main task stack: default 3584 too small for config JSON parsing (~4KB on stack)
+CONFIG_ESP_MAIN_TASK_STACK_SIZE=8192
+
+# WebSocket support in esp_http_server
+CONFIG_HTTPD_WS_SUPPORT=y
+# From IDF v5.5.5 / v6.0.1 the /ws handler is no longer called for the handshake
+# (espressif/esp-idf#18539); WsService registers each client in ws_post_handshake_cb.
+CONFIG_HTTPD_WS_POST_HANDSHAKE_CB_SUPPORT=y
+
+# ── Heap optimization for MQTT over TLS ──────────────────────────
+# Tier 1: Disable peer certificate storage after TLS handshake (~3.7KB)
+# esp-mqtt does not access peer cert after verification
+CONFIG_MBEDTLS_SSL_KEEP_PEER_CERTIFICATE=n
+
+# Tier 1: TLS client only — the HTTP server is plain HTTP, no TLS server needed
+CONFIG_MBEDTLS_TLS_CLIENT_ONLY=y
+
+# Tier 2: TLS buffers 4 KB in/out (docs/CONCEPT.md §8а: internal DMA-SRAM is the scarce
+# resource on P4; 4096 is enough for MQTT and metadata fetches).
+# The P4 board raises IN to 16384 — see boards/p4_player/sdkconfig.board, where the memory
+# that pays for it is.
+CONFIG_MBEDTLS_SSL_OUT_CONTENT_LEN=4096
+CONFIG_MBEDTLS_SSL_IN_CONTENT_LEN=4096
+
+# Tier 2: Common CA bundle (~42 CAs) instead of Full (~200 CAs)
+CONFIG_MBEDTLS_CERTIFICATE_BUNDLE_DEFAULT_CMN=y
+
+# Tier 3: Dynamic TLS buffers — allocated only during send/receive, freed between
+# MQTT messages. NOT compatible with DTLS or TLS 1.3 (both disabled here).
+CONFIG_MBEDTLS_DYNAMIC_BUFFER=y
+# Do NOT enable FREE_CONFIG_DATA — breaks MQTT TLS reconnection
+# CONFIG_MBEDTLS_DYNAMIC_FREE_CONFIG_DATA is not set
+
+CONFIG_LWIP_MAX_SOCKETS=16

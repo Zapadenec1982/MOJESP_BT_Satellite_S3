@@ -1,0 +1,105 @@
+/*
+ * The previous interface's variables, mapped onto the panel's M3 roles.
+ *
+ * The widgets of the generated pages (components/widgets, GroupAccordion) still draw Service's
+ * long tail (PLAN_WEBUI §2): this layer lets them wear the panel's colours, the way the panel's
+ * own service page did through ui_theme.cpp.
+ * Delete a variable here when nothing uses it any more; delete the file with the last widget.
+ */
+
+:root {
+  /* surfaces */
+  --bg: var(--surface);
+  --bg2: var(--surface-low);
+  --bg-hover: var(--surface-high);
+  --bg-input: var(--surface-container);
+  --bg-tertiary: var(--surface-high);
+  --card: var(--surface-low);
+  --surface-2: var(--surface-container);
+  --surface-3: var(--surface-high);
+  --surface-hover: var(--surface-high);
+  --glass: var(--surface-container);
+  --glass-heavy: var(--surface-high);
+  --border: var(--outline-var);
+  --border-accent: var(--primary);
+
+  /* text */
+  --text: var(--on-surface);
+  --text-1: var(--on-surface);
+  --text-2: var(--on-surface-var);
+  --text-3: var(--outline);
+  --text-4: var(--outline);
+  --text-secondary: var(--on-surface-var);
+  --fg: var(--on-surface);
+  --fg-muted: var(--on-surface-var);
+
+  /* accent: the panel has one, primary */
+  --accent: var(--primary);
+  --accent-bright: var(--primary);
+  --accent-bg: var(--secondary-container);
+  --accent-dim: var(--secondary-container);
+  --accent-glow: transparent;
+  --accent-glow-s: transparent;
+  --blue: var(--primary);
+  --blue-dim: var(--secondary-container);
+  --blue-glow: transparent;
+  --blue-glow-s: transparent;
+
+  /* status: the old widgets paint "on" and "fine" green; on the panel a switch that is on is
+     primary, and a fault is error */
+  --ok: var(--primary);
+  --ok-dim: var(--secondary-container);
+  --ok-glow: transparent;
+  --green: var(--primary);
+  --green-glow: transparent;
+  --success: var(--primary);
+  --warn: var(--primary);
+  --warning: var(--primary);
+  --warn-dim: var(--secondary-container);
+  --danger: var(--error);
+  --danger-dim: color-mix(in srgb, var(--error) 14%, transparent);
+  --danger-border: var(--error);
+  --danger-glow: transparent;
+  --red: var(--error);
+  --red-glow: transparent;
+
+  --shadow-lg: 0 6px 20px rgb(0 0 0 / 40%);
+  --shadow-toast: 0 6px 20px rgb(0 0 0 / 40%);
+
+  /* spacing, type, radii, motion — the old scale, unchanged */
+  --sp-1: 4px;
+  --sp-1-5: 6px;
+  --sp-2: 8px;
+  --sp-2-5: 10px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+  --sp-8: 32px;
+  --text-xs: 12px;
+  --text-sm: 13px;
+  --text-base: 14px;
+  --text-md: 15px;
+  --text-lg: 16px;
+  --text-xl: 18px;
+  --text-2xl: 22px;
+  --text-3xl: 24px;
+  --fw-semibold: 600;
+  --fw-bold: 700;
+  --font-family: var(--font);
+  --radius-xs: 8px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius: 16px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+  --radius-2xl: 24px;
+  --radius-pill: 20px;
+  --radius-full: 50%;
+  --touch-min: 48px;
+  --transition-fast: 120ms ease;
+  --transition-normal: 200ms ease;
+  --transition-slow: 300ms ease;
+  --toast-width: 440px;
+  --header-height: var(--topbar-h);
+}

@@ -1,0 +1,25 @@
+{
+  "manifest_version": 1,
+  "board": "overfull",
+  "version": "0.1",
+  "encoders": [
+    {
+      "id": "enc_0",
+      "clk": 32,
+      "dt": 28,
+      "pull": "up"
+    },
+    {
+      "id": "enc_1",
+      "clk": 33,
+      "dt": 30,
+      "pull": "up"
+    },
+    {
+      "id": "enc_2",
+      "clk": 26,
+      "dt": 27,
+      "pull": "up"
+    }
+  ]
+}

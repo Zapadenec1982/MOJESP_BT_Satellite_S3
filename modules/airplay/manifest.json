@@ -1,0 +1,167 @@
+{
+  "manifest_version": 1,
+  "module": "airplay",
+  "version": "0.1.0",
+  "description": "Приймач AirPlay 1/2 (ядро rbouteiller/airplay-esp32, некомерційна ліцензія)",
+  "priority": 5,
+  "requires": [],
+  "state": {
+    "airplay.enabled": {
+      "type": "bool",
+      "access": "readwrite",
+      "default": true,
+      "persist": true,
+      "mqtt_subscribe": true,
+      "description": "Увімкнути AirPlay"
+    },
+    "airplay.mode": {
+      "type": "int",
+      "access": "readwrite",
+      "default": 0,
+      "persist": true,
+      "mqtt_subscribe": true,
+      "options": [
+        {
+          "value": 0,
+          "id": "airplay2",
+          "label": "AirPlay 2"
+        },
+        {
+          "value": 1,
+          "id": "windows",
+          "label": "AirPlay 1 · сумісність із Windows"
+        }
+      ],
+      "description": "Режим AirPlay"
+    },
+    "airplay.active_mode": {
+      "type": "int",
+      "access": "read",
+      "default": 0,
+      "description": "Активний режим: 0 — AirPlay 2, 1 — AirPlay 1 / Windows"
+    },
+    "airplay.active_mode_label": {
+      "type": "string",
+      "access": "read",
+      "description": "Зараз працює"
+    },
+    "airplay.switching": {
+      "type": "bool",
+      "access": "read",
+      "default": false,
+      "description": "Перемикання режиму триває"
+    },
+    "airplay.mode_status": {
+      "type": "string",
+      "long": true,
+      "access": "read",
+      "description": "Стан режиму"
+    },
+    "airplay.mode_error": {
+      "type": "string",
+      "long": true,
+      "access": "read",
+      "description": "Помилка перемикання"
+    },
+    "airplay.state": {
+      "type": "string",
+      "access": "read",
+      "description": "off | idle | connected | playing | paused"
+    },
+    "airplay.name": {
+      "type": "string",
+      "access": "read",
+      "description": "Ім'я, під яким панель видно в списку AirPlay"
+    },
+    "airplay.title": {
+      "type": "string",
+      "long": true,
+      "access": "read",
+      "description": "Назва треку з метаданих відправника"
+    },
+    "airplay.artist": {
+      "type": "string",
+      "long": true,
+      "access": "read",
+      "description": "Виконавець"
+    },
+    "airplay.album": {
+      "type": "string",
+      "long": true,
+      "access": "read",
+      "description": "Альбом"
+    },
+    "airplay.pos_s": {
+      "type": "int",
+      "access": "read",
+      "default": 0,
+      "unit": "s",
+      "description": "Позиція в треку"
+    },
+    "airplay.dur_s": {
+      "type": "int",
+      "access": "read",
+      "default": 0,
+      "unit": "s",
+      "description": "Тривалість треку; 0 — відправник не сказав"
+    },
+    "airplay.remote": {
+      "type": "bool",
+      "access": "read",
+      "default": false,
+      "description": "Відправник дав пульт DACP (AirPlay 1): кнопки панелі керують ним"
+    },
+    "airplay.cmd": {
+      "type": "int",
+      "command": true,
+      "access": "readwrite",
+      "default": 0,
+      "min": 0,
+      "max": 6,
+      "step": 1,
+      "description": "DACP: 0 нічого, 1 грати, 2 пауза, 3 стоп, 4 наступний, 5 попередній, 6 перемкнути"
+    }
+  },
+  "ui": {
+    "page": "AirPlay",
+    "page_id": "airplay",
+    "icon": "radio",
+    "order": 35,
+    "cards": [
+      {
+        "title": "Приймач AirPlay",
+        "subtitle": "Режим зберігається й застосовується автоматично. Поточне з’єднання AirPlay перерветься; P4 не перезапускається. AirPlay 1 — сумісність із Windows, без функцій AirPlay 2.",
+        "widgets": [
+          {
+            "key": "airplay.enabled",
+            "widget": "toggle"
+          },
+          {
+            "key": "airplay.name",
+            "widget": "value"
+          },
+          {
+            "key": "airplay.mode",
+            "widget": "select"
+          },
+          {
+            "key": "airplay.active_mode_label",
+            "widget": "value"
+          },
+          {
+            "key": "airplay.mode_status",
+            "widget": "value"
+          },
+          {
+            "key": "airplay.mode_error",
+            "widget": "value",
+            "visible_when": {
+              "key": "airplay.mode_error",
+              "neq": ""
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

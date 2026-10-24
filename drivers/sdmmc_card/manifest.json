@@ -1,0 +1,12 @@
+{
+  "manifest_version": 1,
+  "driver": "sdmmc_card",
+  "description": "microSD/TF слот на контролері SDMMC: живлення від вбудованого LDO, FAT32 через esp_vfs_fat; хост спільний з esp_hosted (C6), тому init/deinit хоста — no-op",
+  "category": "storage",
+  "hardware_type": "sdmmc_slot",
+  "transport": "wired",
+  "requires_address": false,
+  "multiple_per_bus": false,
+  "provides": {"capability": "storage", "type": "blob", "description": "IStorageVolume for the module that reads files (storage_volume.h)"},
+  "settings": []
+}

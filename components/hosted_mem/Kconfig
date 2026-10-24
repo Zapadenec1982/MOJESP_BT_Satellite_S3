@@ -1,0 +1,19 @@
+menu "ESP-Hosted frame copies (hosted_mem)"
+    depends on ESP_HOSTED_HOST
+
+    config HOSTED_MEM_FRAMES_IN_PSRAM
+        bool "Keep esp_hosted's per-frame copies in PSRAM"
+        depends on SPIRAM
+        default y
+        help
+            esp_hosted 3.0.7 copies every received and every sent frame into a buffer from
+            eh_host_port_dma_alloc(), which is internal DMA-capable SRAM. Up to 20 received
+            frames (~33 KB) can be held at once, and when the allocation fails the frame is
+            dropped without a log line. With this option those copies come from PSRAM; the
+            SDIO transfers themselves are untouched. See components/hosted_mem/hosted_mem.c
+            and docs/NET_LOSS_2026-09-23.md.
+
+            Turning it off restores esp_hosted's own allocation exactly; the drop counters
+            stay available either way.
+
+endmenu

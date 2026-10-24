@@ -1,0 +1,51 @@
+{
+  "manifest_version": 1,
+  "module": "storage",
+  "version": "0.1.0",
+  "description": "microSD: монтування і стан картки",
+  "priority": 4,
+  "requires": [
+    {
+      "role": "card",
+      "type": "storage",
+      "capability": "storage",
+      "label": "Слот картки (microSD)",
+      "optional": true
+    }
+  ],
+  "state": {
+    "storage.sd_present": {
+      "type": "bool",
+      "access": "read",
+      "default": false,
+      "on_label": "вставлена",
+      "off_label": "немає",
+      "description": "Картка microSD змонтована"
+    },
+    "storage.sd_status": {
+      "type": "string",
+      "access": "read",
+      "description": "ok, no card or wrong pins, unreadable, код помилки"
+    },
+    "storage.sd_total_mb": {
+      "type": "int",
+      "access": "read",
+      "default": 0,
+      "unit": "MB",
+      "description": "Ємність картки"
+    },
+    "storage.sd_free_mb": {
+      "type": "int",
+      "access": "read",
+      "default": 0,
+      "unit": "MB",
+      "description": "Вільно на картці"
+    },
+    "storage.sd_tracks": {
+      "type": "int",
+      "access": "read",
+      "default": 0,
+      "description": "Аудіофайлів у корені картки"
+    }
+  }
+}

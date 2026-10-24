@@ -1,0 +1,34 @@
+# The options upstream's core reads, under upstream's names so its files compile unchanged
+# (UPSTREAM.md). Defaults are upstream's, except where a line below says otherwise.
+
+menu "AirPlay 2 receiver (airplay2)"
+
+    # Protocol mode is now the persisted airplay.mode setting, applied by restarting the receiver.
+
+    config AIRPLAY_TIMING_THRESHOLD_MS
+        int "Early/late timing threshold for buffered streams (ms)"
+        default 25
+        range 2 200
+        help
+            How far a frame of a buffered stream (AirPlay 2 AAC) may be early or late before
+            the timing engine holds or drops it. Must stay well above the jitter of the
+            output path. Upstream option, upstream default.
+
+    config AIRPLAY_RT_TIMING_THRESHOLD_MS
+        int "Early/late timing threshold for realtime streams (ms)"
+        default 50
+        range 2 500
+        help
+            The same for realtime streams (ALAC over UDP), which have little buffer to
+            absorb a scheduling hiccup. Upstream option, upstream default.
+
+    config ENABLE_AIRPLAY_ARTWORK
+        bool "Receive cover art"
+        default n
+        help
+            Off, the advertisement asks senders not to send artwork, and the receiver
+            ignores any that arrives anyway. Upstream only flags that artwork came and keeps
+            none of it, so there is nothing for the screen to show either way yet.
+            Upstream option, upstream default.
+
+endmenu

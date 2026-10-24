@@ -1,0 +1,83 @@
+{
+  "manifest_version": 1,
+  "board": "p4_player",
+  "display_name": "P4 Player (Guition JC4880P443C)",
+  "version": "0.4",
+  "description": "ESP32-P4 + ESP32-C6 (SDIO) panel: 4.3in 480x800 MIPI-DSI ST7701S, GT911 touch, 32 MB PSRAM, 16 MB flash. Pins only from docs/CONCEPT.md section 4 (JP1) and section 8b (panel BSP).",
+
+  "_stages": "Stage 2: display, touch, encoder, amp enable line. Stage 3: I2S-A duplex (DAC+ADC) + I2S-B slave (BT). The BT-module I2C expander (MCP23017) is not on the bench yet.",
+
+  "i2c_buses": [
+    {"id": "i2c_0", "label": "ES_I2C (codec, touch, JP1 21/23)", "sda": 7, "scl": 8, "freq_hz": 400000}
+  ],
+
+  "dsi_displays": [
+    {
+      "id": "lcd_0", "label": "4.3in 480x800 ST7701S (MIPI-DSI, 2 lanes)", "chip": "st7701",
+      "lanes": 2, "lane_mbps": 500, "dpi_mhz": 34,
+      "h_res": 480, "v_res": 800,
+      "hsync": 12, "hbp": 42, "hfp": 42,
+      "vsync": 2, "vbp": 8, "vfp": 166,
+      "color_bits": 24,
+      "reset_gpio": 5,
+      "backlight_gpio": 23, "backlight_active_high": true, "backlight_pwm_hz": 20000,
+      "ldo_chan": 3, "ldo_mv": 2500,
+      "rotation": 270
+    }
+  ],
+
+  "sdmmc_slots": [
+    {"id": "sd_0",
+     "label": "microSD (TF). Pins CONFIRMED: they are the P4 slot-0 IOMUX defaults (soc/sdmmc_pins.h), and buccaneer-jak/JC4880P443C-... mounts this same panel with SD_MMC.begin() and no setPins(), i.e. on the defaults. 4-bit because that reference works in 4-bit and 1-bit leaves D3 unconfigured - on an SD card D3 also holds it in SD mode, and an undriven D3 is a card that never answers.",
+     "slot": 0, "width": 4,
+     "clk": 43, "cmd": 44, "d0": 39, "d1": 40, "d2": 41, "d3": 42,
+     "cd": -1, "freq_khz": 20000, "ldo_chan": 4, "ldo_mv": 3300,
+     "mount_point": "/sd"}
+  ],
+
+  "i2c_touch": [
+    {"id": "touch_0", "label": "GT911 capacitive touch (reports landscape 800x480 natively - no transform)",
+     "bus": "i2c_0", "chip": "gt911", "address": "0x5D",
+     "int_gpio": -1, "rst_gpio": -1, "x_max": 800, "y_max": 480,
+     "swap_xy": false, "mirror_x": false, "mirror_y": false}
+  ],
+
+  "encoders": [
+    {"id": "enc_0", "label": "Encoder A/B (JP1 rows 10-11, adjacent)", "clk": 32, "dt": 28, "pull": "up"}
+  ],
+
+  "gpio_inputs": [
+    {"id": "enc_sw", "label": "Encoder SW (JP1, strapping BOOTMODE, R34 10k up)", "gpio": 35, "pull": "up", "invert": true}
+  ],
+
+  "gpio_outputs": [
+    {"id": "amp_enable", "label": "TPA3255 /RESET + PCM5102A XSMT (low = mute, ext. pull-down)", "gpio": 34, "active_high": true}
+  ],
+
+  "i2s_buses": [
+    {
+      "id": "i2s_a", "label": "I2S-A: PCM5102A DAC + PCM1808 ADC (JP1), P4 master 48 kHz",
+      "port": 0, "role": "master",
+      "mclk": 49, "bclk": 50, "ws": 51, "dout": 52, "din": 29,
+      "sample_rate_hz": 48000, "slot_bits": 32, "mclk_multiple": 256
+    },
+    {
+      "id": "i2s_b", "label": "I2S-B in from the BT satellite (JP1). Satellite is master, all three P4 pins are inputs, no MCLK. Rate follows STREAM_FMT; the WIDTH is opened at its maximum deliberately - IDF reallocates the DMA descriptors on a width change and that allocation fails once Wi-Fi has taken its share. See park_bt_off_pll(). CONCEPT 4",
+      "port": 1, "role": "slave",
+      "bclk": 33, "ws": 30, "din": 31,
+      "sample_rate_hz": 32000, "slot_bits": 32
+    }
+  ],
+
+  "uart_buses": [
+    {
+      "id": "uart_sat",
+      "label": "Control link to the BT satellite (J5, freed by removing R70/R75/R76). Far end GPIO16/17 on a WROOM. Wire format: docs/LINK_PROTOCOL.md. tx/rx here are an assignment, not a schematic fact - swap them if the pair is wired the other way",
+      "port": 1,
+      "tx": 26,
+      "rx": 27,
+      "baud": 460800,
+      "rx_buffer": 8192
+    }
+  ]
+}

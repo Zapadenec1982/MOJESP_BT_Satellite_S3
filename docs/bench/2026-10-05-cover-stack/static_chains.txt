@@ -1,0 +1,76 @@
+# Static worst-case stack chains: GCC -fstack-usage -fcallgraph-info=su with the build's own
+# flags (probe/su_compile.py), walked by probe/ci_walk.py through cover_set_jpeg(). Frames under
+# cover_soft_decode() are replaced by their static worst case, 8752 B (QEMU measured 8736).
+# IDF, newlib and FreeRTOS calls are walked only where their source was compiled (JPEG, PPA,
+# heap, log); the rest count 0. Per-task fixed costs are in the README.
+
+### before - 9ad3ce6: the software path ran on each caller's stack
+== void bt_cover::{anonymous}::worker(void*): 9232 bytes (through _ZN11player_core14cover_set_jpeg)
+   void bt_cover::{anonymous}::worker(void*)  64
+   bool player_core::cover_set_jpeg(const uint8_t*, size_t, CoverSource, uint32_t)  288
+   bool player_core::{anonymous}::set_jpeg_soft(Store&, const uint8_t*, size_t, uint32_t)  128
+   unsigned char* cover_soft_decode(const unsigned char*, int, int*, int*)  [subtree 8752]
+== void {anonymous}::cover_worker(void*): 9216 bytes (through _ZN11player_core14cover_set_jpeg)
+   void {anonymous}::cover_worker(void*)  48
+   bool player_core::cover_set_jpeg(const uint8_t*, size_t, CoverSource, uint32_t)  288
+   bool player_core::{anonymous}::set_jpeg_soft(Store&, const uint8_t*, size_t, uint32_t)  128
+   unsigned char* cover_soft_decode(const unsigned char*, int, int*, int*)  [subtree 8752]
+== void {anonymous}::art_task(void*): 10624 bytes (through _ZN11player_core14cover_set_jpeg)
+   void {anonymous}::art_task(void*)  1424
+   void {anonymous}::fall_back()  32
+   bool player_core::cover_set_jpeg(const uint8_t*, size_t, CoverSource, uint32_t)  288
+   bool player_core::{anonymous}::set_jpeg_soft(Store&, const uint8_t*, size_t, uint32_t)  128
+   unsigned char* cover_soft_decode(const unsigned char*, int, int*, int*)  [subtree 8752]
+== void dlna_client::{anonymous}::worker(void*): 11888 bytes (through _ZN11player_core14cover_set_jpeg)
+   void dlna_client::{anonymous}::worker(void*)  2720
+   bool player_core::cover_set_jpeg(const uint8_t*, size_t, CoverSource, uint32_t)  288
+   bool player_core::{anonymous}::set_jpeg_soft(Store&, const uint8_t*, size_t, uint32_t)  128
+   unsigned char* cover_soft_decode(const unsigned char*, int, int*, int*)  [subtree 8752]
+== void {anonymous}::player_task(void*): 10208 bytes (through _ZN11player_core14cover_set_jpeg)
+   void {anonymous}::player_task(void*)  1008
+   {anonymous}::load_cover()::<lambda(FILE*, uint64_t, uint32_t)>  32
+   bool player_core::cover_set_jpeg(const uint8_t*, size_t, CoverSource, uint32_t)  288
+   bool player_core::{anonymous}::set_jpeg_soft(Store&, const uint8_t*, size_t, uint32_t)  128
+   unsigned char* cover_soft_decode(const unsigned char*, int, int*, int*)  [subtree 8752]
+
+### after - the software path on the cover component's own task
+== void player_core::{anonymous}::soft_worker(void*): 8880 bytes
+   void player_core::{anonymous}::soft_worker(void*)  128
+   unsigned char* cover_soft_decode(const unsigned char*, int, int*, int*)  [subtree 8752]
+== void bt_cover::{anonymous}::worker(void*): 736 bytes (through _ZN11player_core14cover_set_jpeg)
+   void bt_cover::{anonymous}::worker(void*)  64
+   bool player_core::cover_set_jpeg(const uint8_t*, size_t, CoverSource, uint32_t)  288
+   esp_err_t jpeg_decoder_process(jpeg_decoder_handle_t, const jpeg_decode_cfg_t*, const uint8_t*, uint32_t, uint8_t*, uint32_t, uint32_t*)  176
+   jpeg_parse_dqt_marker  96
+   jpeg_get_bytes  32
+   esp_log  80
+== void {anonymous}::cover_worker(void*): 720 bytes (through _ZN11player_core14cover_set_jpeg)
+   void {anonymous}::cover_worker(void*)  48
+   bool player_core::cover_set_jpeg(const uint8_t*, size_t, CoverSource, uint32_t)  288
+   esp_err_t jpeg_decoder_process(jpeg_decoder_handle_t, const jpeg_decode_cfg_t*, const uint8_t*, uint32_t, uint8_t*, uint32_t, uint32_t*)  176
+   jpeg_parse_dqt_marker  96
+   jpeg_get_bytes  32
+   esp_log  80
+== void {anonymous}::art_task(void*): 2128 bytes (through _ZN11player_core14cover_set_jpeg)
+   void {anonymous}::art_task(void*)  1424
+   void {anonymous}::fall_back()  32
+   bool player_core::cover_set_jpeg(const uint8_t*, size_t, CoverSource, uint32_t)  288
+   esp_err_t jpeg_decoder_process(jpeg_decoder_handle_t, const jpeg_decode_cfg_t*, const uint8_t*, uint32_t, uint8_t*, uint32_t, uint32_t*)  176
+   jpeg_parse_dqt_marker  96
+   jpeg_get_bytes  32
+   esp_log  80
+== void dlna_client::{anonymous}::worker(void*): 3392 bytes (through _ZN11player_core14cover_set_jpeg)
+   void dlna_client::{anonymous}::worker(void*)  2720
+   bool player_core::cover_set_jpeg(const uint8_t*, size_t, CoverSource, uint32_t)  288
+   esp_err_t jpeg_decoder_process(jpeg_decoder_handle_t, const jpeg_decode_cfg_t*, const uint8_t*, uint32_t, uint8_t*, uint32_t, uint32_t*)  176
+   jpeg_parse_dqt_marker  96
+   jpeg_get_bytes  32
+   esp_log  80
+== void {anonymous}::player_task(void*): 1712 bytes (through _ZN11player_core14cover_set_jpeg)
+   void {anonymous}::player_task(void*)  1008
+   {anonymous}::load_cover()::<lambda(FILE*, uint64_t, uint32_t)>  32
+   bool player_core::cover_set_jpeg(const uint8_t*, size_t, CoverSource, uint32_t)  288
+   esp_err_t jpeg_decoder_process(jpeg_decoder_handle_t, const jpeg_decode_cfg_t*, const uint8_t*, uint32_t, uint8_t*, uint32_t, uint32_t*)  176
+   jpeg_parse_dqt_marker  96
+   jpeg_get_bytes  32
+   esp_log  80

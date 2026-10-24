@@ -1,0 +1,11 @@
+{
+  "manifest_version": 1,
+  "bindings": [
+    {
+      "hardware": "sensor_a",
+      "driver": "ble_xiaomi_th",
+      "role": "air_temp",
+      "module": "equipment"
+    }
+  ]
+}

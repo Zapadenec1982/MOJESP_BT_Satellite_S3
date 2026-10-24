@@ -1,0 +1,12 @@
+{
+  "manifest_version": 1,
+  "driver": "uart_link",
+  "description": "Байтовий лінк до співпроцесора через UART: поріг RX-FIFO під 460800, черга подій драйвера (переповнення = втрата синхронізації), проба RX-піна",
+  "category": "link",
+  "hardware_type": "uart_bus",
+  "transport": "wired",
+  "requires_address": false,
+  "multiple_per_bus": false,
+  "provides": {"capability": "link", "type": "blob", "description": "IByteLink for the module that owns the protocol (byte_link.h)"},
+  "settings": []
+}

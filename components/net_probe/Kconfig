@@ -1,0 +1,21 @@
+menu "Network probe (bench images only)"
+
+    config NET_PROBE_ENABLE
+        bool "UDP link probe for tools/net_probe.py"
+        default n
+        help
+            A receiver shaped like an AirPlay 1 stream (125 packets/s of ~1.4 KB) that counts
+            loss, bursts of loss, gaps and jitter, and reports them to the PC once a second
+            together with the internal DMA memory and esp_hosted's frame-copy counters.
+
+            The port is unauthenticated and can switch where esp_hosted allocates its frame
+            copies. Bench images only: set it through boards/<board>/sdkconfig.nettest
+            (-DMODESP_NETTEST=ON), never in a shipping sdkconfig.
+
+    config NET_PROBE_PORT
+        int "UDP port"
+        depends on NET_PROBE_ENABLE
+        range 1024 65535
+        default 5005
+
+endmenu

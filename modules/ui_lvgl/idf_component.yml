@@ -1,0 +1,7 @@
+dependencies:
+  lvgl/lvgl: "~9.3.0"
+  # esp_lvgl_port: LVGL task + display (MIPI-DSI) + touch glue. Its touch API
+  # (lvgl_port_touch_cfg_t) only exists when esp_lcd_touch.h is visible in the including
+  # TU (__has_include), so the module depends on esp_lcd_touch itself, not only via gt911.
+  espressif/esp_lvgl_port: "^2.9.0"
+  espressif/esp_lcd_touch: "^1.2.1"

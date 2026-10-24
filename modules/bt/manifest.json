@@ -1,0 +1,185 @@
+{
+  "manifest_version": 1,
+  "module": "bt",
+  "version": "0.1.0",
+  "description": "Bluetooth через супутник: лінк, стан з'єднання, метадані треку",
+  "priority": 5,
+  "requires": [
+    {
+      "role": "sat_link",
+      "type": "link",
+      "capability": "link",
+      "label": "Лінк до BT-сателіта",
+      "optional": true
+    }
+  ],
+  "state": {
+    "bt.link": {
+      "type": "bool",
+      "access": "read",
+      "default": false,
+      "on_label": "є",
+      "off_label": "немає",
+      "description": "Лінк із супутником піднятий (обмін HELLO відбувся)"
+    },
+    "bt.link_master": {
+      "type": "bool",
+      "access": "read",
+      "default": false,
+      "on_label": "панель",
+      "off_label": "супутник",
+      "description": "Хто тактує I2S-лінк: панель (протокол 1.9, супутник — slave) чи сам супутник"
+    },
+    "bt.sat": {
+      "type": "string",
+      "access": "read",
+      "description": "Збірка супутника, як він назвав себе в HELLO"
+    },
+    "bt.rtt_ms": {
+      "type": "int",
+      "access": "read",
+      "default": 0,
+      "unit": "ms",
+      "description": "Час обороту PING/PONG по лінку"
+    },
+    "bt.state": {
+      "type": "string",
+      "access": "read",
+      "description": "off, idle, discoverable, connecting, connected, streaming"
+    },
+    "bt.codec": {
+      "type": "string",
+      "access": "read",
+      "description": "Кодек з'єднання: SBC, AAC, aptX, aptX HD, LHDC V5"
+    },
+    "bt.peer": {
+      "type": "string",
+      "access": "read",
+      "description": "Ім'я підключеного пристрою"
+    },
+    "bt.title": {
+      "type": "string",
+      "long": true,
+      "access": "read",
+      "description": "Назва треку (AVRCP)"
+    },
+    "bt.artist": {
+      "type": "string",
+      "access": "read",
+      "description": "Виконавець (AVRCP)"
+    },
+    "bt.album": {
+      "type": "string",
+      "access": "read",
+      "description": "Альбом (AVRCP)"
+    },
+    "bt.pos_s": {
+      "type": "int",
+      "access": "read",
+      "default": 0,
+      "unit": "s",
+      "description": "Позиція у треку на телефоні (AVRCP TRACK_POS)"
+    },
+    "bt.dur_s": {
+      "type": "int",
+      "access": "read",
+      "default": 0,
+      "unit": "s",
+      "description": "Тривалість треку, 0 = невідома"
+    },
+    "bt.play_state": {
+      "type": "string",
+      "access": "read",
+      "description": "idle | playing | paused"
+    },
+    "bt.cmd": {
+      "type": "int",
+      "command": true,
+      "access": "readwrite",
+      "default": 0,
+      "min": 0,
+      "max": 6,
+      "step": 1,
+      "description": "AVRCP: 0 нічого, 1 грати, 2 пауза, 3 стоп, 4 наступний, 5 попередній, 6 перемкнути"
+    },
+    "bt.volume": {
+      "type": "int",
+      "access": "read",
+      "default": 0,
+      "description": "Абсолютна гучність AVRCP, 0..127"
+    },
+    "bt.rate_hz": {
+      "type": "int",
+      "access": "read",
+      "default": 0,
+      "unit": "Hz",
+      "description": "Частота потоку, оголошена супутником у STREAM_FMT"
+    },
+    "bt.bits": {
+      "type": "int",
+      "access": "read",
+      "default": 0,
+      "unit": "bit",
+      "description": "Ширина слота I2S, оголошена супутником у STREAM_FMT (16 або 32)"
+    },
+    "bt.uart_ovf": {
+      "type": "int",
+      "access": "read",
+      "default": 0,
+      "description": "Переповнення UART (FIFO_OVF/BUFFER_FULL) — байти, втрачені драйвером"
+    },
+    "bt.rx_drops": {
+      "type": "int",
+      "access": "read",
+      "default": 0,
+      "description": "Цілі кадри, для яких не було місця в кільці до головного циклу"
+    },
+    "bt.seq_gaps": {
+      "type": "int",
+      "access": "read",
+      "default": 0,
+      "description": "Кадри супутника, що не дійшли — за розривами seq"
+    },
+    "bt.cfg_rev": {
+      "type": "int",
+      "access": "read",
+      "default": 0,
+      "description": "Ревізія налаштувань Bluetooth сателіта: міняється з кожною зміною (GET /api/bt)"
+    },
+    "bt.pair_seq": {
+      "type": "int",
+      "access": "read",
+      "default": 0,
+      "description": "Номер запиту спарювання; 0 — не було з моменту старту"
+    },
+    "bt.pair_active": {
+      "type": "bool",
+      "access": "read",
+      "default": false,
+      "description": "Телефон чекає відповіді на запит спарювання"
+    },
+    "bt.pair_kind": {
+      "type": "int",
+      "access": "read",
+      "default": 0,
+      "description": "Вид запиту: 0 — порівняння коду, 1 — згода, 2 — код вводять на телефоні"
+    },
+    "bt.pair_name": {
+      "type": "string",
+      "access": "read",
+      "description": "Ім'я телефона, що просить спарювання"
+    },
+    "bt.pair_by": {
+      "type": "int",
+      "access": "read",
+      "default": 0,
+      "description": "Хто відповів на запит: 0 — ніхто, 1 — панель, 2 — веб"
+    },
+    "bt.pair_result": {
+      "type": "int",
+      "access": "read",
+      "default": 255,
+      "description": "Результат останнього спарювання: 0 спарено, 1 відхилено, 2 час вийшов, 3 збій, 255 — ще немає"
+    }
+  }
+}

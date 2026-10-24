@@ -1,0 +1,11 @@
+# SPDX-FileContributor: 2026 Zapadenec1982
+dependencies:
+  cmd_system:
+    path: ${IDF_PATH}/examples/system/console/advanced/components/cmd_system
+  cmd_nvs:
+    path: ${IDF_PATH}/examples/system/console/advanced/components/cmd_nvs
+  # Same pins as the product firmware (components/modesp_net/idf_component.yml):
+  # the CP image in slave_fw_bin/ must be built from this very esp_hosted release.
+  espressif/esp_wifi_remote: "==1.6.4"
+  espressif/esp_hosted: "==3.0.7"
+  joltwallet/littlefs: "*"

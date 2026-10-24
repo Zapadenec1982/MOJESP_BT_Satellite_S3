@@ -1,0 +1,40 @@
+{
+  "_comment": "Written by the player. DSP config, sectioned by output — see docs/CONCEPT.md 7a. Band type: peak | lowshelf | highshelf | lowpass | highpass | notch.",
+  "version": 2,
+  "mode": "2.0",
+  "crossover": { "freq_hz": 2500, "slope": "LR24" },
+  "outputs": [
+    {
+      "id": "dac0",
+      "label": "СТЕРЕО",
+      "gain_db": 0.0,
+      "delay_ms": 0.00,
+      "invert": false,
+      "bands": [
+        {"type": "lowshelf", "f": 40, "gain": 3.9, "q": 0.707, "on": true},
+        {"type": "peak", "f": 62.5, "gain": 3.1, "q": 1, "on": true},
+        {"type": "peak", "f": 125, "gain": 2.6, "q": 1, "on": true},
+        {"type": "peak", "f": 250, "gain": -0.3, "q": 1, "on": true},
+        {"type": "peak", "f": 500, "gain": -0.3, "q": 1, "on": true},
+        {"type": "peak", "f": 1000, "gain": 0.1, "q": 1, "on": true},
+        {"type": "peak", "f": 2000, "gain": 0.0, "q": 1, "on": false},
+        {"type": "peak", "f": 4000, "gain": -0.1, "q": 1, "on": true},
+        {"type": "peak", "f": 8000, "gain": 0.9, "q": 1, "on": true},
+        {"type": "highshelf", "f": 12000, "gain": 2.4, "q": 0.707, "on": true}
+      ]
+    },
+    {
+      "id": "dac1",
+      "label": "ДРУГИЙ ЦАП",
+      "gain_db": 0.0,
+      "delay_ms": 0.00,
+      "invert": false,
+      "bands": [
+        {"type": "lowpass", "f": 100, "gain": 0.0, "q": 0.71, "on": false},
+        {"type": "peak", "f": 45, "gain": 0.0, "q": 1, "on": false},
+        {"type": "peak", "f": 70, "gain": 0.0, "q": 1, "on": false},
+        {"type": "highpass", "f": 20, "gain": 0.0, "q": 0.71, "on": false}
+      ]
+    }
+  ]
+}

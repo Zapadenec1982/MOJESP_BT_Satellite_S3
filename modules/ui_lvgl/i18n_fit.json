@@ -1,0 +1,928 @@
+{
+  "_comment": "Panel strings wider than their Ukrainian (tools/i18n/fit.py, docs/PLAN_PANEL_LANG_2026-10-12.md §7). px in the reference face. checked: seen fitting on the glass; unchecked: not yet seen.",
+  "face": "ui_font_400_20",
+  "checked": {
+    "bt.auto": {
+      "de": 205.4,
+      "pl": 206.9
+    },
+    "bt.forget": {
+      "de": 93.7,
+      "pl": 83.9
+    },
+    "bt.forget_all": {
+      "de": 129.3,
+      "pl": 176.0
+    },
+    "bt.name": {
+      "en": 53.3,
+      "de": 53.3,
+      "pl": 60.9
+    },
+    "bt.name_title": {
+      "de": 270.9,
+      "pl": 276.2
+    },
+    "bt.no_phones": {
+      "pl": 260.5
+    },
+    "bt.paired": {
+      "de": 182.8,
+      "pl": 176.1
+    },
+    "bt.phone_none": {
+      "de": 145.3
+    },
+    "bt.save": {
+      "de": 88.6
+    },
+    "bt.visible": {
+      "de": 105.7,
+      "pl": 109.1
+    },
+    "cat.down": {
+      "en": 490.0
+    },
+    "cat.keep": {
+      "en": 116.2,
+      "de": 110.1,
+      "pl": 125.8
+    },
+    "cat.keep_or_preset": {
+      "de": 489.4,
+      "pl": 420.2
+    },
+    "cat.q_128.short": {
+      "en": 81.2
+    },
+    "cat.sort_quality": {
+      "en": 61.4,
+      "de": 69.4,
+      "pl": 64.3
+    },
+    "cat.sort_votes": {
+      "de": 80.1
+    },
+    "dlna.none": {
+      "en": 349.6,
+      "de": 380.1,
+      "pl": 408.9
+    },
+    "dlna.searching": {
+      "en": 184.4,
+      "de": 189.1,
+      "pl": 175.0
+    },
+    "dlna.servers": {
+      "pl": 192.0
+    },
+    "eq.band_n": {
+      "pl": 92.2
+    },
+    "eq.freq": {
+      "en": 92.0,
+      "de": 82.0,
+      "pl": 125.2
+    },
+    "eq.gain": {
+      "pl": 120.3
+    },
+    "eq.preset.bass_treble": {
+      "en": 137.5,
+      "de": 145.5,
+      "pl": 119.1
+    },
+    "eq.preset.classical": {
+      "en": 80.5,
+      "pl": 90.3
+    },
+    "eq.preset.custom": {
+      "en": 86.9,
+      "de": 99.6,
+      "pl": 100.4
+    },
+    "eq.preset.flat": {
+      "de": 64.6,
+      "pl": 85.1
+    },
+    "eq.preset.headphones": {
+      "en": 112.7
+    },
+    "eq.preset.hiphop": {
+      "en": 69.6,
+      "de": 72.8,
+      "pl": 69.6
+    },
+    "eq.preset.more_treble": {
+      "pl": 151.9
+    },
+    "eq.preset.night": {
+      "en": 47.9,
+      "de": 53.2,
+      "pl": 36.2
+    },
+    "eq.preset.rock": {
+      "en": 44.4,
+      "de": 44.4,
+      "pl": 44.4
+    },
+    "eq.reset_mine": {
+      "de": 236.8,
+      "pl": 191.9
+    },
+    "eq.type": {
+      "en": 42.6
+    },
+    "lib.on_card.few": {
+      "en": 188.9,
+      "de": 188.1
+    },
+    "lib.on_card.many": {
+      "en": 188.9,
+      "de": 188.1,
+      "pl": 191.9
+    },
+    "lib.on_card.one": {
+      "de": 188.1
+    },
+    "lib.on_card.other": {
+      "en": 188.9,
+      "de": 188.1
+    },
+    "manage.visible_as": {
+      "de": 185.6,
+      "pl": 208.2
+    },
+    "nav.player": {
+      "pl": 105.4
+    },
+    "now.usb": {
+      "en": 210.5,
+      "pl": 179.3
+    },
+    "now.usb_waiting": {
+      "en": 203.4,
+      "de": 232.8,
+      "pl": 189.1
+    },
+    "page.language": {
+      "en": 87.7,
+      "de": 72.5
+    },
+    "page.service": {
+      "en": 65.1,
+      "de": 65.1
+    },
+    "page.stations": {
+      "en": 73.6
+    },
+    "page.wifi": {
+      "de": 56.0
+    },
+    "sound.bass": {
+      "en": 43.9,
+      "de": 43.9
+    },
+    "sound.eq_off": {
+      "de": 815.8
+    },
+    "sound.treble": {
+      "pl": 72.3
+    },
+    "sound.undo": {
+      "de": 104.3
+    },
+    "spk.balance": {
+      "en": 71.2,
+      "de": 71.2
+    },
+    "spk.center": {
+      "en": 58.4,
+      "pl": 61.9
+    },
+    "spk.setup_web": {
+      "pl": 303.9
+    },
+    "spk.title": {
+      "en": 82.2,
+      "de": 116.8
+    },
+    "spk.unset": {
+      "de": 276.0,
+      "pl": 251.8
+    },
+    "srcsub.airplay_wait": {
+      "en": 270.7,
+      "de": 330.6,
+      "pl": 246.2
+    },
+    "srcsub.phone_off": {
+      "pl": 236.8
+    },
+    "st.all": {
+      "en": 139.4,
+      "de": 140.2,
+      "pl": 188.2
+    },
+    "st.preset_n": {
+      "de": 150.5
+    },
+    "st.tab_countries": {
+      "en": 85.6
+    },
+    "st.tab_fav": {
+      "en": 92.6
+    },
+    "st.tab_genres": {
+      "pl": 68.1
+    },
+    "svc.boot": {
+      "en": 85.0,
+      "de": 109.9,
+      "pl": 110.5
+    },
+    "svc.boot_unknown": {
+      "de": 93.6
+    },
+    "svc.drops": {
+      "de": 73.1
+    },
+    "svc.internal": {
+      "pl": 109.9
+    },
+    "svc.largest": {
+      "en": 120.1,
+      "de": 121.8,
+      "pl": 142.9
+    },
+    "svc.link": {
+      "de": 101.4,
+      "pl": 52.6
+    },
+    "svc.link_up": {
+      "en": 22.2,
+      "de": 45.1,
+      "pl": 32.3
+    },
+    "svc.loop ↑": {
+      "de": 168.3,
+      "pl": 129.4
+    },
+    "svc.memory ↑": {
+      "de": 92.2
+    },
+    "svc.min": {
+      "en": 84.4,
+      "de": 84.4,
+      "pl": 84.4
+    },
+    "svc.peer": {
+      "pl": 98.8
+    },
+    "svc.ram ↑": {
+      "en": 141.0,
+      "de": 140.7
+    },
+    "svc.safe.short": {
+      "pl": 122.2
+    },
+    "svc.safe_off": {
+      "en": 62.6,
+      "de": 62.6,
+      "pl": 83.1
+    },
+    "svc.stack": {
+      "en": 97.7,
+      "de": 99.8
+    },
+    "svc.uptime": {
+      "de": 105.3,
+      "pl": 97.5
+    },
+    "sys.bt_ready": {
+      "pl": 237.9
+    },
+    "sys.device": {
+      "pl": 98.8
+    },
+    "sys.links": {
+      "en": 111.9,
+      "de": 123.1,
+      "pl": 85.4
+    },
+    "sys.scheme.short": {
+      "en": 68.8,
+      "de": 61.3
+    },
+    "sys.scheme_amber": {
+      "de": 84.3
+    },
+    "sys.screen": {
+      "en": 61.2,
+      "de": 94.4
+    },
+    "sys.services": {
+      "en": 75.4
+    },
+    "sys.sleep": {
+      "en": 94.4,
+      "de": 106.5,
+      "pl": 116.4
+    },
+    "sys.sound": {
+      "en": 56.6,
+      "de": 50.6,
+      "pl": 63.7
+    },
+    "sys.standby_bl.short": {
+      "en": 109.2,
+      "de": 111.1,
+      "pl": 100.8
+    },
+    "sys.wifi_off": {
+      "de": 145.3
+    },
+    "undo.action": {
+      "de": 104.3
+    },
+    "wifi.forget": {
+      "de": 93.7,
+      "pl": 83.9
+    },
+    "wifi.nearby": {
+      "en": 149.9,
+      "de": 200.4,
+      "pl": 132.2
+    },
+    "wifi.none": {
+      "de": 237.5
+    },
+    "wifi.not_connected": {
+      "de": 145.3
+    },
+    "xover.biamp": {
+      "en": 89.7,
+      "de": 91.9,
+      "pl": 89.7
+    },
+    "xover.four": {
+      "en": 96.9,
+      "de": 133.0
+    },
+    "xover.stereo_title": {
+      "de": 249.2,
+      "pl": 251.9
+    },
+    "xover.title": {
+      "de": 144.6
+    },
+    "xover.unsupported": {
+      "pl": 211.1
+    }
+  },
+  "unchecked": {
+    "airplay.st_not_applied": {
+      "de": 258.9,
+      "pl": 292.4
+    },
+    "airplay.st_starting": {
+      "pl": 185.5
+    },
+    "airplay.st_stopped": {
+      "de": 201.4,
+      "pl": 192.8
+    },
+    "airplay.st_switching": {
+      "de": 245.1
+    },
+    "airplay.st_wifi": {
+      "pl": 188.0
+    },
+    "bt.codecs_later": {
+      "de": 533.1
+    },
+    "bt.dropping": {
+      "en": 220.7,
+      "de": 188.4
+    },
+    "bt.err_no_satellite": {
+      "en": 260.8,
+      "de": 236.4
+    },
+    "bt.forget_all_body": {
+      "pl": 689.1
+    },
+    "bt.forget_all_q": {
+      "de": 220.5,
+      "pl": 278.2
+    },
+    "bt.forget_body": {
+      "de": 626.6,
+      "pl": 613.6
+    },
+    "bt.forget_q": {
+      "de": 182.9,
+      "pl": 192.2
+    },
+    "bt.hidden_wait": {
+      "de": 406.1
+    },
+    "bt.name_lag": {
+      "de": 525.6,
+      "pl": 551.3
+    },
+    "bt.off": {
+      "pl": 95.0
+    },
+    "bt.settings_old": {
+      "de": 1395.5
+    },
+    "bt.settings_wait": {
+      "de": 611.4
+    },
+    "bt.wait_phone": {
+      "de": 193.2
+    },
+    "cal.m_doubtful": {
+      "de": 367.1
+    },
+    "cal.m_found": {
+      "pl": 169.5
+    },
+    "cal.m_interrupted": {
+      "en": 368.2
+    },
+    "cal.m_mic_open": {
+      "en": 255.1,
+      "de": 308.0,
+      "pl": 223.2
+    },
+    "cal.m_mic_read": {
+      "en": 276.9,
+      "de": 232.9,
+      "pl": 265.8
+    },
+    "cal.m_no_dip": {
+      "de": 354.2,
+      "pl": 332.6
+    },
+    "cal.m_no_memory": {
+      "de": 334.8
+    },
+    "cal.m_no_tone": {
+      "en": 327.6,
+      "de": 283.3,
+      "pl": 216.1
+    },
+    "cal.m_outside": {
+      "de": 330.2,
+      "pl": 296.8
+    },
+    "cal.m_progress": {
+      "en": 262.9,
+      "de": 264.2,
+      "pl": 222.9
+    },
+    "cal.m_silence": {
+      "en": 256.0,
+      "de": 266.6,
+      "pl": 271.6
+    },
+    "cal.m_stopped": {
+      "de": 116.4
+    },
+    "cat.countries.few": {
+      "en": 112.6
+    },
+    "cat.countries.many": {
+      "en": 112.6,
+      "de": 90.8,
+      "pl": 88.1
+    },
+    "cat.countries.one": {
+      "en": 96.4
+    },
+    "cat.countries.other": {
+      "en": 112.6
+    },
+    "cat.down": {
+      "de": 528.8
+    },
+    "cat.genres.few": {
+      "de": 92.3,
+      "pl": 95.2
+    },
+    "cat.genres.many": {
+      "pl": 116.8
+    },
+    "cat.genres.one": {
+      "en": 79.6,
+      "de": 82.0,
+      "pl": 101.0
+    },
+    "cat.genres.other": {
+      "en": 89.9,
+      "de": 92.3,
+      "pl": 101.4
+    },
+    "cat.lossless": {
+      "pl": 99.1
+    },
+    "cat.per_day": {
+      "pl": 103.8
+    },
+    "cat.q_192.short": {
+      "en": 81.2
+    },
+    "cat.q_all": {
+      "de": 33.4,
+      "pl": 89.9
+    },
+    "cat.q_flac.short": {
+      "pl": 95.4
+    },
+    "cat.stations.few": {
+      "en": 101.5
+    },
+    "cat.stations.many": {
+      "en": 101.5
+    },
+    "cat.stations.other": {
+      "en": 101.5
+    },
+    "cat.toast_already": {
+      "en": 181.3,
+      "de": 201.9
+    },
+    "cat.toast_kept": {
+      "de": 258.4,
+      "pl": 198.1
+    },
+    "cat.toast_preset": {
+      "de": 186.3,
+      "pl": 127.6
+    },
+    "cat.type_name": {
+      "de": 302.5
+    },
+    "cat.votes.few": {
+      "de": 109.6
+    },
+    "cat.votes.many": {
+      "de": 109.6
+    },
+    "cat.votes.one": {
+      "de": 98.6
+    },
+    "cat.votes.other": {
+      "de": 109.6
+    },
+    "dlna.empty": {
+      "en": 170.9,
+      "de": 159.9,
+      "pl": 146.6
+    },
+    "dlna.queued": {
+      "de": 174.4
+    },
+    "dlna.st_broken_list": {
+      "de": 260.9
+    },
+    "dlna.st_cancelled": {
+      "de": 118.6
+    },
+    "dlna.st_garbled": {
+      "en": 317.4,
+      "de": 327.6,
+      "pl": 305.8
+    },
+    "dlna.st_no_socket": {
+      "pl": 363.9
+    },
+    "dlna.st_no_total": {
+      "en": 473.2,
+      "de": 460.5,
+      "pl": 404.5
+    },
+    "dlna.st_not_searched": {
+      "en": 222.1,
+      "de": 293.1,
+      "pl": 275.4
+    },
+    "dlna.st_page": {
+      "en": 145.8,
+      "de": 174.1
+    },
+    "dlna.st_page_size": {
+      "de": 426.5
+    },
+    "dlna.st_playing": {
+      "en": 121.7,
+      "de": 102.9,
+      "pl": 163.5
+    },
+    "dlna.st_too_deep": {
+      "en": 258.8,
+      "de": 306.6,
+      "pl": 211.6
+    },
+    "dlna.st_unreachable": {
+      "en": 430.3
+    },
+    "eq.no_bands": {
+      "de": 117.4
+    },
+    "eq.preset.reggae": {
+      "en": 66.9,
+      "de": 66.9,
+      "pl": 66.9
+    },
+    "eq.reset_done": {
+      "de": 210.6,
+      "pl": 200.2
+    },
+    "eq.slope": {
+      "en": 50.1,
+      "de": 58.4,
+      "pl": 98.1
+    },
+    "eq.type.highpass": {
+      "en": 89.1,
+      "de": 89.9,
+      "pl": 167.6
+    },
+    "eq.type.highshelf": {
+      "pl": 122.5
+    },
+    "eq.type.lowpass": {
+      "en": 84.9,
+      "de": 77.1,
+      "pl": 165.2
+    },
+    "eq.type.notch": {
+      "pl": 100.0
+    },
+    "eq.type.peak": {
+      "en": 44.1,
+      "de": 61.0,
+      "pl": 58.1
+    },
+    "kb.space": {
+      "de": 84.2
+    },
+    "lib.on_card.few": {
+      "pl": 175.2
+    },
+    "lib.on_card.one": {
+      "en": 178.6,
+      "pl": 165.6
+    },
+    "lib.on_card.other": {
+      "pl": 176.6
+    },
+    "now.airplay_pick": {
+      "en": 309.5,
+      "de": 385.7
+    },
+    "now.airplay_waiting": {
+      "en": 175.2,
+      "de": 171.0,
+      "pl": 200.6
+    },
+    "now.aux": {
+      "pl": 171.6
+    },
+    "now.make_visible": {
+      "de": 213.0
+    },
+    "now.no_device": {
+      "pl": 237.9
+    },
+    "now.off": {
+      "pl": 167.4
+    },
+    "now.pick": {
+      "de": 239.8,
+      "pl": 207.7
+    },
+    "now.stopped": {
+      "pl": 104.4
+    },
+    "pair.accepted_web": {
+      "en": 506.2,
+      "de": 446.8,
+      "pl": 529.4
+    },
+    "pair.confirm_phone": {
+      "de": 285.6,
+      "pl": 256.5
+    },
+    "pair.consent": {
+      "de": 422.2
+    },
+    "pair.failed": {
+      "de": 224.9,
+      "pl": 207.2
+    },
+    "pair.hide": {
+      "de": 105.0
+    },
+    "pair.numeric": {
+      "de": 725.9
+    },
+    "pair.ok": {
+      "de": 206.8,
+      "pl": 197.8
+    },
+    "pair.passkey": {
+      "de": 357.1
+    },
+    "pair.rejected_web": {
+      "en": 262.2,
+      "de": 165.6,
+      "pl": 242.5
+    },
+    "pair.rejecting": {
+      "de": 146.9,
+      "pl": 105.0
+    },
+    "pair.timeout": {
+      "de": 339.2
+    },
+    "sound.eq_off": {
+      "pl": 210.8
+    },
+    "spk.closed": {
+      "de": 247.1,
+      "pl": 174.9
+    },
+    "spk.left": {
+      "pl": 104.3
+    },
+    "spk.port_manual": {
+      "de": 287.0,
+      "pl": 291.6
+    },
+    "spk.port_none": {
+      "de": 304.0,
+      "pl": 334.4
+    },
+    "spk.ported": {
+      "de": 227.7
+    },
+    "srcsub.servers": {
+      "en": 187.7
+    },
+    "srcsub.stations.few": {
+      "en": 187.1,
+      "de": 194.2
+    },
+    "srcsub.stations.many": {
+      "en": 187.1,
+      "de": 194.2
+    },
+    "srcsub.stations.one": {
+      "de": 194.2
+    },
+    "srcsub.stations.other": {
+      "en": 187.1,
+      "de": 194.2
+    },
+    "srcsub.tracks.few": {
+      "en": 84.2,
+      "pl": 89.9
+    },
+    "srcsub.tracks.many": {
+      "pl": 106.5
+    },
+    "srcsub.tracks.one": {
+      "en": 73.9,
+      "pl": 80.2
+    },
+    "srcsub.tracks.other": {
+      "en": 84.2,
+      "pl": 91.2
+    },
+    "srcsub.usb_wait": {
+      "en": 201.0,
+      "de": 236.9
+    },
+    "svc.boot_brownout": {
+      "de": 135.9,
+      "pl": 144.3
+    },
+    "svc.boot_power_on": {
+      "de": 103.1
+    },
+    "svc.boot_task_wdt": {
+      "pl": 116.9
+    },
+    "sys.ap_switch_failed": {
+      "de": 246.9
+    },
+    "sys.ap_switching": {
+      "de": 177.8
+    },
+    "sys.eq_off": {
+      "pl": 95.8
+    },
+    "sys.minutes": {
+      "en": 63.0,
+      "de": 68.1,
+      "pl": 63.0
+    },
+    "sys.not_announced": {
+      "en": 269.9
+    },
+    "sys.not_built": {
+      "de": 184.4,
+      "pl": 181.6
+    },
+    "sys.scheme_blue": {
+      "pl": 81.8
+    },
+    "sys.scheme_red": {
+      "pl": 87.3
+    },
+    "sys.timbre": {
+      "de": 97.1,
+      "pl": 88.8
+    },
+    "unit.hz": {
+      "en": 24.2,
+      "de": 24.2,
+      "pl": 24.2
+    },
+    "unit.ms": {
+      "en": 27.9,
+      "de": 27.9,
+      "pl": 27.9
+    },
+    "wifi.busy": {
+      "en": 423.3
+    },
+    "wifi.forget_panel": {
+      "de": 1274.6
+    },
+    "wifi.forget_q": {
+      "de": 182.9,
+      "pl": 192.2
+    },
+    "wifi.no_ip": {
+      "pl": 263.3
+    },
+    "wifi.no_wep": {
+      "pl": 467.4
+    },
+    "wifi.no_wpa": {
+      "pl": 467.8
+    },
+    "wifi.none_chosen": {
+      "de": 200.4
+    },
+    "wifi.pass_q": {
+      "en": 201.1,
+      "de": 196.4
+    },
+    "wifi.pass_short": {
+      "de": 412.2
+    },
+    "wifi.password": {
+      "en": 88.2,
+      "de": 84.2
+    },
+    "wifi.saved_silent": {
+      "de": 381.5
+    },
+    "wifi.scan_busy": {
+      "en": 239.4,
+      "de": 199.5,
+      "pl": 200.9
+    },
+    "wifi.scan_failed": {
+      "de": 195.5,
+      "pl": 275.2
+    },
+    "wifi.scanning": {
+      "en": 102.0,
+      "pl": 139.2
+    },
+    "wifi.this_network": {
+      "en": 109.2,
+      "de": 146.8
+    },
+    "wifi.why_none": {
+      "de": 221.6
+    },
+    "wifi.why_pass": {
+      "de": 164.6
+    },
+    "wifi.why_refused": {
+      "de": 220.4
+    },
+    "wifi.why_security": {
+      "de": 250.1,
+      "pl": 281.5
+    }
+  }
+}

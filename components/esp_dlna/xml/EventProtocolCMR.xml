@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<e:propertyset xmlns:e="urn:schemas-upnp-org:event-1-0">
+    <e:property>
+        <SourceProtocolInfo></SourceProtocolInfo>
+    </e:property>
+    <e:property>
+        <SinkProtocolInfo>http-get:*:audio/mpeg:*,http-get:*:audio/mp3:*,http-get:*:audio/x-mpeg:*,http-get:*:audio/mpeg3:*,http-get:*:audio/flac:*,http-get:*:audio/x-flac:*,http-get:*:audio/wav:*,http-get:*:audio/x-wav:*,http-get:*:audio/wave:*,http-get:*:audio/mpegurl:*,http-get:*:audio/x-mpegurl:*,http-get:*:audio/x-scpls:*
+        </SinkProtocolInfo>
+    </e:property>
+    <e:property>
+        <CurrentConnectionIDs>0</CurrentConnectionIDs>
+    </e:property>
+</e:propertyset>

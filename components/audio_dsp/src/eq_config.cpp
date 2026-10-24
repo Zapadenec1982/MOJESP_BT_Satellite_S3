@@ -1,0 +1,316 @@
+/**
+ * @file eq_config.cpp
+ * @brief jsmn parser and serialiser for /data/eq.json.
+ */
+
+#include "eq_config.h"
+#include "safe_file.h"
+
+#define JSMN_STATIC          // jsmn is header-only and linked in several places
+#include "jsmn.h"
+
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#include <climits>
+
+namespace audio_core {
+
+EqBus& eq_bus() {
+    static EqBus bus;
+    return bus;
+}
+
+void EqBus::publish(const EqBand* bands, int count) {
+    if (count < 0) count = 0;
+    if (count > MAX_BANDS) count = MAX_BANDS;
+    const uint32_t s = seq_.load(std::memory_order_relaxed);
+    seq_.store(s + 1, std::memory_order_release);          // odd: write in progress
+    for (int i = 0; i < count; i++) bands_[i] = bands[i];
+    count_ = count;
+    seq_.store(s + 2, std::memory_order_release);          // even: complete
+}
+
+bool EqBus::read(EqBand* bands, int& count) const {
+    for (int attempt = 0; attempt < 4; attempt++) {
+        const uint32_t s0 = seq_.load(std::memory_order_acquire);
+        if (s0 == 0) return false;             // nothing published yet
+        if (s0 & 1u) continue;                 // writer mid-set
+        const int n = count_;
+        for (int i = 0; i < n && i < MAX_BANDS; i++) bands[i] = bands_[i];
+        if (seq_.load(std::memory_order_acquire) == s0) { count = n; return true; }
+    }
+    return false;                              // the caller keeps what it has
+}
+namespace {
+
+constexpr size_t MAX_FILE   = 4096;
+constexpr int    MAX_TOKENS = 320;
+
+bool key_is(const char* json, const jsmntok_t& t, const char* name) {
+    const int n = t.end - t.start;
+    return t.type == JSMN_STRING && (int)strlen(name) == n && !strncmp(json + t.start, name, n);
+}
+
+void copy_str(const char* json, const jsmntok_t& t, char* out, size_t out_sz) {
+    int n = t.end - t.start;
+    if (n < 0) n = 0;
+    if ((size_t)n >= out_sz) n = (int)out_sz - 1;
+    memcpy(out, json + t.start, n);
+    out[n] = '\0';
+}
+
+float num(const char* json, const jsmntok_t& t) {
+    char b[24];
+    copy_str(json, t, b, sizeof(b));
+    return strtof(b, nullptr);
+}
+
+bool truthy(const char* json, const jsmntok_t& t) {
+    return (t.end - t.start) == 4 && !strncmp(json + t.start, "true", 4);
+}
+
+BandType parse_type(const char* json, const jsmntok_t& t) {
+    char b[16];
+    copy_str(json, t, b, sizeof(b));
+    if (!strcmp(b, "lowshelf"))  return BandType::LOW_SHELF;
+    if (!strcmp(b, "highshelf")) return BandType::HIGH_SHELF;
+    if (!strcmp(b, "lowpass"))   return BandType::LOW_PASS;
+    if (!strcmp(b, "highpass"))  return BandType::HIGH_PASS;
+    if (!strcmp(b, "notch"))     return BandType::NOTCH;
+    return BandType::PEAK;
+}
+
+const char* type_name(BandType t) {
+    switch (t) {
+    case BandType::LOW_SHELF:  return "lowshelf";
+    case BandType::HIGH_SHELF: return "highshelf";
+    case BandType::LOW_PASS:   return "lowpass";
+    case BandType::HIGH_PASS:  return "highpass";
+    case BandType::NOTCH:      return "notch";
+    default:                   return "peak";
+    }
+}
+
+/// Number of tokens `tok[i]` spans, itself included, never past `count`. jsmn lays children
+/// out contiguously after their parent. A loop, not recursion: eq.json can come back from a
+/// user backup, and a few hundred levels of '[' would recurse off main's stack at every boot
+/// (the defect RP-2 fixed in the radio parsers, deep review 2026-10-12). Each token takes the
+/// place of one child still owed and owes its own in turn; the value ends when nothing is owed.
+int span(const jsmntok_t* tok, int count, int i) {
+    if (i >= count) return 1;
+    int j = i + 1;
+    for (int pending = tok[i].size; pending > 0 && j < count; ++j) pending += tok[j].size - 1;
+    return j - i;
+}
+
+} // namespace
+
+bool eq_parse(const char* json, size_t len, EqConfig& cfg) {
+    cfg = EqConfig{};
+
+    jsmn_parser p;
+    jsmntok_t tok[MAX_TOKENS];
+    jsmn_init(&p);
+    const int n = jsmn_parse(&p, json, len, tok, MAX_TOKENS);
+    if (n < 1 || tok[0].type != JSMN_OBJECT) return false;
+
+    // Schema gate, before anything is read out of the file (plan item 11.2). eq_serialize
+    // has always stamped "version": 2 and nothing ever looked at it, so a file written by a
+    // LATER build would be read with today's rules: the fields this parser does not know
+    // would be dropped silently, and the first touch of a slider would write the file back
+    // without them. Refusing costs a flat EQ and a log line; the alternative costs the file.
+    {
+        int file_version = EQ_SCHEMA_VERSION;
+        for (int i = 1, f = 0; f < tok[0].size && i < n; f++) {
+            const int vi = i + 1;
+            if (vi >= n) break;
+            if (key_is(json, tok[i], "version")) { file_version = (int)num(json, tok[vi]); break; }
+            i = vi + span(tok, n, vi);
+        }
+        if (file_version > EQ_SCHEMA_VERSION) return false;
+    }
+
+    int i = 1;
+    for (int f = 0; f < tok[0].size && i < n; f++) {
+        const jsmntok_t& key = tok[i];
+        const int vi = i + 1;
+        if (vi >= n) break;
+
+        if (key_is(json, key, "mode")) {
+            copy_str(json, tok[vi], cfg.mode, sizeof(cfg.mode));
+        } else if (key_is(json, key, "preset")) {
+            // An id is [a-z0-9_]; anything else is not one, and would not survive a rewrite
+            // copied as it is (a cut escape, a quote), so it is dropped.
+            const int len = tok[vi].end - tok[vi].start;
+            bool plain = tok[vi].type == JSMN_STRING && len > 0 && len < (int)sizeof(cfg.preset);
+            for (int c = 0; plain && c < len; c++) {
+                const char ch = json[tok[vi].start + c];
+                plain = (ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9') || ch == '_';
+            }
+            if (plain) copy_str(json, tok[vi], cfg.preset, sizeof(cfg.preset));
+        } else if (key_is(json, key, "crossover")) {
+            // one nested object: pick freq_hz out of it
+            int ci = vi + 1;
+            for (int c = 0; c < tok[vi].size && ci < n; c++) {
+                if (key_is(json, tok[ci], "freq_hz")) cfg.crossover_hz = num(json, tok[ci + 1]);
+                ci += 1 + span(tok, n, ci + 1);
+            }
+        } else if (key_is(json, key, "outputs") && tok[vi].type == JSMN_ARRAY) {
+            int si = vi + 1;
+            for (int s = 0; s < tok[vi].size && si < n; s++) {
+                if (cfg.sections < MAX_SECTIONS && tok[si].type == JSMN_OBJECT) {
+                    EqSection& sec = cfg.sec[cfg.sections];
+                    int ki = si + 1;
+                    for (int k = 0; k < tok[si].size && ki < n; k++) {
+                        const jsmntok_t& sk = tok[ki];
+                        const int svi = ki + 1;
+                        if      (key_is(json, sk, "id"))       copy_str(json, tok[svi], sec.id, sizeof(sec.id));
+                        else if (key_is(json, sk, "label"))    copy_str(json, tok[svi], sec.label, sizeof(sec.label));
+                        else if (key_is(json, sk, "gain_db"))  sec.gain_db  = num(json, tok[svi]);
+                        else if (key_is(json, sk, "delay_ms")) sec.delay_ms = num(json, tok[svi]);
+                        else if (key_is(json, sk, "invert"))   sec.invert   = truthy(json, tok[svi]);
+                        else if (key_is(json, sk, "bands") && tok[svi].type == JSMN_ARRAY) {
+                            int bi = svi + 1;
+                            for (int b = 0; b < tok[svi].size && bi < n; b++) {
+                                if (sec.count < MAX_BANDS && tok[bi].type == JSMN_OBJECT) {
+                                    EqBand& band = sec.bands[sec.count];
+                                    int fi = bi + 1;
+                                    for (int q = 0; q < tok[bi].size && fi < n; q++) {
+                                        const jsmntok_t& bk = tok[fi];
+                                        if      (key_is(json, bk, "type")) band.type    = parse_type(json, tok[fi + 1]);
+                                        else if (key_is(json, bk, "f"))    band.freq_hz = num(json, tok[fi + 1]);
+                                        else if (key_is(json, bk, "gain")) band.gain_db = num(json, tok[fi + 1]);
+                                        else if (key_is(json, bk, "q"))    band.q       = num(json, tok[fi + 1]);
+                                        else if (key_is(json, bk, "on"))   band.enabled = truthy(json, tok[fi + 1]);
+                                        fi += 1 + span(tok, n, fi + 1);
+                                    }
+                                    sec.count++;
+                                }
+                                bi += span(tok, n, bi);
+                            }
+                        }
+                        ki += 1 + span(tok, n, ki + 1);
+                    }
+                    cfg.sections++;
+                }
+                si += span(tok, n, si);
+            }
+        }
+        i = vi + span(tok, n, vi);
+    }
+    return cfg.sections > 0;
+}
+
+size_t eq_serialize(const EqConfig& cfg, char* buf, size_t buf_sz) {
+    size_t o = 0;
+    // A tiny append helper: every write checks the remaining room, so a too-small buffer
+    // returns 0 rather than producing half a JSON document.
+    // `at` is a local copy on purpose. `o` is captured by reference, so with the size
+    // bound written as `buf_sz - o` the optimiser cannot prove the subtraction does not
+    // wrap — and at -O2 it says so. Reading the offset once states the invariant the guard
+    // already establishes: past this point the offset is strictly inside the buffer.
+    auto add = [&](const char* fmt, auto... args) {
+        const size_t at = o;
+        if (at >= buf_sz) { o = buf_sz + 1; return; }
+        // Clamped because snprintf reports its length as an int, so a size past INT_MAX is
+        // meaningless to it in any case. It also settles the range analysis, which at -O2
+        // will not take the guard above as proof that the subtraction cannot wrap.
+        size_t room = buf_sz - at;
+        if (room > (size_t)INT_MAX) room = (size_t)INT_MAX;
+        const int w = snprintf(buf + at, room, fmt, args...);
+        if (w < 0 || (size_t)w >= room) o = buf_sz + 1;
+        else o = at + (size_t)w;
+    };
+
+    add("{\n  \"_comment\": \"%s\",\n",
+        "Written by the player. DSP config, sectioned by output — see docs/CONCEPT.md 7a. "
+        "Band type: peak | lowshelf | highshelf | lowpass | highpass | notch.");
+    add("  \"version\": %d,\n  \"mode\": \"%s\",\n", EQ_SCHEMA_VERSION, cfg.mode);
+    // A new field and not a new schema: an older build skips it and reads the bands as ever.
+    if (cfg.preset[0]) add("  \"preset\": \"%s\",\n", cfg.preset);
+    add("  \"crossover\": { \"freq_hz\": %.0f, \"slope\": \"LR24\" },\n", (double)cfg.crossover_hz);
+    add("  \"outputs\": [\n");
+    for (int s = 0; s < cfg.sections; s++) {
+        const EqSection& sec = cfg.sec[s];
+        add("    {\n      \"id\": \"%s\",\n      \"label\": \"%s\",\n", sec.id, sec.label);
+        add("      \"gain_db\": %.1f,\n      \"delay_ms\": %.2f,\n      \"invert\": %s,\n",
+            (double)sec.gain_db, (double)sec.delay_ms, sec.invert ? "true" : "false");
+        add("      \"bands\": [\n");
+        for (int b = 0; b < sec.count; b++) {
+            const EqBand& x = sec.bands[b];
+            // Frequency and Q as %.6g, not rounded to a fixed width: the presets put a band at
+            // 62.5 Hz and the shelves at Q 0.707, and "%.0f"/"%.2f" brought them back as 62 and
+            // 0.71 - still the preset to the ear, but no longer equal to it, so the EQ screen
+            // showed the user's own set after every reboot (customer, 04.10.2026).
+            add("        {\"type\": \"%s\", \"f\": %.6g, \"gain\": %.1f, \"q\": %.6g, \"on\": %s}%s\n",
+                type_name(x.type), (double)x.freq_hz, (double)x.gain_db, (double)x.q,
+                x.enabled ? "true" : "false", b + 1 < sec.count ? "," : "");
+        }
+        add("      ]\n    }%s\n", s + 1 < cfg.sections ? "," : "");
+    }
+    add("  ]\n}\n");
+    return o > buf_sz ? 0 : o;
+}
+
+bool eq_load(const char* path, EqConfig& cfg) {
+    cfg = EqConfig{};
+    FILE* f = fopen(path, "r");
+    if (!f) return false;
+    static char buf[MAX_FILE];
+    const size_t len = fread(buf, 1, sizeof(buf) - 1, f);
+    fclose(f);
+    buf[len] = '\0';
+    return eq_parse(buf, len, cfg);
+}
+
+/// eq_save()'s and eq_copy_file()'s: static, because they run on the main task, which has
+/// little stack to spare, and one at a time (the EQ's owner calls both).
+static char s_out[MAX_FILE];
+
+bool eq_save(const char* path, const EqConfig& cfg) {
+    char* const buf = s_out;
+    const size_t len = eq_serialize(cfg, buf, sizeof(s_out));
+    if (len == 0) return false;
+
+    // One implementation of write -> read back -> rename, shared with the station list, the
+    // resume point and POST /api/bindings (plan item 11.2). This used to be its own copy,
+    // and that copy did `remove(path)` before the rename on the belief that LittleFS would
+    // not replace an existing target. It does — lfs_rename commits the replace in one
+    // metadata operation — so the remove bought nothing and opened a window in which the EQ
+    // existed nowhere, around a flash erase. safe_file removes first only if the rename
+    // actually refuses.
+    //
+    // No validator: these bytes come out of eq_serialize, and what eq_parse makes of
+    // eq_serialize's output is settled by the host round-trip tests, not by re-parsing on
+    // the device. Re-parsing here would also put eq_parse's 5 KB token array on the caller's
+    // stack, and eq_save is called from the main loop.
+    return safe_file::save(path, buf, len);
+}
+
+bool eq_copy_file(const char* src, const char* dst) {
+    // Not safe_file::copy: that streams through two half-kilobyte buffers on the caller's
+    // stack, and this runs where eq_save does, on the main task. A file that is not whole in
+    // the buffer is not one eq_load() reads either, and is not copied.
+    FILE* f = fopen(src, "rb");
+    if (!f) return false;
+    const size_t len = fread(s_out, 1, sizeof(s_out), f);
+    const bool whole = len < sizeof(s_out) && !ferror(f);
+    fclose(f);
+    return whole && safe_file::save(dst, s_out, len);
+}
+
+const char* eq_type_name(BandType t) { return type_name(t); }
+
+bool eq_type_from_name(const char* name, size_t len, BandType& out) {
+    static constexpr struct { const char* s; BandType t; } NAMES[] = {
+        {"peak", BandType::PEAK}, {"lowshelf", BandType::LOW_SHELF}, {"highshelf", BandType::HIGH_SHELF},
+        {"lowpass", BandType::LOW_PASS}, {"highpass", BandType::HIGH_PASS}, {"notch", BandType::NOTCH},
+    };
+    for (const auto& n : NAMES) {
+        if (strlen(n.s) == len && !strncmp(name, n.s, len)) { out = n.t; return true; }
+    }
+    return false;
+}
+
+} // namespace audio_core

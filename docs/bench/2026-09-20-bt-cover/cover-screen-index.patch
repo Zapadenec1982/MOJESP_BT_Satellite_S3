@@ -1,0 +1,23 @@
+--- a/modules/ui_lvgl/src/screen_now.cpp
++++ b/modules/ui_lvgl/src/screen_now.cpp
+@@ -76,6 +76,7 @@
+     lv_image_dsc_t cover_dsc[2] = {};
+     uint8_t   cover_which = 0;
+     uint32_t  cover_gen   = 0xFFFFFFFF;
++    int cover_source = -1;
+     lv_obj_t* title    = nullptr;
+     lv_obj_t* sub      = nullptr;
+     lv_obj_t* tech     = nullptr;
+@@ -473,8 +474,10 @@
+     // The picture itself is decoded by the player, in hardware, once per track; all that
+     // happens here is pointing the widget at whichever slot is current.
+     {
+-        const auto cv = player_core::cover_view();
+-        if (cv.gen != n.cover_gen) {
++        auto cv = player_core::cover_view(s.source == 3 ? player_core::CoverSource::Bluetooth : player_core::CoverSource::File);
++        if (!is_file && s.source != 3) cv = {};
++        if (cv.gen != n.cover_gen || n.cover_source != s.source) {
++            n.cover_source = s.source;
+             n.cover_gen = cv.gen;
+             if (cv.px && cv.w > 0) {
+                 n.cover_which ^= 1;

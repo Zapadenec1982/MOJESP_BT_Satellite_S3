@@ -1,0 +1,12 @@
+{
+  "manifest_version": 1,
+  "driver": "dsi_st7701",
+  "description": "ST7701S MIPI-DSI панель 480x800 (Guition JC4880P443C): DSI-шина, DPI-панель, LDO PHY, скидання, підсвітка LEDC",
+  "category": "lcd",
+  "hardware_type": "dsi_display",
+  "transport": "wired",
+  "requires_address": false,
+  "multiple_per_bus": false,
+  "provides": {"capability": "lcd", "type": "blob", "description": "esp_lcd panel + io handles for the UI module (lcd_port.h)"},
+  "settings": []
+}

@@ -1,0 +1,17 @@
+idf_component_register(
+    SRCS
+        "src/base_module.cpp"
+        "src/shared_state.cpp"
+        "src/module_manager.cpp"
+        "src/liveness.cpp"
+        "src/app.cpp"
+    INCLUDE_DIRS
+        "include"
+        "${CMAKE_SOURCE_DIR}/generated"
+    REQUIRES
+        etl
+    PRIV_REQUIRES
+        esp_timer
+        esp_system
+        freertos
+)

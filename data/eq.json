@@ -1,0 +1,45 @@
+{
+  "_comment": "DSP of the audio core (modules/audio), 48 kHz. Sectioned by OUTPUT — see docs/CONCEPT.md 7a. Two DACs are planned, giving four modes picked from the menu: 2.0 (DAC 1 only), biamp, 4.0 and 2.1. The shape is fixed now so saved presets never need migrating. TODAY only section 0 is loaded and only mode 2.0 runs; everything else is declared, not implemented. Band type: peak | lowshelf | highshelf | lowpass | highpass | notch; f in Hz, gain in dB, q. Edit, then toggle audio.eq_reload.",
+  "version": 2,
+  "mode": "2.0",
+  "crossover": {
+    "_comment": "Linkwitz-Riley 24 dB/oct = two cascaded Butterworths (q 0.707) at one frequency. Unused in 2.0.",
+    "freq_hz": 2500,
+    "slope": "LR24"
+  },
+  "outputs": [
+    {
+      "id": "dac0",
+      "label": "СТЕРЕО",
+      "gain_db": 0.0,
+      "delay_ms": 0.0,
+      "invert": false,
+      "bands": [
+        {"type": "lowshelf",  "f": 80,    "gain": 0.0, "q": 0.7, "on": false},
+        {"type": "peak",      "f": 125,   "gain": 0.0, "q": 1.0, "on": false},
+        {"type": "peak",      "f": 250,   "gain": 0.0, "q": 1.0, "on": false},
+        {"type": "peak",      "f": 500,   "gain": 0.0, "q": 1.0, "on": false},
+        {"type": "peak",      "f": 1000,  "gain": 0.0, "q": 1.0, "on": false},
+        {"type": "peak",      "f": 2000,  "gain": 0.0, "q": 1.0, "on": false},
+        {"type": "peak",      "f": 4000,  "gain": 0.0, "q": 1.0, "on": false},
+        {"type": "peak",      "f": 8000,  "gain": 0.0, "q": 1.0, "on": false},
+        {"type": "highshelf", "f": 12000, "gain": 0.0, "q": 0.7, "on": false},
+        {"type": "highpass",  "f": 20,    "gain": 0.0, "q": 0.707, "on": false}
+      ]
+    },
+    {
+      "id": "dac1",
+      "label": "ДРУГИЙ ЦАП",
+      "_comment": "Silent until there is a second DAC. Its meaning follows `mode`: the other way in biamp, the second pair in 4.0, the subwoofer in 2.1.",
+      "gain_db": 0.0,
+      "delay_ms": 0.0,
+      "invert": false,
+      "bands": [
+        {"type": "lowpass", "f": 100, "gain": 0.0, "q": 0.707, "on": false},
+        {"type": "peak",    "f": 45,  "gain": 0.0, "q": 1.0, "on": false},
+        {"type": "peak",    "f": 70,  "gain": 0.0, "q": 1.0, "on": false},
+        {"type": "highpass","f": 20,  "gain": 0.0, "q": 0.707, "on": false}
+      ]
+    }
+  ]
+}

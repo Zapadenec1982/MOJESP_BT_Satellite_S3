@@ -1,0 +1,891 @@
+{
+  "manifest_version": 1,
+  "module": "audio",
+  "version": "0.1.0",
+  "description": "Аудіоядро: вибір джерела (тон / AUX / BT), ASRC для BT, параметричний EQ, гучність, лімітер → I2S-A на PCM5102A; окрема задача на ядрі 1",
+  "priority": 2,
+  "requires": [
+    {
+      "role": "port_main",
+      "type": "audio",
+      "capability": "audio",
+      "label": "I2S-A: DAC + ADC (48 кГц, майстер)"
+    },
+    {
+      "role": "port_bt",
+      "type": "audio",
+      "capability": "audio",
+      "label": "I2S-B: BT-модуль (P4 раб)",
+      "optional": true
+    },
+    {
+      "role": "amp_enable",
+      "type": "actuator",
+      "capability": "binary_out",
+      "label": "Enable підсилювача / XSMT DAC",
+      "optional": true
+    }
+  ],
+  "state": {
+    "audio.source": {
+      "type": "int",
+      "access": "readwrite",
+      "default": 0,
+      "persist": true,
+      "mqtt_subscribe": true,
+      "options": [
+        {
+          "value": 0,
+          "id": "off",
+          "label": "Вимкнено"
+        },
+        {
+          "value": 1,
+          "id": "tone",
+          "label": "Тест-тон"
+        },
+        {
+          "value": 2,
+          "id": "aux",
+          "label": "AUX"
+        },
+        {
+          "value": 3,
+          "id": "bt",
+          "label": "Bluetooth"
+        },
+        {
+          "value": 4,
+          "id": "file",
+          "label": "Файл"
+        },
+        {
+          "value": 5,
+          "id": "radio",
+          "label": "Радіо"
+        },
+        {
+          "value": 6,
+          "id": "airplay",
+          "label": "AirPlay"
+        },
+        {
+          "value": 7,
+          "id": "usb",
+          "label": "USB"
+        }
+      ],
+      "description": "Активне джерело"
+    },
+    "audio.volume": {
+      "type": "int",
+      "access": "readwrite",
+      "default": 30,
+      "min": 0,
+      "max": 100,
+      "step": 1,
+      "unit": "%",
+      "persist": true,
+      "mqtt_subscribe": true,
+      "description": "Гучність (0 = тиша, 100 = 0 дБ)"
+    },
+    "audio.vol_max": {
+      "type": "int",
+      "access": "readwrite",
+      "default": 100,
+      "min": 40,
+      "max": 100,
+      "step": 5,
+      "unit": "%",
+      "persist": true,
+      "description": "Максимум: стискає шкалу гучності — 100 % на будь-якому пристрої грає як цей відсоток, кожен крок дрібнішає. Збережена гучність не змінюється"
+    },
+    "audio.vol_start": {
+      "type": "int",
+      "access": "readwrite",
+      "default": 0,
+      "min": 0,
+      "max": 100,
+      "step": 5,
+      "unit": "%",
+      "persist": true,
+      "description": "Після увімкнення гучність не більша за цю; 0 — як була"
+    },
+    "audio.vol_eff": {
+      "type": "float",
+      "access": "read",
+      "default": 0.0,
+      "unit": "%",
+      "description": "Гучність, яку застосувало ядро: audio.volume × audio.vol_max / 100. Оновлюється, коли нове значення дійшло"
+    },
+    "audio.mute": {
+      "type": "bool",
+      "access": "readwrite",
+      "default": false,
+      "persist": true,
+      "mqtt_subscribe": true,
+      "on_label": "тиша",
+      "off_label": "звук",
+      "description": "Mute"
+    },
+    "audio.eq_enabled": {
+      "type": "bool",
+      "access": "readwrite",
+      "default": true,
+      "persist": true,
+      "on_label": "увімкнено",
+      "off_label": "обхід",
+      "description": "Параметричний EQ (/data/eq.json)"
+    },
+    "audio.width": {
+      "type": "int",
+      "access": "readwrite",
+      "default": 100,
+      "min": 0,
+      "max": 200,
+      "step": 5,
+      "unit": "%",
+      "persist": true,
+      "mqtt_subscribe": true,
+      "description": "Ширина стерео (mid/side): 0 моно, 100 як є, 200 подвійна"
+    },
+    "audio.mono_bass_hz": {
+      "type": "int",
+      "access": "readwrite",
+      "default": 0,
+      "min": 0,
+      "max": 300,
+      "step": 10,
+      "unit": "Hz",
+      "persist": true,
+      "mqtt_subscribe": true,
+      "description": "Моно-бас нижче цієї частоти; 0 — вимкнено"
+    },
+    "audio.eq_reload": {
+      "type": "bool",
+      "access": "readwrite",
+      "default": false,
+      "description": "Перечитати /data/eq.json (momentary)"
+    },
+    "audio.eq_rev": {
+      "type": "int",
+      "access": "read",
+      "default": 0,
+      "description": "Ревізія EQ: міняється з кожною правкою — з панелі чи з вебу (GET /api/eq)"
+    },
+    "audio.bt_clock_follow": {
+      "type": "bool",
+      "access": "readwrite",
+      "default": true,
+      "persist": true,
+      "mqtt_subscribe": true,
+      "on_label": "такт",
+      "off_label": "ресемплер",
+      "description": "Bluetooth: вихідний такт іде за потоком (сервотакт, етап 13); вимкнено — кожен BT-потік через ресемплер. Діє з наступного старту потоку"
+    },
+    "audio.tone_hz": {
+      "type": "int",
+      "access": "readwrite",
+      "default": 1000,
+      "min": 20,
+      "max": 20000,
+      "step": 1,
+      "unit": "Hz",
+      "description": "Частота тест-тону (−12 дБFS)"
+    },
+    "audio.tone_mode": {
+      "type": "int",
+      "access": "readwrite",
+      "default": 0,
+      "options": [
+        {
+          "value": 0,
+          "id": "chain",
+          "label": "Через DSP (−12 dB від стелі)"
+        },
+        {
+          "value": 1,
+          "id": "raw",
+          "label": "Калібрування: точний рівень ЦАП"
+        },
+        {
+          "value": 2,
+          "id": "bursts",
+          "label": "Калібрування: сплески 250/750 мс"
+        }
+      ],
+      "description": "Що грає джерело «тест-тон». Калібрувальні режими йдуть повз DSP і вимикаються самі через 60 с"
+    },
+    "audio.tone_db10": {
+      "type": "int",
+      "access": "readwrite",
+      "default": -260,
+      "min": -600,
+      "max": 0,
+      "step": 5,
+      "unit": "0.1 dBFS",
+      "description": "Рівень калібрувального тону від повної шкали ЦАП, у десятих dBFS (−260 = −26 dBFS, з чого починає калібрування)"
+    },
+    "audio.tone_ch": {
+      "type": "int",
+      "access": "readwrite",
+      "default": 3,
+      "options": [
+        {
+          "value": 1,
+          "id": "left",
+          "label": "Лівий"
+        },
+        {
+          "value": 2,
+          "id": "right",
+          "label": "Правий"
+        },
+        {
+          "value": 3,
+          "id": "both",
+          "label": "Обидва"
+        }
+      ],
+      "description": "Канал калібрувального тону"
+    },
+    "audio.cal_port_off": {
+      "type": "bool",
+      "access": "readwrite",
+      "default": false,
+      "description": "Поки грає тест-тон — без частоти порту (ручний пошук порту). Не зберігається; знімається, щойно тон зупинено"
+    },
+    "audio.cal_vol_cap": {
+      "type": "int",
+      "access": "readwrite",
+      "default": 0,
+      "min": 0,
+      "max": 100,
+      "step": 1,
+      "unit": "%",
+      "description": "Поки грає тест-тон — гучність не більша за цю (0 — без обмеження). Не зберігається; знімається, щойно тон зупинено"
+    },
+    "audio.sources": {
+      "type": "int",
+      "access": "read",
+      "default": 0,
+      "description": "Бітова маска доступних джерел, біт = значення audio.source (0 вимк … 6 AirPlay, 7 USB) — залежить від bindings і вбудованих модулів"
+    },
+    "audio.state": {
+      "type": "string",
+      "access": "read",
+      "description": "Стан аудіоядра"
+    },
+    "audio.out_mode": {
+      "type": "string",
+      "access": "read",
+      "description": "Режим виходу з eq.json: 2.0 | biamp | 4.0 | 2.1 (реалізовано лише 2.0)"
+    },
+    "audio.in_l": {
+      "type": "float",
+      "access": "read",
+      "unit": "dBFS",
+      "description": "Рівень джерела ДО обробки, лівий (AUX/BT: чи взагалі щось приходить)"
+    },
+    "audio.in_r": {
+      "type": "float",
+      "access": "read",
+      "unit": "dBFS",
+      "description": "Рівень джерела ДО обробки, правий"
+    },
+    "audio.level_l": {
+      "type": "float",
+      "access": "read",
+      "unit": "dBFS",
+      "description": "Пік лівого каналу (вихід)"
+    },
+    "audio.level_r": {
+      "type": "float",
+      "access": "read",
+      "unit": "dBFS",
+      "description": "Пік правого каналу (вихід)"
+    },
+    "audio.underruns": {
+      "type": "int",
+      "access": "read",
+      "default": 0,
+      "description": "Недоливи вихідного DMA / порожнє BT-кільце"
+    },
+    "audio.in_rate": {
+      "type": "float",
+      "access": "read",
+      "unit": "Hz",
+      "description": "Виміряна частота BT-входу"
+    },
+    "audio.asrc_ppm": {
+      "type": "float",
+      "access": "read",
+      "unit": "ppm",
+      "description": "Поправка ASRC відносно номіналу"
+    },
+    "audio.cpu_pct": {
+      "type": "float",
+      "access": "read",
+      "unit": "%",
+      "description": "Завантаження аудіозадачі (DSP-час / реальний час)"
+    },
+    "audio.amp_clip_db10": {
+      "type": "int",
+      "access": "readwrite",
+      "default": -98,
+      "min": -240,
+      "max": 0,
+      "step": 5,
+      "unit": "0.1 dBFS",
+      "persist": true,
+      "description": "Стеля підсилювача: рівень ЦАП, з якого TPA3255 обрізає, у десятих dBFS. Типово −98 (−9.8 dBFS, даташит при 24 В); точно — калібруванням. Лімітер стоїть на 0.5 dB нижче"
+    },
+    "audio.amp_cal": {
+      "type": "bool",
+      "access": "readwrite",
+      "default": false,
+      "persist": true,
+      "on_label": "відкалібровано",
+      "off_label": "з даташиту",
+      "description": "Чи стелю підсилювача виміряно на цьому модулі. Лишається для сумісності: дорівнює audio.amp_src = «виміряно»"
+    },
+    "audio.amp_src": {
+      "type": "int",
+      "access": "readwrite",
+      "default": 0,
+      "persist": true,
+      "options": [
+        {
+          "value": 0,
+          "id": "datasheet",
+          "label": "З даташиту"
+        },
+        {
+          "value": 1,
+          "id": "manual",
+          "label": "Вписано вручну"
+        },
+        {
+          "value": 2,
+          "id": "ear",
+          "label": "Знайдено на слух"
+        },
+        {
+          "value": 3,
+          "id": "measured",
+          "label": "Виміряно"
+        }
+      ],
+      "description": "Звідки стеля підсилювача: з даташиту, вписана вручну, знайдена на слух чи виміряна мультиметром"
+    },
+    "audio.drive_db": {
+      "type": "int",
+      "access": "readwrite",
+      "default": 0,
+      "min": 0,
+      "max": 6,
+      "step": 1,
+      "unit": "dB",
+      "persist": true,
+      "description": "Наскільки 100 % гучності заходить у лімітери понад чисту стелю (0 — найгучніше чисте)"
+    },
+    "audio.hp_hz": {
+      "type": "int",
+      "access": "readwrite",
+      "default": 40,
+      "min": 0,
+      "max": 80,
+      "step": 5,
+      "unit": "Hz",
+      "persist": true,
+      "description": "Сабсонік: 4-й порядок нижче цієї частоти (0 — вимкнено; 20…80). Нижче порту колонки — струм без звуку. Не діє, коли задано частоту порту"
+    },
+    "audio.port_hz": {
+      "type": "int",
+      "access": "readwrite",
+      "default": 0,
+      "min": 0,
+      "max": 80,
+      "step": 1,
+      "unit": "Hz",
+      "persist": true,
+      "description": "Частота порту колонок-фазоінверторів (0 — вимкнено; 30…80). Задана — сабсонік стає на 0,8 від неї, а біля неї бас піднімається. Як знайти: тест-тон 30…80 Гц на малій гучності; де дифузор майже стоїть, а з порту дме найсильніше — це вона"
+    },
+    "audio.port_lift_db": {
+      "type": "int",
+      "access": "readwrite",
+      "default": 3,
+      "min": 0,
+      "max": 6,
+      "step": 1,
+      "unit": "dB",
+      "persist": true,
+      "description": "Підйом біля частоти порту (0…6 дБ). Більше — глибше; якщо колонка й так «бумкає», загуде"
+    },
+    "audio.port_meas": {
+      "type": "bool",
+      "access": "readwrite",
+      "default": false,
+      "on_label": "міряю",
+      "off_label": "виміряти",
+      "description": "Знайти частоту порту мікрофоном панелі (~40 с): отвір мікрофона за 0,5–1 см від центру великого динаміка обраної колонки, у кімнаті тиша; колонка гратиме тихі тони 20…100 Гц. Знайдене впевнено — вписується в «Частоту порту» само"
+    },
+    "audio.port_meas_ch": {
+      "type": "int",
+      "access": "readwrite",
+      "default": 1,
+      "persist": true,
+      "options": [
+        {
+          "value": 1,
+          "id": "left",
+          "label": "Ліва"
+        },
+        {
+          "value": 2,
+          "id": "right",
+          "label": "Права"
+        }
+      ],
+      "description": "Яку колонку міряти"
+    },
+    "audio.port_meas_status": {
+      "type": "string",
+      "access": "read",
+      "description": "Як іде вимір і що знайдено. «сумнівно» — провал неглибокий: мікрофон ближче до центру дифузора, тиша, і ще раз; «провалу нема» — колонка закрита або мікрофон далеко; «не чує» — панель не біля обраної колонки"
+    },
+    "audio.port_meas_hz": {
+      "type": "float",
+      "access": "read",
+      "default": 0.0,
+      "unit": "Hz",
+      "description": "Виміряна частота порту"
+    },
+    "audio.spk_type": {
+      "type": "int",
+      "access": "readwrite",
+      "default": 0,
+      "persist": true,
+      "options": [
+        {
+          "value": 0,
+          "id": "unset",
+          "label": "Не задано"
+        },
+        {
+          "value": 1,
+          "id": "ported",
+          "label": "З отвором"
+        },
+        {
+          "value": 2,
+          "id": "closed",
+          "label": "Закриті"
+        }
+      ],
+      "description": "Які колонки (Налаштування › Колонки): з отвором — частота порту діє; закриті — порт не діє, хоч би яке число записано; не задано — як було"
+    },
+    "audio.port_src": {
+      "type": "int",
+      "access": "readwrite",
+      "default": 0,
+      "persist": true,
+      "options": [
+        {
+          "value": 0,
+          "id": "unset",
+          "label": "Не задано"
+        },
+        {
+          "value": 1,
+          "id": "manual",
+          "label": "Вписано вручну"
+        },
+        {
+          "value": 3,
+          "id": "measured",
+          "label": "Виміряно"
+        }
+      ],
+      "description": "Звідки частота порту: вписана вручну чи виміряна (ті самі числа, що в audio.amp_src). Вимір лише пропонує число — записує його «Прийняти» чи «Застосувати»"
+    },
+    "audio.loud_ref": {
+      "type": "int",
+      "access": "readwrite",
+      "default": 100,
+      "min": 20,
+      "max": 100,
+      "step": 1,
+      "unit": "%",
+      "persist": true,
+      "description": "Звичайна гучність, % ефективного рівня: на ній тонкомпенсація нічого не додає, тихіше — додає. 100 — від верху шкали, як було"
+    },
+    "audio.loudness": {
+      "type": "int",
+      "access": "readwrite",
+      "default": 70,
+      "min": 0,
+      "max": 100,
+      "step": 10,
+      "unit": "%",
+      "persist": true,
+      "description": "Тонкомпенсація: на тихій гучності повертає бас і верхи, які вухо там недочуває (криві рівної гучності ISO 226). 0 — вимкнено, 100 — повна; на 100 % гучності її немає"
+    },
+    "audio.bass_db": {
+      "type": "int",
+      "access": "readwrite",
+      "default": 0,
+      "min": -6,
+      "max": 6,
+      "step": 1,
+      "unit": "dB",
+      "persist": true,
+      "description": "Бас: полиця на 100 Гц поверх будь-якого звучання й тоді, коли еквалайзер вимкнено. Власних смуг не займає; 0 — не діє"
+    },
+    "audio.treble_db": {
+      "type": "int",
+      "access": "readwrite",
+      "default": 0,
+      "min": -6,
+      "max": 6,
+      "step": 1,
+      "unit": "dB",
+      "persist": true,
+      "description": "Високі: полиця на 10 кГц поверх будь-якого звучання й тоді, коли еквалайзер вимкнено. Власних смуг не займає; 0 — не діє"
+    },
+    "audio.balance_db10": {
+      "type": "int",
+      "access": "readwrite",
+      "default": 0,
+      "min": -60,
+      "max": 60,
+      "step": 5,
+      "unit": "0.1 dB",
+      "persist": true,
+      "description": "Баланс у десятих dB: більше нуля — тихіше лівий канал, менше — правий. Лише приглушує, запасу не забирає; 0 — не діє"
+    },
+    "audio.loud_db": {
+      "type": "float",
+      "access": "read",
+      "default": 0.0,
+      "unit": "dB",
+      "description": "Скільки тонкомпенсація зараз додає басу"
+    },
+    "audio.bass_xo_hz": {
+      "type": "int",
+      "access": "readwrite",
+      "default": 120,
+      "min": 0,
+      "max": 250,
+      "step": 10,
+      "unit": "Hz",
+      "persist": true,
+      "description": "Бас-лімітер: нижче цієї частоти гучний бас стискається першим, до −12 dB, середина не «дихає» (0 — вимкнено; 60…250)"
+    },
+    "audio.rms_cap_db10": {
+      "type": "int",
+      "access": "readwrite",
+      "default": 0,
+      "min": -120,
+      "max": 0,
+      "step": 5,
+      "unit": "0.1 dB",
+      "persist": true,
+      "description": "Стеля потужності басу для блока живлення, що просідає (0 — вимкнено). Вмикати лише за кроком 4 калібрування"
+    },
+    "audio.bass_gr": {
+      "type": "float",
+      "access": "read",
+      "default": 0.0,
+      "unit": "dB",
+      "description": "Наскільки бас-лімітер прибрав бас за останні пів секунди"
+    },
+    "audio.ceiling_dbfs": {
+      "type": "float",
+      "access": "read",
+      "unit": "dBFS",
+      "description": "Поріг лімітера на ЦАП: стеля підсилювача мінус 0.5 dB"
+    },
+    "audio.eq_headroom_db": {
+      "type": "float",
+      "access": "read",
+      "default": 0.0,
+      "unit": "dB",
+      "description": "Запас під EQ: скільки dB зверху шкали гучності забирає підйом EQ"
+    },
+    "audio.dsp_pct": {
+      "type": "float",
+      "access": "read",
+      "default": 0.0,
+      "unit": "%",
+      "description": "DSP: частка тактів ядра за останні пів секунди"
+    },
+    "audio.dsp_max_pct": {
+      "type": "float",
+      "access": "read",
+      "default": 0.0,
+      "unit": "%",
+      "description": "DSP: найважчий блок за пів секунди, у відсотках від часу блоку (понад 80 — тісно)"
+    },
+    "audio.out_clamps": {
+      "type": "int",
+      "access": "read",
+      "default": 0,
+      "description": "Семпли, обрізані на виході після лімітера (має бути 0)"
+    },
+    "audio.dsp_faults": {
+      "type": "int",
+      "access": "read",
+      "default": 0,
+      "description": "Блоки, які DSP замінив тишею: NaN або нескінченність у ланцюзі (має бути 0)"
+    },
+    "audio.lim_gr": {
+      "type": "float",
+      "access": "read",
+      "default": 0.0,
+      "unit": "dB",
+      "description": "Затухання лімітера (0 — не працює)"
+    },
+    "audio.out_caps": {
+      "type": "int",
+      "access": "read",
+      "default": 1,
+      "description": "Схеми виходів, які прошивка грає, бітами: 1 стерео, 2 стерео й сабвуфер, 4 бі-ампінг, 8 чотири колонки"
+    }
+  },
+  "ui": {
+    "page": "Аудіо",
+    "page_id": "audio",
+    "icon": "volume-2",
+    "order": 10,
+    "cards": [
+      {
+        "title": "Відтворення",
+        "widgets": [
+          {
+            "key": "audio.source",
+            "widget": "select"
+          },
+          {
+            "key": "audio.volume",
+            "widget": "slider"
+          },
+          {
+            "key": "audio.vol_max",
+            "widget": "slider"
+          },
+          {
+            "key": "audio.vol_start",
+            "widget": "slider"
+          },
+          {
+            "key": "audio.mute",
+            "widget": "toggle"
+          },
+          {
+            "key": "audio.state",
+            "widget": "status_text"
+          }
+        ]
+      },
+      {
+        "title": "Бас і тонкомпенсація",
+        "widgets": [
+          {
+            "key": "audio.loudness",
+            "widget": "slider"
+          },
+          {
+            "key": "audio.loud_db",
+            "widget": "value"
+          },
+          {
+            "key": "audio.bass_db",
+            "widget": "slider"
+          },
+          {
+            "key": "audio.treble_db",
+            "widget": "slider"
+          },
+          {
+            "key": "audio.balance_db10",
+            "widget": "slider"
+          },
+          {
+            "key": "audio.port_hz",
+            "widget": "number_input"
+          },
+          {
+            "key": "audio.port_lift_db",
+            "widget": "slider"
+          },
+          {
+            "key": "audio.port_meas_ch",
+            "widget": "select"
+          },
+          {
+            "key": "audio.port_meas",
+            "widget": "toggle"
+          },
+          {
+            "key": "audio.port_meas_status",
+            "widget": "status_text"
+          },
+          {
+            "key": "audio.port_meas_hz",
+            "widget": "value"
+          }
+        ]
+      },
+      {
+        "title": "Підсилювач",
+        "widgets": [
+          {
+            "key": "audio.amp_clip_db10",
+            "widget": "number_input"
+          },
+          {
+            "key": "audio.amp_cal",
+            "widget": "toggle"
+          },
+          {
+            "key": "audio.ceiling_dbfs",
+            "widget": "value"
+          },
+          {
+            "key": "audio.drive_db",
+            "widget": "slider"
+          },
+          {
+            "key": "audio.hp_hz",
+            "widget": "slider"
+          },
+          {
+            "key": "audio.bass_xo_hz",
+            "widget": "slider"
+          },
+          {
+            "key": "audio.rms_cap_db10",
+            "widget": "number_input"
+          },
+          {
+            "key": "audio.bass_gr",
+            "widget": "value"
+          },
+          {
+            "key": "audio.eq_headroom_db",
+            "widget": "value"
+          },
+          {
+            "key": "audio.lim_gr",
+            "widget": "value"
+          },
+          {
+            "key": "audio.dsp_faults",
+            "widget": "value"
+          },
+          {
+            "key": "audio.dsp_pct",
+            "widget": "value"
+          },
+          {
+            "key": "audio.dsp_max_pct",
+            "widget": "value"
+          },
+          {
+            "key": "audio.out_clamps",
+            "widget": "value"
+          },
+          {
+            "key": "audio.tone_mode",
+            "widget": "select"
+          },
+          {
+            "key": "audio.tone_ch",
+            "widget": "select"
+          },
+          {
+            "key": "audio.tone_db10",
+            "widget": "number_input"
+          },
+          {
+            "key": "audio.tone_hz",
+            "widget": "number_input"
+          }
+        ]
+      },
+      {
+        "title": "DSP",
+        "widgets": [
+          {
+            "key": "audio.eq_enabled",
+            "widget": "toggle"
+          },
+          {
+            "key": "audio.eq_reload",
+            "widget": "toggle"
+          },
+          {
+            "key": "audio.bt_clock_follow",
+            "widget": "toggle"
+          },
+          {
+            "key": "audio.tone_hz",
+            "widget": "number_input"
+          }
+        ]
+      },
+      {
+        "title": "Діагностика",
+        "widgets": [
+          {
+            "key": "audio.in_l",
+            "widget": "value"
+          },
+          {
+            "key": "audio.in_r",
+            "widget": "value"
+          },
+          {
+            "key": "audio.level_l",
+            "widget": "value"
+          },
+          {
+            "key": "audio.level_r",
+            "widget": "value"
+          },
+          {
+            "key": "audio.underruns",
+            "widget": "value"
+          },
+          {
+            "key": "audio.in_rate",
+            "widget": "value"
+          },
+          {
+            "key": "audio.asrc_ppm",
+            "widget": "value"
+          },
+          {
+            "key": "audio.cpu_pct",
+            "widget": "value"
+          }
+        ]
+      }
+    ]
+  },
+  "mqtt": {
+    "publish": [
+      "audio.source",
+      "audio.volume",
+      "audio.mute",
+      "audio.state",
+      "audio.underruns"
+    ],
+    "subscribe": [
+      "audio.source",
+      "audio.volume",
+      "audio.mute"
+    ]
+  }
+}

@@ -1,0 +1,120 @@
+{
+  "manifest_version": 1,
+  "module": "player",
+  "version": "0.1.0",
+  "description": "Локальне відтворення з microSD: MP3, FLAC, WAV",
+  "priority": 4,
+  "requires": [],
+  "state": {
+    "player.state": {
+      "type": "string",
+      "access": "read",
+      "description": "idle | playing | paused | error"
+    },
+    "player.track": {
+      "type": "string",
+      "long": true,
+      "access": "readwrite",
+      "description": "Шлях до файлу на картці"
+    },
+    "player.title": {
+      "type": "string",
+      "long": true,
+      "access": "read",
+      "description": "Назва трека або ім'я файла"
+    },
+    "player.format": {
+      "type": "string",
+      "access": "read",
+      "description": "Наприклад FLAC 16/44.1"
+    },
+    "player.pos_s": {
+      "type": "int",
+      "access": "read",
+      "default": 0,
+      "unit": "s",
+      "description": "Позиція у треку"
+    },
+    "player.dur_s": {
+      "type": "int",
+      "access": "read",
+      "default": 0,
+      "unit": "s",
+      "description": "Тривалість трека; 0 — невідома"
+    },
+    "player.cmd": {
+      "type": "int",
+      "command": true,
+      "access": "readwrite",
+      "default": 0,
+      "min": 0,
+      "max": 6,
+      "step": 1,
+      "mqtt_subscribe": true,
+      "description": "0 нічого, 1 грати, 2 пауза, 3 стоп, 4 наступний, 5 попередній, 6 пуск/пауза"
+    },
+    "player.index": {
+      "type": "int",
+      "access": "read",
+      "default": 0,
+      "description": "Позиція в черзі"
+    },
+    "player.count": {
+      "type": "int",
+      "access": "read",
+      "default": 0,
+      "description": "Скільки треків у черзі"
+    },
+    "player.seek_s": {
+      "type": "int",
+      "access": "readwrite",
+      "default": -1,
+      "min": -1,
+      "max": 86400,
+      "step": 1,
+      "unit": "s",
+      "mqtt_subscribe": true,
+      "description": "Перемотка: секунда, куди стрибнути; -1 — нічого"
+    },
+    "player.artist": {
+      "type": "string",
+      "long": true,
+      "access": "read",
+      "default": "",
+      "description": "Виконавець із тегів"
+    },
+    "player.album": {
+      "type": "string",
+      "long": true,
+      "access": "read",
+      "default": "",
+      "description": "Альбом із тегів"
+    },
+    "player.dir": {
+      "type": "string",
+      "long": true,
+      "access": "read",
+      "default": "",
+      "description": "Тека, з якої зібрано чергу; відновлюється при старті з /data/last_dir"
+    },
+    "player.repeat": {
+      "type": "int",
+      "access": "readwrite",
+      "default": 0,
+      "min": 0,
+      "max": 2,
+      "step": 1,
+      "persist": true,
+      "mqtt_subscribe": true,
+      "description": "0 вимкнено, 1 один трек, 2 вся черга"
+    },
+    "player.shuffle": {
+      "type": "bool",
+      "access": "readwrite",
+      "default": false,
+      "persist": true,
+      "mqtt_subscribe": true,
+      "description": "Перемішування черги"
+    }
+  }
+}

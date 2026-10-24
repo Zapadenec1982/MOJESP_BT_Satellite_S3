@@ -1,0 +1,5 @@
+dependencies:
+  # Same pins as the product firmware (components/modesp_net/idf_component.yml) and
+  # tools/c6_updater — the C6 must already run the matching 3.0.7 CP image.
+  espressif/esp_wifi_remote: "==1.6.4"
+  espressif/esp_hosted: "==3.0.7"

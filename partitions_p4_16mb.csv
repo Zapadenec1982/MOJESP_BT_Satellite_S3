@@ -1,0 +1,37 @@
+# P4_DSP — 16 MB flash layout (Guition JC4880P443C).
+# Two 4 MB OTA slots, coredump (the USB-CDC console gives no output after a panic),
+# slave_fw = ESP-Hosted co-processor image for the ESP32-C6 (pushed to the C6 over
+# SDIO by the updater, see docs/C6_UPDATE.md), data = LittleFS.
+# Partition table at 0x10000 (CONFIG_PARTITION_TABLE_OFFSET): on ESP32-P4 the bootloader
+# starts at 0x2000 and with app rollback enabled it no longer fits below the default 0x8000.
+#
+# data vs userdata — why there are two LittleFS partitions since 22.09.2026.
+# `data` carries BUILD OUTPUT: board.json, bindings.json, ui.json, the web bundle, the
+# factory eq.json. The build makes data.bin out of data/ and `idf.py flash` writes it, so
+# every full flash rewrites that partition whole. Until this split the firmware also wrote
+# what a person makes — the EQ they tuned, their station list, the track to resume — into
+# the same partition, so a board.json change (which needs a full flash: it is not in the
+# app) took all of it with it. Measured 18.09.2026: an EQ with two active bands and a
+# six-station list, none of it in git; it happened again on 22.09.2026.
+# `userdata` has NO image in the build, so nothing writes it during a flash. It is formatted
+# on its first boot and migrated into once (UserStore, components/modesp_services).
+# 512 KB for ~16 KB of files is not waste: littlefs spreads erases over every free block,
+# so the spare blocks are the wear budget of a file rewritten on every EQ edit.
+#
+# 4 MB slots since 05.10.2026. With AAC and M4A registered the image was 93 % of a 3 MB slot
+# (216 KB free), while `data` was 7.3 MB holding 219 KB. Two rows do not move:
+# - `slave_fw` stays at 0x630000, because tools/c6_updater/partitions.csv mirrors it so a
+#   player flash after the updater leaves the C6 image in place;
+# - `userdata` stays at 0xF80000 with its size, so a full flash leaves the user's files alone.
+# So `data` (2 MB, still nine times its content) takes the gap before slave_fw, ota_1 moves
+# after it, and 0xC30000-0xF80000 (3.2 MB) is left unallocated for later.
+# Name,     Type, SubType,  Offset,   Size,     Flags
+nvs,        data, nvs,      0x11000,  0x8000,
+otadata,    data, ota,      0x19000,  0x2000,
+phy_init,   data, phy,      0x1B000,  0x1000,
+coredump,   data, coredump, 0x1C000,  0x10000,
+ota_0,      app,  ota_0,    0x30000,  0x400000,
+data,       data, spiffs,   0x430000, 0x200000,
+slave_fw,   data, 0x40,     0x630000, 0x200000,
+ota_1,      app,  ota_1,    0x830000, 0x400000,
+userdata,   data, spiffs,   0xF80000, 0x80000,

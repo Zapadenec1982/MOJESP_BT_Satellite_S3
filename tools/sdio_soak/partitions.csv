@@ -1,0 +1,20 @@
+# P4_DSP — 16 MB flash layout (Guition JC4880P443C).
+# COPY of ../../partitions_p4_16mb.csv — keep identical. Flashing this tool REPLACES the
+# panel's partition table, so a stale copy here would put the old single-`data` layout back
+# and take the `userdata` partition (and everything in it) with it.
+# Two 4 MB OTA slots (3 MB until 05.10.2026), coredump (the USB-CDC console gives no output after a panic),
+# slave_fw = ESP-Hosted co-processor image for the ESP32-C6 (pushed to the C6 over
+# SDIO by the updater, see docs/C6_UPDATE.md), data = LittleFS build output, userdata = the
+# person's own files, which no flash writes an image over.
+# Partition table at 0x10000 (CONFIG_PARTITION_TABLE_OFFSET): on ESP32-P4 the bootloader
+# starts at 0x2000 and with app rollback enabled it no longer fits below the default 0x8000.
+# Name,     Type, SubType,  Offset,   Size,     Flags
+nvs,        data, nvs,      0x11000,  0x8000,
+otadata,    data, ota,      0x19000,  0x2000,
+phy_init,   data, phy,      0x1B000,  0x1000,
+coredump,   data, coredump, 0x1C000,  0x10000,
+ota_0,      app,  ota_0,    0x30000,  0x400000,
+data,       data, spiffs,   0x430000, 0x200000,
+slave_fw,   data, 0x40,     0x630000, 0x200000,
+ota_1,      app,  ota_1,    0x830000, 0x400000,
+userdata,   data, spiffs,   0xF80000, 0x80000,

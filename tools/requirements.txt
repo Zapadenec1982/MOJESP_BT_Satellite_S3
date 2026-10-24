@@ -1,0 +1,15 @@
+# Python tooling dependencies for the ModESP build pipeline.
+# Install into the ESP-IDF Python env: pip install -r tools/requirements.txt
+#
+# Used by:
+#   tools/generate_ui.py   — manifest / board / bindings validation (jsonschema)
+#   tools/tests/           — pytest suite
+#
+# REQUIRED for `idf.py build`: the root CMakeLists.txt runs generate_ui.py at
+# configure time.
+
+jsonschema>=4.0,<5.0
+pytest>=8.0,<10.0
+
+# Optional: Hypothesis для property tests (Step 2b)
+# hypothesis>=6.0,<7.0

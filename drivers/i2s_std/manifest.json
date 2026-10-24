@@ -1,0 +1,12 @@
+{
+  "manifest_version": 1,
+  "driver": "i2s_std",
+  "description": "I2S стерео-транспорт (standard/Philips): майстер full-duplex (DAC + ADC на одному контролері) або раб RX (зовнішній майстер — BT-модуль); 32-бітні слоти",
+  "category": "audio",
+  "hardware_type": "i2s_bus",
+  "transport": "wired",
+  "requires_address": false,
+  "multiple_per_bus": false,
+  "provides": {"capability": "audio", "type": "blob", "description": "IAudioSink + IAudioPort (as_port) for the audio core"},
+  "settings": []
+}

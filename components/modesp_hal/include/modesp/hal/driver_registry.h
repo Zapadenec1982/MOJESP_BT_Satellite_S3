@@ -1,0 +1,202 @@
+/**
+ * @file driver_registry.h
+ * @brief Type-string → factory registry for drivers.
+ *
+ * Replaces the old hardcoded if-else dispatch in DriverManager. Each driver
+ * registers a factory under its manifest "driver" type string; DriverManager
+ * looks up by binding.driver_type — no hardcoded #includes, pools or branches.
+ *
+ * A driver disabled in menuconfig (CONFIG_MODESP_DRIVER_<NAME>=n) is simply not
+ * compiled, so its registration function is absent and the generated
+ * modesp_register_all_drivers() skips it (guarded by #if). Bindings referencing
+ * a disabled/unknown driver are skipped with a warning.
+ *
+ * Registration is EXPLICIT (not static-init): the generated
+ * modesp_register_all_drivers() calls each enabled driver's
+ * modesp_register_driver_<name>() — deterministic, no WHOLE_ARCHIVE tricks.
+ */
+
+#pragma once
+
+#include "modesp/hal/hal_types.h"          // Binding, MAX_SENSORS/ACTUATORS
+#include "modesp/hal/driver_interfaces.h"  // ISensorDriver / IActuatorDriver
+
+namespace modesp {
+
+class HAL;
+
+// Display/audio backends are drivers too (drivers/<name>/ + manifest category
+// display/audio). Їхні інтерфейси — доменні шви (modesp/hal/display_port.h,
+// modesp/hal/audio_sink.h); тут достатньо forward-декларацій — фабрики
+// повертають вказівники.
+namespace display { class IDisplayPort; }
+namespace audio   { class IAudioSink; }
+namespace lcd     { class ILcdPort; }     // graphic LCD family: panel + touch (modesp/hal/lcd_port.h)
+namespace storage { class IStorageVolume; }  // a mountable volume of files (modesp/hal/storage_volume.h)
+namespace link    { class IByteLink; }       // a framed byte transport (modesp/hal/byte_link.h)
+
+using SensorFactory   = ISensorDriver*          (*)(const Binding&, HAL&);
+using ActuatorFactory = IActuatorDriver*        (*)(const Binding&, HAL&);
+using DisplayFactory  = display::IDisplayPort*  (*)(const Binding&, HAL&);
+using AudioFactory    = audio::IAudioSink*      (*)(const Binding&, HAL&);
+using LcdFactory      = lcd::ILcdPort*          (*)(const Binding&, HAL&);
+using StorageFactory  = storage::IStorageVolume* (*)(const Binding&, HAL&);
+using LinkFactory     = link::IByteLink*         (*)(const Binding&, HAL&);
+
+/// One device found by a driver's discovery scan (bus enumeration before any
+/// binding exists). `value` is an optional preview sample (e.g. temperature);
+/// `rssi` is an optional signal level for radios (BLE) — 0 = not applicable.
+struct DiscoveredDevice {
+    char   address[24] = {};   // ROM address / BLE MAC / bus device id
+    float  value       = 0.0f;
+    bool   has_value   = false;
+    int8_t rssi        = 0;    // dBm, 0 = unavailable (wired buses leave it 0)
+    char   type[16]    = {};   // identified driver type (unified BLE scan); "" = wired/unknown
+    char   name[24]    = {};   // adv-name of a connectable device (panel); "" for observers
+    char   summary[24] = {};   // short current-readings string for the manual scan ("24.6C 41%")
+};
+
+/// Scan the board resource `hw_id` (id from board.json, e.g. "ow_1") and fill
+/// out[0..max). Returns the device count, or <0 if the resource is unknown to
+/// this driver (wrong id / wrong bus kind). The driver resolves the resource
+/// through HAL itself — the HTTP layer stays bus-agnostic.
+using DiscoveryFn = int (*)(HAL&, const char* hw_id, DiscoveredDevice* out, size_t max);
+
+class DriverRegistry {
+public:
+    static constexpr size_t MAX_DRIVER_TYPES = 16;
+
+    /// Register a factory under a type string. Idempotent: re-registering the
+    /// same type is a no-op (so calling register-all twice is safe).
+    static bool register_sensor(const char* type, SensorFactory fn);
+    static bool register_actuator(const char* type, ActuatorFactory fn);
+
+    /// Create a driver for the given type. Returns nullptr if the type is not
+    /// registered (disabled/unknown) or the factory itself failed.
+    static ISensorDriver*   create_sensor(const char* type, const Binding&, HAL&);
+    static IActuatorDriver* create_actuator(const char* type, const Binding&, HAL&);
+
+    /// True if any (sensor or actuator) factory is registered for this type.
+    /// НЕ покриває display/audio — DriverManager створює лише sensors/actuators;
+    /// display/audio backend-и модулі беруть самі через create_display/create_audio
+    /// у своєму on_bind().
+    static bool is_known(const char* type);
+
+    // ── Display/audio backends (module-bound: створюються НЕ DriverManager-ом,
+    //    а модулем-власником у on_bind за bindings.json) ──
+    static bool register_display(const char* type, DisplayFactory fn);
+    static bool register_audio(const char* type, AudioFactory fn);
+    static display::IDisplayPort* create_display(const char* type, const Binding&, HAL&);
+    static audio::IAudioSink*     create_audio(const char* type, const Binding&, HAL&);
+    static bool has_display(const char* type);
+    static bool has_audio(const char* type);
+
+    // ── Graphic LCD backends (manifest category "lcd": MIPI-DSI/RGB panel or a touch
+    //    controller). Module-bound like display/audio — the UI module resolves them in
+    //    on_bind() and picks the capability via ILcdPort::as_panel()/as_touch().
+    static bool register_lcd(const char* type, LcdFactory fn);
+    static lcd::ILcdPort* create_lcd(const char* type, const Binding&, HAL&);
+    static bool has_lcd(const char* type);
+
+    // ── Storage volumes (manifest category "storage") — the card slot behind
+    //    modesp/hal/storage_volume.h, resolved by modules/storage in on_bind(). A volume is
+    //    neither a sensor nor an actuator: nothing polls it, and update_all() must not.
+    static bool register_storage(const char* type, StorageFactory fn);
+    static storage::IStorageVolume* create_storage(const char* type, const Binding&, HAL&);
+    static bool has_storage(const char* type);
+
+    // ── Byte links (manifest category "link") — the wire to a co-processor behind
+    //    modesp/hal/byte_link.h, resolved by the module that speaks what crosses it.
+    static bool register_link(const char* type, LinkFactory fn);
+    static link::IByteLink* create_link(const char* type, const Binding&, HAL&);
+    static bool has_link(const char* type);
+
+    // Note: a panel (e.g. ble_led_panel) is NOT a module-backend — it is a normal
+    // actuator created by DriverManager and resolved by the panel module via
+    // find_actuator(role)->as_panel(). No separate registry seam is needed.
+
+    /// True для типів, що є module-bound backend-ами (display/audio) — щоб
+    /// DriverManager міг тихо пропустити їхні bindings без хибного WARN.
+    static bool is_module_backend(const char* type) {
+        return has_display(type) || has_audio(type) || has_lcd(type)
+            || has_storage(type) || has_link(type);
+    }
+
+    /// Тест-хук: очистити ВСІ реєстри (host-тести). Не використовувати на девайсі.
+    static void reset();
+
+    // ── Discovery (optional per driver) ──
+    // A discovery-capable driver (manifest: discovery.supported=true) also
+    // registers a scan function; the generic scan endpoint dispatches through
+    // here — modesp_net never includes a concrete driver again.
+    static bool        register_discovery(const char* type, DiscoveryFn fn);
+    static DiscoveryFn find_discovery(const char* type);
+    static size_t      discovery_count();
+    static const char* discovery_type_at(size_t i);   // nullptr if out of range
+    static DiscoveryFn discovery_fn_at(size_t i);     // nullptr if out of range
+};
+
+} // namespace modesp
+
+// ─────────────────────────────────────────────────────────────────────
+// Registration macros — used once at file scope in a driver's .cpp.
+//
+// Defines `extern "C" void modesp_register_driver_<name>()`, which the
+// generated modesp_register_all_drivers() declares and calls. <name> MUST equal
+// the manifest "driver" field (== folder name), so the generator can derive the
+// symbol mechanically without knowing the C++ class name.
+//
+//   static ISensorDriver* my_factory(const Binding&, HAL&) { ... }
+//   MODESP_REGISTER_SENSOR(ds18b20, &my_factory)
+// ─────────────────────────────────────────────────────────────────────
+#define MODESP_REGISTER_SENSOR(name, factory_fn)                          \
+    extern "C" void modesp_register_driver_##name(void) {                 \
+        ::modesp::DriverRegistry::register_sensor(#name, (factory_fn));    \
+    }
+
+#define MODESP_REGISTER_ACTUATOR(name, factory_fn)                        \
+    extern "C" void modesp_register_driver_##name(void) {                 \
+        ::modesp::DriverRegistry::register_actuator(#name, (factory_fn));  \
+    }
+
+// Sensor that can also enumerate devices on its bus before any binding exists
+// (manifest: discovery.supported=true). Registers both in one hook.
+#define MODESP_REGISTER_SENSOR_WITH_DISCOVERY(name, factory_fn, discovery_fn) \
+    extern "C" void modesp_register_driver_##name(void) {                     \
+        ::modesp::DriverRegistry::register_sensor(#name, (factory_fn));        \
+        ::modesp::DriverRegistry::register_discovery(#name, (discovery_fn));   \
+    }
+
+// Display backend driver (manifest category "display"). The module that owns
+// the seam (DisplayModule) resolves it in on_bind via create_display().
+#define MODESP_REGISTER_DISPLAY(name, factory_fn)                          \
+    extern "C" void modesp_register_driver_##name(void) {                  \
+        ::modesp::DriverRegistry::register_display(#name, (factory_fn));    \
+    }
+
+// Audio sink driver (manifest category "audio") — resolved by PlayerModule.
+#define MODESP_REGISTER_AUDIO(name, factory_fn)                            \
+    extern "C" void modesp_register_driver_##name(void) {                  \
+        ::modesp::DriverRegistry::register_audio(#name, (factory_fn));      \
+    }
+
+// Graphic LCD backend driver (manifest category "lcd") — panel or touch controller,
+// resolved by the UI module (ui_lvgl) in on_bind via create_lcd().
+#define MODESP_REGISTER_LCD(name, factory_fn)                              \
+    extern "C" void modesp_register_driver_##name(void) {                  \
+        ::modesp::DriverRegistry::register_lcd(#name, (factory_fn));        \
+    }
+
+// Storage volume driver (manifest category "storage") — resolved by modules/storage,
+// which owns WHEN a volume is mounted but not HOW.
+#define MODESP_REGISTER_STORAGE(name, factory_fn)                          \
+    extern "C" void modesp_register_driver_##name(void) {                  \
+        ::modesp::DriverRegistry::register_storage(#name, (factory_fn));    \
+    }
+
+// Byte-link driver (manifest category "link") — resolved by the module that owns the
+// protocol on the far end (modules/bt for the Bluetooth satellite).
+#define MODESP_REGISTER_LINK(name, factory_fn)                             \
+    extern "C" void modesp_register_driver_##name(void) {                  \
+        ::modesp::DriverRegistry::register_link(#name, (factory_fn));       \
+    }

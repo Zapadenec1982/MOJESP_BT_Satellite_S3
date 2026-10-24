@@ -1,0 +1,14 @@
+{
+  "manifest_version": 1,
+  "driver": "digital_input",
+  "description": "GPIO дискретний вхід (контакт дверей, кінцевик)",
+  "category": "sensor",
+  "hardware_type": "gpio_input",
+  "transport": "wired",
+  "requires_address": false,
+  "multiple_per_bus": false,
+  "provides": {"capability": "binary_in", "type": "bool"},
+  "settings": [
+    {"key": "invert", "type": "bool", "default": false, "description": "Інверсія логіки (NC/NO)", "persist": true}
+  ]
+}

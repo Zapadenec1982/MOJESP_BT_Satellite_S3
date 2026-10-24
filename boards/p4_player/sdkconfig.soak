@@ -1,0 +1,15 @@
+# boards/p4_player — SOAK overlay. NOT part of a normal build.
+#
+# Applied on top of sdkconfig.board by configuring with -DMODESP_SOAK=ON (see the root
+# CMakeLists). Use it for ONE long run before a release, then build normally again.
+#
+# Heap poisoning, light: every allocation gets a head and tail canary, and free() checks
+# them. It turns the class of bug this stage is most likely to introduce — a write past the
+# end of a buffer that now lives in PSRAM, or a double free of the resampler's filter bank —
+# into an immediate, located abort instead of memory that misbehaves somewhere else hours
+# later. It costs a few bytes per allocation and some time in malloc/free, which is why it is
+# not the shipping default.
+#
+# COMPREHENSIVE would also check the whole free list on every call; on a board with an audio
+# task on a 5 ms deadline that is too slow to run for a day, and LIGHT catches the overruns.
+CONFIG_HEAP_POISONING_LIGHT=y

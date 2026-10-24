@@ -1,0 +1,56 @@
+# ─────────────────────────────────────────────────────────────────────
+# modesp_driver_component() — register an OPTIONAL driver component.
+#
+# NAMING: a driver folder IS an ESP-IDF component, and EXTRA_COMPONENT_DIRS wins
+# over ESP-IDF's own components — so a folder named after one SHADOWS it, for the
+# whole build. `drivers/sdmmc` did exactly that to IDF's `sdmmc`, and what failed
+# was esp_hosted, three components away, on a missing sd_protocol_defs.h. Check a
+# new driver's name against `ls $IDF_PATH/components` before choosing it; the one
+# there is called sdmmc_card for this reason.
+#
+# Compiles SRCS only when the driver's Kconfig option is enabled:
+#   CONFIG_MODESP_DRIVER_<NAME>   (NAME = component/folder name, uppercased)
+# When disabled, the component still registers (headers available) but with no
+# sources, so it contributes no code and the binary shrinks. The option is
+# generated automatically by tools/generate_ui.py (menu "ModESP Drivers" in
+# components/modesp_hal/Kconfig) — a new driver gets a toggle with zero manual
+# Kconfig edits.
+#
+# IMPORTANT: this is a macro(), NOT a function() — idf_component_register sets
+# variables in the COMPONENT scope, which a function() would swallow (the
+# component would be reported "not registered"). Also: REQUIRES must NOT depend
+# on CONFIG_* (ESP-IDF expands requirements before sdkconfig is loaded), so the
+# driver is always REQUIRED by modesp_hal; only its SRCS are gated.
+#
+# Usage in drivers/<name>/CMakeLists.txt:
+#   include("${CMAKE_CURRENT_LIST_DIR}/../../tools/cmake/modesp_driver.cmake")
+#   modesp_driver_component(
+#       SRCS "src/<name>_driver.cpp"
+#       PRIV_REQUIRES driver esp_timer   # optional extra deps
+#   )
+# (REQUIRES modesp_hal is added automatically.)
+# ─────────────────────────────────────────────────────────────────────
+macro(modesp_driver_component)
+    cmake_parse_arguments(_MDC "" "" "SRCS;REQUIRES;PRIV_REQUIRES" ${ARGN})
+
+    string(TOUPPER "${COMPONENT_NAME}" _mdc_upper)
+    if(CONFIG_MODESP_DRIVER_${_mdc_upper})
+        set(_mdc_srcs ${_MDC_SRCS})
+    else()
+        set(_mdc_srcs "")   # disabled → register empty (no code compiled)
+    endif()
+
+    # include/ is optional — a driver with no public headers (e.g. an audio
+    # sink registered purely via its factory) simply doesn't have one.
+    set(_mdc_incs "")
+    if(IS_DIRECTORY "${CMAKE_CURRENT_LIST_DIR}/include")
+        set(_mdc_incs "include")
+    endif()
+
+    idf_component_register(
+        SRCS ${_mdc_srcs}
+        INCLUDE_DIRS ${_mdc_incs}
+        REQUIRES modesp_hal ${_MDC_REQUIRES}
+        PRIV_REQUIRES ${_MDC_PRIV_REQUIRES}
+    )
+endmacro()

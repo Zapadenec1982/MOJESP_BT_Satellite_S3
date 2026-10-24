@@ -1,0 +1,13 @@
+dependencies:
+  espressif/mdns: ">=1.3.2"
+  # ESP32-P4: Wi-Fi lives on the ESP32-C6 co-processor over SDIO (ESP-Hosted). Both versions
+  # are pinned: the C6 firmware (tools/c6_updater, docs/C6_UPDATE.md) must be built from the
+  # same esp_hosted release as the host library.
+  espressif/esp_wifi_remote:
+    version: "==1.6.4"
+    rules:
+      - if: "target == esp32p4"
+  espressif/esp_hosted:
+    version: "==3.0.7"
+    rules:
+      - if: "target == esp32p4"

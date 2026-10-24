@@ -1,0 +1,251 @@
+diff --git a/components/cover/src/cover.cpp b/components/cover/src/cover.cpp
+index 8f98027..0e481c3 100644
+--- a/components/cover/src/cover.cpp
++++ b/components/cover/src/cover.cpp
+@@ -43,13 +43,20 @@ const char* TAG = "Cover";
+ constexpr uint32_t MAX_SIDE = 2048;
+ /// The PPA scales in sixteenths, so every factor is quantised to this grid.
+ constexpr float    SCALE_STEP = 1.0f / 16.0f;
+-/// JPEG works in macroblocks, so the engine writes a picture rounded UP to a multiple of
+-/// sixteen in both directions — a 500-pixel cover comes out 512 wide, with the extra
+-/// columns holding whatever the last macroblock contained. Sizing the buffer to the
+-/// nominal dimensions is asking the engine to write past the end of it, which is why it
+-/// refused every cover it was given.
+-constexpr uint32_t MB = 16;
+-uint32_t align_mb(uint32_t v) { return (v + MB - 1) / MB * MB; }
++// Match jpeg_parse_sof_marker() in the pinned IDF: MCU = Y sampling factor * 8.
++// Overallocating is harmless, but a wrong row stride corrupts PPA's input image.
++bool jpeg_layout(const jpeg_decode_picture_info_t& info, uint32_t& w, uint32_t& h) {
++    uint32_t mx = 8, my = 8;
++    switch (info.sample_method) {
++    case JPEG_DOWN_SAMPLING_YUV444: break;
++    case JPEG_DOWN_SAMPLING_YUV422: mx = 16; break;
++    case JPEG_DOWN_SAMPLING_YUV420: mx = my = 16; break;
++    default: return false; // grayscale needs the software RGB conversion
++    }
++    w = (info.width + mx - 1) / mx * mx;
++    h = (info.height + my - 1) / my * my;
++    return true;
++}
+ 
+ struct Store {
+     uint16_t* slot[2] = {nullptr, nullptr};
+@@ -223,7 +230,8 @@ bool cover_set_jpeg(const uint8_t* jpg, size_t len, CoverSource source, uint32_t
+ 
+     // The decoded picture, at macroblock-aligned dimensions. The helper adds whatever
+     // alignment the DMA needs and reports how much it actually took.
+-    const uint32_t aw = align_mb(info.width), ah = align_mb(info.height);
++    uint32_t aw = 0, ah = 0;
++    if (!jpeg_layout(info, aw, ah)) return set_jpeg_soft(g, jpg, len, expected_generation);
+     size_t full_size = 0;
+     jpeg_decode_memory_alloc_cfg_t mem = {};
+     mem.buffer_direction = JPEG_DEC_ALLOC_OUTPUT_BUFFER;
+@@ -253,7 +261,7 @@ bool cover_set_jpeg(const uint8_t* jpg, size_t len, CoverSource source, uint32_t
+     dec.rgb_order     = JPEG_DEC_RGB_ELEMENT_ORDER_RGB;
+     const esp_err_t derr =
+         jpeg_decoder_process(g.jpeg, &dec, in, (uint32_t)len, full, full_size, &out_size);
+-    if (derr == ESP_OK) {
++    if (derr == ESP_OK && out_size == aw * ah * 2) {
+         // Centre square of the source, scaled to as near the card as the PPA's grid allows.
+         const uint32_t side = info.width < info.height ? info.width : info.height;
+         const float    scale = scale_for(side);
+@@ -290,14 +298,18 @@ bool cover_set_jpeg(const uint8_t* jpg, size_t len, CoverSource source, uint32_t
+ 
+         if (ppa_do_scale_rotate_mirror(g.ppa, &op) == ESP_OK) {
+             ok = publish(g, next, expected_generation);
+-            ESP_LOGI(TAG, "artwork %lux%lu -> %d px",
+-                     (unsigned long)info.width, (unsigned long)info.height, COVER_PX);
++            ESP_LOGI(TAG, "artwork %lux%lu (DMA %lux%lu, sampling %d) -> %d px",
++                     (unsigned long)info.width, (unsigned long)info.height,
++                     (unsigned long)aw, (unsigned long)ah, (int)info.sample_method, COVER_PX);
+         } else {
+             ESP_LOGW(TAG, "PPA refused %lux%lu block %lu scale %.4f",
+                      (unsigned long)info.width, (unsigned long)info.height,
+                      (unsigned long)block, (double)scale);
+         }
+     }
++    if (derr == ESP_OK && out_size != aw * ah * 2)
++        ESP_LOGW(TAG, "JPEG output layout mismatch: %lu bytes for %lux%lu",
++                 (unsigned long)out_size, (unsigned long)aw, (unsigned long)ah);
+     free(in);
+     free(full);
+     // The engine reads baseline JPEG only. Progressive is common enough on real albums that
+diff --git a/modules/dlna/include/dlna_module.h b/modules/dlna/include/dlna_module.h
+index 9b9ebc0..35ca86d 100644
+--- a/modules/dlna/include/dlna_module.h
++++ b/modules/dlna/include/dlna_module.h
+@@ -25,6 +25,7 @@ public:
+     bool    state_flag(const char* key, bool def) const    { return read_bool(key, def); }
+     void    put_int(const char* key, int32_t value)        { state_set(key, value); }
+     void    put_flag(const char* key, bool value)          { state_set(key, value); }
++    void    put_text(const char* key, const char* value)   { state_set(key, value); }
+ 
+ private:
+     uint32_t poll_ms_ = 0;      ///< pacing for the cheap state mirror
+diff --git a/modules/dlna/manifest.json b/modules/dlna/manifest.json
+index bb55842..0cb91aa 100644
+--- a/modules/dlna/manifest.json
++++ b/modules/dlna/manifest.json
+@@ -34,6 +34,16 @@
+       "access": "read",
+       "description": "Назва треку з метаданих DIDL-Lite"
+     },
++    "dlna.album": {
++      "type": "string",
++      "access": "read",
++      "description": "Альбом з метаданих DIDL-Lite"
++    },
++    "dlna.art_uri": {
++      "type": "string",
++      "access": "read",
++      "description": "URL обкладинки з метаданих DIDL-Lite"
++    },
+     "dlna.artist": {
+       "type": "string",
+       "access": "read",
+diff --git a/modules/dlna/src/dlna_module.cpp b/modules/dlna/src/dlna_module.cpp
+index 1051433..82773a4 100644
+--- a/modules/dlna/src/dlna_module.cpp
++++ b/modules/dlna/src/dlna_module.cpp
+@@ -303,6 +303,8 @@ int renderer_request(esp_dlna_handle_t dlna, const upnp_attr_t* attr, int attr_n
+         snprintf(d.uri, sizeof(d.uri), "%s", buffer ? buffer : "");
+         d.title[0] = '\0';
+         d.artist[0] = '\0';
++        d.self->put_text("dlna.album", "");
++        d.self->put_text("dlna.art_uri", "");
+         set_trans_state(d.uri[0] ? TS_STOPPED : TS_NO_MEDIA);
+         ESP_LOGI(TAG, "track set: %s", d.uri);
+         return 0;
+@@ -310,6 +312,13 @@ int renderer_request(esp_dlna_handle_t dlna, const upnp_attr_t* attr, int attr_n
+         didl_field(buffer, "dc:title", d.title, sizeof(d.title));
+         didl_field(buffer, "upnp:artist", d.artist, sizeof(d.artist));
+         if (!d.artist[0]) didl_field(buffer, "dc:creator", d.artist, sizeof(d.artist));
++        {
++            char album[96], art[URI_LEN];
++            didl_field(buffer, "upnp:album", album, sizeof(album));
++            didl_field(buffer, "upnp:albumArtURI", art, sizeof(art));
++            d.self->put_text("dlna.album", album);
++            d.self->put_text("dlna.art_uri", art);
++        }
+         return 0;
+     case AVT_GET_TRACK_URI:
+         return snprintf(buffer, max_len, "%s", d.uri);
+@@ -549,6 +558,8 @@ bool DlnaModule::on_init() {
+     state_set("dlna.uri", "");
+     state_set("dlna.title", "");
+     state_set("dlna.artist", "");
++    state_set("dlna.album", "");
++    state_set("dlna.art_uri", "");
+ 
+     d.notify_q = xQueueCreate(8, sizeof(Notify));
+     if (d.notify_q) {
+diff --git a/modules/ui_lvgl/include/ui_lvgl_module.h b/modules/ui_lvgl/include/ui_lvgl_module.h
+index 71b5dc7..8f6198a 100644
+--- a/modules/ui_lvgl/include/ui_lvgl_module.h
++++ b/modules/ui_lvgl/include/ui_lvgl_module.h
+@@ -72,6 +72,7 @@ public:
+         int32_t  repeat     = 0;
+         bool     shuffle    = false;
+         // radio mirrors
++        bool     network_push = false;
+         char     radio_name[64]  = "";
+         char     radio_now[128]  = "";   ///< the ICY StreamTitle, which is what is playing
+         char     radio_fmt[32]   = "";
+diff --git a/modules/ui_lvgl/src/screen_now.cpp b/modules/ui_lvgl/src/screen_now.cpp
+index eee9339..947ccef 100644
+--- a/modules/ui_lvgl/src/screen_now.cpp
++++ b/modules/ui_lvgl/src/screen_now.cpp
+@@ -119,6 +119,7 @@ struct Now {
+     char  pos_txt[12]     = "";
+     char  dur_txt[12]     = "";
+     int32_t source = -2;
++    bool network_push = false;
+     int8_t  playing = -1;
+     int32_t repeat  = -1;
+     int8_t  shuffle = -1;
+@@ -462,10 +463,12 @@ void refresh(lv_obj_t*, UiCtx& c) {
+     const auto& s = c.s;
+     const bool is_file = (s.source == 4);
+ 
+-    if (s.source != n.source) {
++    if (s.source != n.source || s.network_push != n.network_push) {
+         n.source = s.source;
++        n.network_push = s.network_push;
++        n.cover_gen = 0xFFFFFFFF;
+         uih::show(n.transport, is_file);
+-        uih::show(n.prog_box, is_file);
++        uih::show(n.prog_box, is_file || s.network_push);
+         // The card's list belongs to the card; on AUX or Bluetooth there is nothing to list.
+         if (!is_file) set_open(false);
+     }
+@@ -501,7 +504,7 @@ void refresh(lv_obj_t*, UiCtx& c) {
+         }
+     }
+ 
+-    if (is_file) {
++    if (is_file || s.network_push) {
+         uih::set_text(n.title, n.title_txt, sizeof(n.title_txt),
+                       s.play_title[0] ? s.play_title : "—");
+         // Artist and album when the file carries them, the position in the index when it
+@@ -511,7 +514,9 @@ void refresh(lv_obj_t*, UiCtx& c) {
+             snprintf(sub, sizeof(sub), "%s • %s", s.play_artist, s.play_album);
+         else if (s.play_artist[0])
+             snprintf(sub, sizeof(sub), "%s", s.play_artist);
+-        else if (s.play_count > 0)
++        else if (s.play_album[0])
++            snprintf(sub, sizeof(sub), "%s", s.play_album);
++        else if (is_file && s.play_count > 0)
+             snprintf(sub, sizeof(sub), "%ld / %ld", (long)(s.play_index + 1), (long)s.play_count);
+         else
+             snprintf(sub, sizeof(sub), " ");
+diff --git a/modules/ui_lvgl/src/ui_lvgl_module.cpp b/modules/ui_lvgl/src/ui_lvgl_module.cpp
+index f70d288..7446fdd 100644
+--- a/modules/ui_lvgl/src/ui_lvgl_module.cpp
++++ b/modules/ui_lvgl/src/ui_lvgl_module.cpp
+@@ -459,8 +459,27 @@ void UiLvglModule::mirror_state() {
+     read_string("player.album", play_album, sizeof(play_album));
+     read_string("player.format", play_fmt, sizeof(play_fmt));
+     read_string("player.state", play_state, sizeof(play_state));
+-    const int32_t play_pos   = read_int("player.pos_s", 0);
+-    const int32_t play_dur   = read_int("player.dur_s", 0);
++    char radio_mode[12] = "";
++    read_string("radio.mode", radio_mode, sizeof(radio_mode));
++    const bool network_push = source == 5 && strcmp(radio_mode, "push") == 0;
++    if (network_push) {
++        // File-player tags belong to the SD track, not to the network engine.
++        play_title[0] = play_artist[0] = play_album[0] = '\0';
++        char radio_url[MODESP_MAX_STRING_VALUE_LENGTH + 1] = "";
++        char dlna_uri[MODESP_MAX_STRING_VALUE_LENGTH + 1] = "";
++        read_string("radio.url", radio_url, sizeof(radio_url));
++        read_string("dlna.uri", dlna_uri, sizeof(dlna_uri));
++        if (radio_url[0] && strcmp(radio_url, dlna_uri) == 0) {
++            read_string("dlna.title", play_title, sizeof(play_title));
++            read_string("dlna.artist", play_artist, sizeof(play_artist));
++            read_string("dlna.album", play_album, sizeof(play_album));
++        }
++        if (!play_title[0]) snprintf(play_title, sizeof(play_title), "%.*s", (int)sizeof(play_title)-1, radio_now[0] ? radio_now : "Мережевий трек");
++        snprintf(play_fmt, sizeof(play_fmt), "%s", radio_fmt);
++        snprintf(play_state, sizeof(play_state), "%.*s", (int)sizeof(play_state)-1, radio_state);
++    }
++    const int32_t play_pos   = read_int(network_push ? "radio.pos_s" : "player.pos_s", 0);
++    const int32_t play_dur   = read_int(network_push ? "radio.dur_s" : "player.dur_s", 0);
+     const int32_t play_index = read_int("player.index", -1);
+     const int32_t play_count = read_int("player.count", 0);
+     const int32_t repeat     = read_int("player.repeat", 0);
+@@ -474,6 +493,7 @@ void UiLvglModule::mirror_state() {
+ 
+     portENTER_CRITICAL(&mux_);
+     snap_.source = source;
++    snap_.network_push = network_push;
+     snap_.sources = sources;
+     snap_.volume = volume;
+     snap_.mute = mute;
+@@ -639,7 +659,7 @@ void UiLvglModule::apply_requests() {
+         case Req::SEEK:
+             // The player owns what this means: it turns a second into a file position and
+             // lets the decoder find the next frame from there.
+-            if (it.value >= 0) state_set("player.seek_s", it.value);
++            if (it.value >= 0) state_set(read_int("audio.source", 0) == 5 ? "radio.seek_s" : "player.seek_s", it.value);
+             break;
+         case Req::PLAY_QUEUE: {
+             // Straight from the card's index, which is the list the screen draws.

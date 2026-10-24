@@ -1,0 +1,457 @@
+{
+  "manifest_version": 1,
+  "module": "radio",
+  "version": "0.1.0",
+  "description": "Інтернет-радіо: HTTP-стрім, ICY, список станцій",
+  "priority": 4,
+  "requires": [],
+  "state": {
+    "radio.state": {
+      "type": "string",
+      "access": "read",
+      "description": "idle | connecting | buffering | playing | reconnecting"
+    },
+    "radio.station": {
+      "type": "int",
+      "access": "readwrite",
+      "default": 0,
+      "min": -1,
+      "max": 63,
+      "step": 1,
+      "persist": true,
+      "mqtt_subscribe": true,
+      "description": "Номер станції у списку; -1 — станція з каталогу, якої немає в списку"
+    },
+    "radio.name": {
+      "type": "string",
+      "access": "read",
+      "description": "Назва станції"
+    },
+    "radio.url": {
+      "type": "string",
+      "long": true,
+      "access": "read",
+      "description": "URL потоку"
+    },
+    "radio.play_url": {
+      "type": "string",
+      "long": true,
+      "access": "readwrite",
+      "mqtt_subscribe": true,
+      "description": "Зіграти цей URL один раз (поза списком станцій); очищається після прийняття"
+    },
+    "radio.now_playing": {
+      "type": "string",
+      "long": true,
+      "access": "read",
+      "description": "StreamTitle із ICY"
+    },
+    "radio.format": {
+      "type": "string",
+      "access": "read",
+      "description": "Частота, канали, бітрейт"
+    },
+    "radio.count": {
+      "type": "int",
+      "access": "read",
+      "default": 0,
+      "description": "Скільки станцій у списку"
+    },
+    "radio.list_rev": {
+      "type": "int",
+      "access": "read",
+      "default": 0,
+      "description": "Покоління списку станцій: міняється з кожною правкою — з панелі, з каталогу чи з вебу (GET /api/stations)"
+    },
+    "radio.cmd": {
+      "type": "int",
+      "command": true,
+      "access": "readwrite",
+      "default": 0,
+      "min": 0,
+      "max": 4,
+      "step": 1,
+      "mqtt_subscribe": true,
+      "description": "0 нічого, 1 грати, 2 стоп, 3 наступна, 4 попередня"
+    },
+    "radio.save": {
+      "type": "int",
+      "access": "readwrite",
+      "default": 0,
+      "min": 0,
+      "max": 1,
+      "step": 1,
+      "description": "Записати список станцій у файл (1 — зберегти)"
+    },
+    "radio.buffer": {
+      "type": "int",
+      "access": "read",
+      "default": 0,
+      "unit": "%",
+      "description": "Заповнення буфера потоку"
+    },
+    "radio.mode": {
+      "type": "string",
+      "access": "read",
+      "description": "station — станція зі списку; push — URL, надісланий ззовні (DLNA)"
+    },
+    "radio.pos_s": {
+      "type": "int",
+      "access": "read",
+      "default": 0,
+      "unit": "s",
+      "description": "Позиція у треку; для станції завжди росте від нуля"
+    },
+    "radio.dur_s": {
+      "type": "int",
+      "access": "read",
+      "default": 0,
+      "unit": "s",
+      "description": "Тривалість треку; 0 — невідома (станція не має кінця)"
+    },
+    "radio.seekable": {
+      "type": "bool",
+      "access": "read",
+      "default": false,
+      "description": "This stream supports a verified network seek"
+    },
+    "radio.seek_s": {
+      "type": "int",
+      "access": "readwrite",
+      "default": -1,
+      "min": -1,
+      "max": 86400,
+      "step": 1,
+      "unit": "s",
+      "mqtt_subscribe": true,
+      "description": "Перемотка: секунда, куди стрибнути; -1 — нічого"
+    },
+    "radio.completed": {
+      "type": "int",
+      "access": "read",
+      "default": 0,
+      "description": "Sequence incremented at natural completion or prepared PCM handoff"
+    },
+    "radio.completed_uri": {
+      "type": "string",
+      "long": true,
+      "access": "read",
+      "description": "URI completed at drain or prepared handoff"
+    },
+    "radio.next_url": {
+      "type": "string",
+      "long": true,
+      "access": "readwrite",
+      "description": "Next pushed URL to prepare near the end of the active finite track"
+    },
+    "radio.promoted_uri": {
+      "type": "string",
+      "long": true,
+      "access": "read",
+      "description": "Already-started next URI associated with radio.completed; empty for drained stop"
+    },
+    "radio.cat_query": {
+      "type": "string",
+      "access": "readwrite",
+      "description": "Каталог Radio Browser: top:UA, country:DE, tag:jazz, tag:jazz@UA, name:kiss; порожньо — нічого"
+    },
+    "radio.cat_sort": {
+      "type": "int",
+      "access": "readwrite",
+      "default": 0,
+      "min": 0,
+      "max": 3,
+      "step": 1,
+      "persist": true,
+      "options": [
+        {
+          "value": 0,
+          "id": "popular",
+          "label": "Популярні"
+        },
+        {
+          "value": 1,
+          "id": "votes",
+          "label": "Голоси"
+        },
+        {
+          "value": 2,
+          "id": "quality",
+          "label": "Якість"
+        },
+        {
+          "value": 3,
+          "id": "name",
+          "label": "А–Я"
+        }
+      ],
+      "description": "Порядок у каталозі: кліки за добу, голоси, бітрейт, назва"
+    },
+    "radio.cat_quality": {
+      "type": "int",
+      "access": "readwrite",
+      "default": 1,
+      "min": 0,
+      "max": 4,
+      "step": 1,
+      "persist": true,
+      "options": [
+        {
+          "value": 0,
+          "id": "any",
+          "label": "Усі"
+        },
+        {
+          "value": 1,
+          "id": "k128",
+          "label": "від 128 кбіт/с"
+        },
+        {
+          "value": 2,
+          "id": "k192",
+          "label": "від 192 кбіт/с"
+        },
+        {
+          "value": 3,
+          "id": "k320",
+          "label": "320 кбіт/с"
+        },
+        {
+          "value": 4,
+          "id": "lossless",
+          "label": "Без втрат (FLAC)"
+        }
+      ],
+      "description": "Поріг якості в каталозі"
+    },
+    "radio.cat_next": {
+      "type": "bool",
+      "access": "readwrite",
+      "default": false,
+      "description": "Наступна сторінка каталогу (скидається після прийняття)"
+    },
+    "radio.cat_prev": {
+      "type": "bool",
+      "access": "readwrite",
+      "default": false,
+      "description": "Попередня сторінка каталогу (скидається після прийняття)"
+    },
+    "radio.cat_play": {
+      "type": "int",
+      "access": "readwrite",
+      "default": -1,
+      "min": -1,
+      "max": 11,
+      "step": 1,
+      "description": "Зіграти рядок N поточної сторінки каталогу; -1 — нічого"
+    },
+    "radio.cat_state": {
+      "type": "string",
+      "access": "read",
+      "description": "idle | loading | ready | error"
+    },
+    "radio.cat_page": {
+      "type": "int",
+      "access": "read",
+      "default": 0,
+      "description": "Сторінка каталогу, від 0"
+    },
+    "radio.cat_count": {
+      "type": "int",
+      "access": "read",
+      "default": 0,
+      "description": "Станцій на сторінці каталогу"
+    },
+    "radio.cat_more": {
+      "type": "bool",
+      "access": "read",
+      "default": false,
+      "description": "Чи може бути наступна сторінка"
+    },
+    "radio.cat_error": {
+      "type": "string",
+      "access": "read",
+      "description": "Чому каталог не відповів"
+    },
+    "radio.cat_list": {
+      "type": "string",
+      "long": true,
+      "access": "read",
+      "description": "Сторінка каталогу одним рядком: номер, назва, кодек і бітрейт"
+    },
+    "radio.covers": {
+      "type": "bool",
+      "access": "readwrite",
+      "default": true,
+      "persist": true,
+      "description": "Обкладинки треків: шукати за назвою з ICY у Deezer (надсилає туди назву треку)"
+    },
+    "radio.uuid": {
+      "type": "string",
+      "access": "read",
+      "description": "Ідентифікатор станції в Radio Browser; порожньо — станція не з каталогу"
+    },
+    "radio.cat_fav": {
+      "type": "int",
+      "access": "readwrite",
+      "default": -1,
+      "min": -1,
+      "max": 11,
+      "step": 1,
+      "description": "Додати рядок N поточної сторінки каталогу до списку станцій; -1 — нічого"
+    },
+    "radio.fav_add": {
+      "type": "bool",
+      "access": "readwrite",
+      "default": false,
+      "description": "Додати станцію з каталогу, що грає зараз, до списку (скидається після прийняття)"
+    },
+    "radio.report_clicks": {
+      "type": "bool",
+      "access": "readwrite",
+      "default": true,
+      "persist": true,
+      "description": "Повідомляти Radio Browser про відтворення станції з каталогу (так вони рахують популярні)"
+    },
+    "radio.web_name": {
+      "type": "string",
+      "access": "readwrite",
+      "description": "Сторінка каталогу в браузері (/radio.html): назва обраної станції"
+    },
+    "radio.web_url": {
+      "type": "string",
+      "long": true,
+      "access": "readwrite",
+      "description": "Сторінка каталогу в браузері: потік обраної станції"
+    },
+    "radio.web_uuid": {
+      "type": "string",
+      "access": "readwrite",
+      "description": "Сторінка каталогу в браузері: uuid обраної станції в Radio Browser"
+    },
+    "radio.web_act": {
+      "type": "int",
+      "access": "readwrite",
+      "default": -1,
+      "min": -1,
+      "max": 7,
+      "step": 1,
+      "description": "Що зробити зі станцією зі сторінки в браузері: 0 — грати, 1 — в улюблені, 2–7 — у пресет 1–6; -1 — нічого (скидається після прийняття)"
+    }
+  },
+  "ui": {
+    "page": "Радіо",
+    "page_id": "radio",
+    "icon": "radio",
+    "order": 30,
+    "cards": [
+      {
+        "title": "Відтворення",
+        "subtitle": "Що грає зараз. URL — зіграти потік поза списком станцій.",
+        "widgets": [
+          {
+            "key": "radio.state",
+            "widget": "value"
+          },
+          {
+            "key": "radio.name",
+            "widget": "value"
+          },
+          {
+            "key": "radio.now_playing",
+            "widget": "value"
+          },
+          {
+            "key": "radio.format",
+            "widget": "value"
+          },
+          {
+            "key": "radio.covers",
+            "widget": "toggle"
+          },
+          {
+            "key": "radio.fav_add",
+            "widget": "button",
+            "label": "♥ До списку станцій"
+          },
+          {
+            "key": "radio.play_url",
+            "widget": "text_input",
+            "maxlength": 223
+          }
+        ]
+      },
+      {
+        "title": "Каталог",
+        "subtitle": "Radio Browser. Зручніше — окрема сторінка /radio.html. Тут запит текстом: top:UA, country:DE, tag:jazz, tag:jazz@UA, name:kiss; рядок — номер для «Зіграти».",
+        "widgets": [
+          {
+            "key": "radio.cat_query",
+            "widget": "text_input",
+            "maxlength": 63
+          },
+          {
+            "key": "radio.cat_sort",
+            "widget": "select"
+          },
+          {
+            "key": "radio.cat_quality",
+            "widget": "select"
+          },
+          {
+            "key": "radio.cat_prev",
+            "widget": "button",
+            "label": "‹ Попередня"
+          },
+          {
+            "key": "radio.cat_next",
+            "widget": "button",
+            "label": "Наступна ›"
+          },
+          {
+            "key": "radio.cat_state",
+            "widget": "value"
+          },
+          {
+            "key": "radio.cat_page",
+            "widget": "value"
+          },
+          {
+            "key": "radio.cat_count",
+            "widget": "value"
+          },
+          {
+            "key": "radio.cat_list",
+            "widget": "value"
+          },
+          {
+            "key": "radio.cat_error",
+            "widget": "value",
+            "visible_when": {
+              "key": "radio.cat_error",
+              "neq": ""
+            }
+          },
+          {
+            "key": "radio.cat_play",
+            "widget": "number_input",
+            "min": -1,
+            "max": 11,
+            "step": 1
+          },
+          {
+            "key": "radio.cat_fav",
+            "widget": "number_input",
+            "min": -1,
+            "max": 11,
+            "step": 1
+          },
+          {
+            "key": "radio.report_clicks",
+            "widget": "toggle"
+          }
+        ]
+      }
+    ]
+  }
+}

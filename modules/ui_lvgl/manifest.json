@@ -1,0 +1,196 @@
+{
+  "manifest_version": 1,
+  "module": "ui_lvgl",
+  "version": "0.2.0",
+  "description": "LVGL-інтерфейс на MIPI-DSI панелі: головний екран — годинник, Wi-Fi, джерело, гучність, індикатори рівня, клавіші джерел (тач); енкодер = гучність, кнопка = mute",
+  "priority": 3,
+  "requires": [
+    {
+      "role": "lcd_main",
+      "type": "lcd",
+      "capability": "lcd",
+      "label": "Панель (MIPI-DSI)"
+    },
+    {
+      "role": "touch_main",
+      "type": "lcd",
+      "capability": "touch",
+      "label": "Тач-контролер",
+      "optional": true
+    },
+    {
+      "role": "encoder_main",
+      "type": "sensor",
+      "capability": "rotary",
+      "label": "Енкодер",
+      "optional": true
+    },
+    {
+      "role": "encoder_sw",
+      "type": "sensor",
+      "capability": "binary_in",
+      "label": "Кнопка енкодера",
+      "optional": true
+    }
+  ],
+  "state": {
+    "ui.screen": {
+      "type": "string",
+      "access": "read",
+      "description": "Поточний екран"
+    },
+    "ui.cover": {
+      "type": "int",
+      "access": "read",
+      "default": 0,
+      "description": "Обкладинка на Плеєрі: 0 — немає, інакше змінюється з кожною новою (GET /api/cover)"
+    },
+    "ui.cover_rgb": {
+      "type": "int",
+      "access": "read",
+      "default": 0,
+      "description": "Тло Плеєра з кольору обкладинки, RGB 0xRRGGBB: 0 — немає обкладинки"
+    },
+    "ui.backlight": {
+      "type": "int",
+      "access": "readwrite",
+      "default": 80,
+      "min": 0,
+      "max": 100,
+      "step": 5,
+      "unit": "%",
+      "persist": true,
+      "mqtt_subscribe": true,
+      "description": "Підсвітка екрана"
+    },
+    "ui.standby_bl": {
+      "type": "int",
+      "access": "readwrite",
+      "default": 25,
+      "min": 5,
+      "max": 100,
+      "step": 5,
+      "unit": "%",
+      "persist": true,
+      "mqtt_subscribe": true,
+      "description": "Підсвітка заставки, коли грає музика (без музики — 5 %)"
+    },
+    "ui.theme": {
+      "type": "int",
+      "access": "readwrite",
+      "default": 0,
+      "min": 0,
+      "max": 3,
+      "step": 1,
+      "persist": true,
+      "mqtt_subscribe": true,
+      "description": "Схема інтерфейсу: 0 Бурштин, 1 Синя, 2 Зелена, 3 Червона"
+    },
+    "ui.lang": {
+      "type": "int",
+      "access": "readwrite",
+      "default": 0,
+      "min": 0,
+      "max": 3,
+      "step": 1,
+      "persist": true,
+      "mqtt_subscribe": true,
+      "description": "Мова панелі: 0 Українська, 1 English, 2 Deutsch, 3 Polski"
+    },
+    "ui.standby_min": {
+      "type": "int",
+      "access": "readwrite",
+      "default": 5,
+      "min": 0,
+      "max": 60,
+      "step": 5,
+      "unit": "хв",
+      "persist": true,
+      "mqtt_subscribe": true,
+      "description": "Автостендбай після бездіяльності; 0 — ніколи"
+    },
+    "ui.encoder_pos": {
+      "type": "int",
+      "access": "read",
+      "default": 0,
+      "description": "Положення енкодера (клацань від старту)"
+    },
+    "ui.encoder_sw": {
+      "type": "bool",
+      "access": "read",
+      "default": false,
+      "on_label": "натиснуто",
+      "off_label": "відпущено",
+      "description": "Кнопка енкодера"
+    },
+    "ui.touch_down": {
+      "type": "bool",
+      "access": "read",
+      "default": false,
+      "on_label": "дотик",
+      "off_label": "нема",
+      "description": "Дотик до екрана"
+    },
+    "ui.touch_x": {
+      "type": "int",
+      "access": "read",
+      "default": 0,
+      "unit": "px",
+      "description": "Останній дотик, X"
+    },
+    "ui.touch_y": {
+      "type": "int",
+      "access": "read",
+      "default": 0,
+      "unit": "px",
+      "description": "Останній дотик, Y"
+    }
+  },
+  "ui": {
+    "page": "Екран",
+    "page_id": "ui",
+    "icon": "monitor",
+    "order": 20,
+    "cards": [
+      {
+        "title": "Екран",
+        "widgets": [
+          {
+            "key": "ui.backlight",
+            "widget": "slider"
+          },
+          {
+            "key": "ui.standby_bl",
+            "widget": "slider"
+          },
+          {
+            "key": "ui.encoder_pos",
+            "widget": "value"
+          },
+          {
+            "key": "ui.encoder_sw",
+            "widget": "indicator"
+          },
+          {
+            "key": "ui.touch_down",
+            "widget": "indicator"
+          },
+          {
+            "key": "ui.touch_x",
+            "widget": "value"
+          },
+          {
+            "key": "ui.touch_y",
+            "widget": "value"
+          }
+        ]
+      }
+    ]
+  },
+  "mqtt": {
+    "publish": [
+      "ui.backlight",
+      "ui.encoder_pos"
+    ]
+  }
+}

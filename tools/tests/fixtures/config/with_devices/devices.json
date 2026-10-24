@@ -1,0 +1,16 @@
+{
+  "manifest_version": 1,
+  "devices": [
+    {
+      "id": "sensor_a",
+      "transport": "ble",
+      "identity": "a4:c1:38:00:00:02",
+      "label": "Kitchen"
+    },
+    {
+      "id": "panel_b",
+      "transport": "ble",
+      "name": "PANEL-B"
+    }
+  ]
+}

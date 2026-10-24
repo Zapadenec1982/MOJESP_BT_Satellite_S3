@@ -1,0 +1,50 @@
+{
+  "manifest_version": 1,
+  "module": "usb_audio",
+  "version": "0.1.0",
+  "description": "USB-аудіо: панель як звукова карта комп'ютера (UAC2 на HS-порту)",
+  "priority": 5,
+  "requires": [],
+  "state": {
+    "usb_audio.state": {
+      "type": "string",
+      "access": "read",
+      "description": "off | waiting | ready | playing"
+    },
+    "usb_audio.rate": {
+      "type": "int",
+      "access": "read",
+      "default": 0,
+      "unit": "Hz",
+      "description": "Частота, яку вибрав комп'ютер"
+    },
+    "usb_audio.bits": {
+      "type": "int",
+      "access": "read",
+      "default": 0,
+      "description": "Розрядність потоку: 16 або 24; 0 — потоку немає"
+    },
+    "usb_audio.diag": {
+      "type": "string",
+      "long": true,
+      "access": "read",
+      "description": "Перевірка потоку: фаза, кадри, заповнення кільця, feedback, пакети, втрати, рівень, тон, розриви"
+    },
+    "usb_audio.losses": {
+      "type": "string",
+      "long": true,
+      "access": "read",
+      "description": "Останні втрати пакетів: час, скільки мікрокадрів, пауза переривання"
+    },
+    "usb_audio.core": {
+      "type": "int",
+      "access": "readwrite",
+      "default": 1,
+      "min": 0,
+      "max": 1,
+      "step": 1,
+      "persist": true,
+      "description": "Ядро для переривання USB і його задач; діє після перезапуску. 1 — типово: на 0 переривання запізнюється через UI"
+    }
+  }
+}

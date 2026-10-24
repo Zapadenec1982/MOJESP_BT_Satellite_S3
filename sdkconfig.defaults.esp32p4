@@ -1,0 +1,3 @@
+# ESP32-P4 target overlay — board choice only.
+# Everything board-specific lives in boards/p4_player/sdkconfig.board.
+CONFIG_MODESP_BOARD_P4_PLAYER=y

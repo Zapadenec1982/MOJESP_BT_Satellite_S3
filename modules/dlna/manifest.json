@@ -1,0 +1,78 @@
+{
+  "manifest_version": 1,
+  "module": "dlna",
+  "version": "0.1.0",
+  "description": "DLNA/UPnP рендерер: пристрій видно в Music Assistant і в телефоні",
+  "priority": 5,
+  "requires": [],
+  "state": {
+    "dlna.enabled": {
+      "type": "bool",
+      "access": "readwrite",
+      "default": true,
+      "persist": true,
+      "mqtt_subscribe": true,
+      "description": "Оголошувати себе в мережі (SSDP). Вимкнено — пристрій не видно"
+    },
+    "dlna.state": {
+      "type": "string",
+      "access": "read",
+      "description": "Стан транспорту UPnP: STOPPED | PLAYING | PAUSED_PLAYBACK | TRANSITIONING | NO_MEDIA_PRESENT"
+    },
+    "dlna.name": {
+      "type": "string",
+      "access": "read",
+      "description": "Ім'я, під яким пристрій видно в мережі"
+    },
+    "dlna.uri": {
+      "type": "string",
+      "long": true,
+      "access": "read",
+      "description": "URL треку, який надіслав контрол-поінт"
+    },
+    "dlna.title": {
+      "type": "string",
+      "long": true,
+      "access": "read",
+      "description": "Назва треку з метаданих DIDL-Lite"
+    },
+    "dlna.cmd": {
+      "type": "int",
+      "command": true,
+      "access": "readwrite",
+      "default": 0,
+      "description": "Transport command: 0 none, 1 play/resume, 2 stop, 3 pause, 4 next, 5 previous",
+      "min": 0,
+      "max": 5,
+      "step": 1
+    },
+    "dlna.album": {
+      "type": "string",
+      "long": true,
+      "access": "read",
+      "description": "Album from DIDL-Lite"
+    },
+    "dlna.art_uri": {
+      "type": "string",
+      "long": true,
+      "access": "read",
+      "description": "Artwork URL from DIDL-Lite"
+    },
+    "dlna.artist": {
+      "type": "string",
+      "long": true,
+      "access": "read",
+      "description": "Виконавець з метаданих DIDL-Lite"
+    },
+    "dlna.browse_cmd": {
+      "type": "int",
+      "command": true,
+      "access": "readwrite",
+      "default": 0,
+      "description": "Revision-stamped local MediaServer browser command",
+      "min": 0,
+      "max": 268435455,
+      "step": 1
+    }
+  }
+}

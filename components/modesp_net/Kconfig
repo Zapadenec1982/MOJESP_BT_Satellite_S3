@@ -1,0 +1,46 @@
+menu "ModESP Network"
+
+    config MODESP_NET_ENABLE
+        bool "Enable networking (WiFi + HTTP + WebSocket)"
+        default y
+        help
+            Master switch for the modesp_net component. When disabled, the
+            component compiles empty (zero sources) and main.cpp skips the
+            WiFi/HTTP/WebSocket wiring — for offline or BLE-only products.
+
+            Disabling networking also removes OTA-over-HTTP; the OTA rollback
+            watchdog then validates the firmware right after the main loop
+            starts (no network health check available).
+
+            Cloud backends (MQTT) require this option.
+
+    config MODESP_NET_SET_DEFAULT_NETIF
+        bool "Make the STA netif the default route after start"
+        depends on MODESP_NET_ENABLE
+        default y if IDF_TARGET_ESP32P4
+        default n
+        help
+            Call esp_netif_set_default_netif() on the station interface right
+            after esp_wifi_start(). Needed when Wi-Fi runs on a co-processor
+            (ESP-Hosted / esp_wifi_remote): unbound UDP sockets such as SNTP may
+            otherwise not leave through the hosted interface. Harmless on
+            targets with native Wi-Fi.
+
+    config MODESP_HTTPD_MAX_OPEN_SOCKETS
+        int "HTTP server sessions, WebSocket and HTTP together"
+        depends on MODESP_NET_ENABLE
+        range 1 58
+        default 4
+        help
+            httpd's max_open_sockets. A WebSocket client holds its session for as
+            long as it stays connected (WsService serves up to 3), so HTTP gets
+            what is left. With every session taken, httpd closes the one least
+            recently heard from to admit a new connection, and a WebSocket that
+            only listens is heard from once per heartbeat (its PONG). A browser
+            loading a page through too few sessions closes live WebSockets.
+
+            httpd keeps 3 sockets of its own on top of these, and all of it has
+            to fit in LWIP_MAX_SOCKETS with every other socket the firmware
+            opens; http_service.cpp refuses to build if this plus 3 does not.
+
+endmenu

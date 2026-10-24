@@ -1,0 +1,66 @@
+menu "UI (LVGL)"
+
+config UI_SCREENSHOT_OPEN
+    bool "Serve GET /api/screenshot without the web login"
+    default n
+    help
+        Development panels only. The screenshot route normally answers to the same
+        Basic-auth login as the rest of /api/*. With this set it answers to anyone on
+        the network, so that the person reviewing screens can fetch them by URL
+        without holding the panel's password.
+
+        Off by default and deliberately absent from boards/*/sdkconfig.board: set it
+        in the local sdkconfig of the bench panel, never in a profile that ships. The
+        firmware logs a warning at boot while it is on.
+
+config UI_SCROLL_BENCH
+    bool "Serve GET /api/ui/scrollbench: a timed, scripted scroll of a long list"
+    default n
+    help
+        Development panels only. Scrolls 600 synthetic rows of a real list widget at a
+        fixed speed for a few seconds and answers with the frame times, split into
+        rendering, the flush (PPA rotation), the wait for the DMA2D copy and the list's
+        own row recycling. It is how a change to the drawing path is judged: the same
+        list, speed and duration on every build (src/ui_scroll_bench.cpp).
+
+        The route answers WITHOUT the web login, like /api/screenshot under
+        UI_SCREENSHOT_OPEN, and the firmware says so at WARN on every boot. Set it in the
+        local sdkconfig of a bench build, never in a profile that ships.
+
+config UI_DOUBLE_FB
+    bool "Compose frames in the DSI panel's second frame buffer, shift scrolled lists"
+    default y
+    help
+        With the rotated panel's direct PPA flush (src/ppa_flush.cpp): LVGL's blocks go
+        into the frame buffer that is not on the glass, and the DPI driver switches to it
+        when the frame is complete, so nothing tears. A list that scrolls (VList) is then
+        moved by DMA2D inside the frame buffer, and LVGL draws only the strip that came
+        into view: a scroll frame costs a strip's drawing and ~5 ms of copying instead of
+        repainting the whole list (~70 ms here).
+
+        Needs the panel driver to make two DPI frame buffers (num_fbs = 2); with one, or
+        with this off, frames are drawn straight into the buffer on the glass, as before.
+
+config UI_SHIFT_PRIORITY
+    int "LVGL task priority while a frame shifts a scrolled list (0: unchanged)"
+    depends on UI_DOUBLE_FB
+    range 0 10
+    default 2
+    help
+        A frame that shifts a list draws only the strip that came into view, a few ms of
+        CPU. For those frames the LVGL task is raised to this priority, above the radio's
+        decoder and the main loop that share its core at priority 1, so a scroll keeps the
+        panel's 60 Hz under load; any other frame goes back to the port's priority. 0 keeps
+        LVGL where the port put it.
+
+config UI_M3_TEST_SCREEN
+    bool "Put the Material 3 component test page in the menu"
+    default n
+    help
+        Development only. Replaces the service screen's menu slot with a page that
+        shows every component of src/ui_m3_widgets.h — buttons, chips, switch,
+        slider, list rows, rail items, toast, the wavy line and the type roles — so
+        the redesign's building blocks can be judged on the glass and by screenshot
+        before a real screen is drawn with them (docs/PLAN_UI_M3_2026-09-24.md, U0).
+
+endmenu

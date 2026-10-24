@@ -1,0 +1,155 @@
+{
+  "manifest_version": 1,
+  "bindings": [
+    {
+      "hardware": "relay_0",
+      "driver": "relay",
+      "role": "role_0",
+      "module": "equipment"
+    },
+    {
+      "hardware": "relay_1",
+      "driver": "relay",
+      "role": "role_1",
+      "module": "equipment"
+    },
+    {
+      "hardware": "relay_2",
+      "driver": "relay",
+      "role": "role_2",
+      "module": "equipment"
+    },
+    {
+      "hardware": "relay_3",
+      "driver": "relay",
+      "role": "role_3",
+      "module": "equipment"
+    },
+    {
+      "hardware": "relay_4",
+      "driver": "relay",
+      "role": "role_4",
+      "module": "equipment"
+    },
+    {
+      "hardware": "relay_5",
+      "driver": "relay",
+      "role": "role_5",
+      "module": "equipment"
+    },
+    {
+      "hardware": "relay_6",
+      "driver": "relay",
+      "role": "role_6",
+      "module": "equipment"
+    },
+    {
+      "hardware": "relay_7",
+      "driver": "relay",
+      "role": "role_7",
+      "module": "equipment"
+    },
+    {
+      "hardware": "relay_8",
+      "driver": "relay",
+      "role": "role_8",
+      "module": "equipment"
+    },
+    {
+      "hardware": "relay_9",
+      "driver": "relay",
+      "role": "role_9",
+      "module": "equipment"
+    },
+    {
+      "hardware": "relay_10",
+      "driver": "relay",
+      "role": "role_10",
+      "module": "equipment"
+    },
+    {
+      "hardware": "relay_11",
+      "driver": "relay",
+      "role": "role_11",
+      "module": "equipment"
+    },
+    {
+      "hardware": "relay_12",
+      "driver": "relay",
+      "role": "role_12",
+      "module": "equipment"
+    },
+    {
+      "hardware": "relay_13",
+      "driver": "relay",
+      "role": "role_13",
+      "module": "equipment"
+    },
+    {
+      "hardware": "relay_14",
+      "driver": "relay",
+      "role": "role_14",
+      "module": "equipment"
+    },
+    {
+      "hardware": "relay_15",
+      "driver": "relay",
+      "role": "role_15",
+      "module": "equipment"
+    },
+    {
+      "hardware": "relay_16",
+      "driver": "relay",
+      "role": "role_16",
+      "module": "equipment"
+    },
+    {
+      "hardware": "relay_17",
+      "driver": "relay",
+      "role": "role_17",
+      "module": "equipment"
+    },
+    {
+      "hardware": "relay_18",
+      "driver": "relay",
+      "role": "role_18",
+      "module": "equipment"
+    },
+    {
+      "hardware": "relay_19",
+      "driver": "relay",
+      "role": "role_19",
+      "module": "equipment"
+    },
+    {
+      "hardware": "relay_20",
+      "driver": "relay",
+      "role": "role_20",
+      "module": "equipment"
+    },
+    {
+      "hardware": "relay_21",
+      "driver": "relay",
+      "role": "role_21",
+      "module": "equipment"
+    },
+    {
+      "hardware": "relay_22",
+      "driver": "relay",
+      "role": "role_22",
+      "module": "equipment"
+    },
+    {
+      "hardware": "relay_23",
+      "driver": "relay",
+      "role": "role_23",
+      "module": "equipment"
+    },
+    {
+      "hardware": "relay_24",
+      "driver": "relay",
+      "role": "role_24",
+      "module": "equipment"
+    }
+  ]
+}

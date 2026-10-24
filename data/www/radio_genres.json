@@ -1,0 +1,31 @@
+{
+  "_comment": "Station catalog genres (docs/PLAN_RADIO_V2_2026-10-04.md 4). One Radio Browser tag per genre, matched as a substring, so 'rock' also finds 'classic rock'. Counts of live stations per tag were measured on 04.10.2026. Edit freely: name is what the screen shows, in Ukrainian; name_en, name_de and name_pl in those languages (docs/PLAN_PANEL_LANG_2026-10-12.md 9), and a genre without one shows name. At most 31 bytes a name. tag is what is asked for.",
+  "genres": [
+    {"name": "Поп", "name_en": "Pop", "name_de": "Pop", "name_pl": "Pop", "tag": "pop"},
+    {"name": "Рок", "name_en": "Rock", "name_de": "Rock", "name_pl": "Rock", "tag": "rock"},
+    {"name": "Метал", "name_en": "Metal", "name_de": "Metal", "name_pl": "Metal", "tag": "metal"},
+    {"name": "Альтернатива", "name_en": "Alternative", "name_de": "Alternative", "name_pl": "Alternatywa", "tag": "alternative"},
+    {"name": "Джаз", "name_en": "Jazz", "name_de": "Jazz", "name_pl": "Jazz", "tag": "jazz"},
+    {"name": "Блюз", "name_en": "Blues", "name_de": "Blues", "name_pl": "Blues", "tag": "blues"},
+    {"name": "Класика", "name_en": "Classical", "name_de": "Klassik", "name_pl": "Klasyka", "tag": "classical"},
+    {"name": "Електроніка", "name_en": "Electronic", "name_de": "Elektronik", "name_pl": "Elektronika", "tag": "electronic"},
+    {"name": "Денс", "name_en": "Dance", "name_de": "Dance", "name_pl": "Dance", "tag": "dance"},
+    {"name": "Хаус", "name_en": "House", "name_de": "House", "name_pl": "House", "tag": "house"},
+    {"name": "Техно", "name_en": "Techno", "name_de": "Techno", "name_pl": "Techno", "tag": "techno"},
+    {"name": "Чилаут", "name_en": "Chillout", "name_de": "Chillout", "name_pl": "Chillout", "tag": "chillout"},
+    {"name": "Ембієнт", "name_en": "Ambient", "name_de": "Ambient", "name_pl": "Ambient", "tag": "ambient"},
+    {"name": "Хіп-хоп", "name_en": "Hip-hop", "name_de": "Hip-Hop", "name_pl": "Hip-hop", "tag": "hip"},
+    {"name": "Соул і R&B", "name_en": "Soul & R&B", "name_de": "Soul & R&B", "name_pl": "Soul i R&B", "tag": "soul"},
+    {"name": "Реггі", "name_en": "Reggae", "name_de": "Reggae", "name_pl": "Reggae", "tag": "reggae"},
+    {"name": "Кантрі", "name_en": "Country", "name_de": "Country", "name_pl": "Country", "tag": "country"},
+    {"name": "Фолк", "name_en": "Folk", "name_de": "Folk", "name_pl": "Folk", "tag": "folk"},
+    {"name": "Ретро", "name_en": "Oldies", "name_de": "Oldies", "name_pl": "Złote przeboje", "tag": "oldies"},
+    {"name": "80-ті", "name_en": "80s", "name_de": "80er", "name_pl": "Lata 80.", "tag": "80s"},
+    {"name": "90-ті", "name_en": "90s", "name_de": "90er", "name_pl": "Lata 90.", "tag": "90s"},
+    {"name": "Хіти", "name_en": "Hits", "name_de": "Hits", "name_pl": "Hity", "tag": "hits"},
+    {"name": "Новини", "name_en": "News", "name_de": "Nachrichten", "name_pl": "Wiadomości", "tag": "news"},
+    {"name": "Розмовне", "name_en": "Talk", "name_de": "Talk", "name_pl": "Rozmowy", "tag": "talk"},
+    {"name": "Спорт", "name_en": "Sports", "name_de": "Sport", "name_pl": "Sport", "tag": "sport"},
+    {"name": "Духовне", "name_en": "Christian", "name_de": "Christlich", "name_pl": "Chrześcijańskie", "tag": "christian"}
+  ]
+}

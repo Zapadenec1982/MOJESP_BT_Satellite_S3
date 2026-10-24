@@ -1,0 +1,18 @@
+{
+  "manifest_version": 1,
+  "board": "no_timings",
+  "display_name": "A panel entry missing its vertical front porch",
+  "version": "0.1",
+  "_why": "Fixture for item 8.8: the timings used to be defaults in hal_types.h, so this file parsed and drove an unknown panel at the JC4880P443C's numbers. It must now be refused by name.",
+
+  "dsi_displays": [
+    {
+      "id": "lcd_0", "chip": "st7701",
+      "lanes": 2, "lane_mbps": 500, "dpi_mhz": 34,
+      "h_res": 480, "v_res": 800,
+      "hsync": 12, "hbp": 42, "hfp": 42,
+      "vsync": 2, "vbp": 8,
+      "color_bits": 16
+    }
+  ]
+}

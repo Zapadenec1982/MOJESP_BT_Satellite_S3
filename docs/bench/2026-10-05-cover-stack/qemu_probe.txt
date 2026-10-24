@@ -1,0 +1,31 @@
+
+stb_image stack probe: firmware cover_soft.c.obj on RV32 (QEMU virt)
+image                             bytes     w x h      info  decode   heap KB  ok
+fav120_rgba8_dyn.png              49647    120 x  120    1608    8736       219  yes
+fav120_rgb8_fixed.png              9637    120 x  120    1608    6192       101  yes
+fav120_rgb8_stored.png            43453    120 x  120    1608    6036       149  yes
+fav120_rgb8_huffonly.png          35345    120 x  120    1608    8736       149  yes
+fav120_pal8_trns.png               3026    120 x  120    1608    8736        74  yes
+fav64_pal4.png                      413     64 x   64    1608    8736        22  yes
+fav64_pal1.png                      126     64 x   64    1608    6192        20  yes
+fav120_gray8.png                  13182    120 x  120    1608    8736        86  yes
+fav64_gray2.png                     144     64 x   64    1608    8736        21  yes
+fav120_graya8.png                 17201    120 x  120    1608    8736       131  yes
+fav120_rgb16.png                  53106    120 x  120    1608    8736       276  yes
+fav120_rgba16_interlaced.png      58564    120 x  120    1608    8736       646  yes
+fav120_rgba8_interlaced.png       43778    120 x  120    1608    8736       334  yes
+fav120_gray16_trns.png             2557    120 x  120    1608    8736       215  yes
+fav120_rgb8_paeth.png             30862    120 x  120    1608    8736       117  yes
+cover600_rgb8_dyn.png            869546    600 x  600    1608    8736      3137  yes
+cover600_prog420.jpg             102271    600 x  600     456     868      2717  yes
+cover600_prog444.jpg             180657    600 x  600     456     868      4256  yes
+cover600_prog422.jpg              85001    600 x  600     456     868      3230  yes
+cover333_prog420_odd.jpg          14027    333 x  251     456     868       660  yes
+cover600_prog_gray.jpg            85571    600 x  600     456     868      2146  yes
+cover600_base_gray.jpg            96491    600 x  600     456     868      1443  yes
+cover600_prog_cmyk.jpg           276100    600 x  600     456     868      5312  yes
+cover600_prog420_rst.jpg         121703    600 x  600     456     868      2717  yes
+
+worst cover_soft_info():   1608 B
+worst cover_soft_decode() PNG:  8736 B  (fav120_rgba8_dyn.png)
+worst cover_soft_decode() JPEG: 868 B  (cover600_prog420.jpg)

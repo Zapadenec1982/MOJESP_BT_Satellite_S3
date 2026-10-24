@@ -1,0 +1,16 @@
+{
+  "manifest_version": 1,
+  "board": "no_touch_address",
+  "display_name": "A touch entry with no I2C address",
+  "version": "0.1",
+  "_why": "Fixture for item 8.8: 0x5D was a default in hal_types.h, i.e. one controller's ADDR strapping standing in for every board's. A GT911 strapped high answers at 0x14 and this file would have silently probed the wrong one.",
+
+  "i2c_buses": [
+    {"id": "i2c_0", "label": "bus", "sda": 7, "scl": 8, "freq_hz": 400000}
+  ],
+
+  "i2c_touch": [
+    {"id": "touch_0", "bus": "i2c_0", "chip": "gt911",
+     "int_gpio": -1, "rst_gpio": -1, "x_max": 800, "y_max": 480}
+  ]
+}

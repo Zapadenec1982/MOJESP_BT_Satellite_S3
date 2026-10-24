@@ -20,7 +20,7 @@ product and comes with no support.
 | Internet radio | Station catalogue from [Radio Browser](https://www.radio-browser.info) (country, genre, search), presets on the panel and in the web UI; MP3, AAC/HE-AAC and FLAC streams. The playing track's cover is looked up by its title |
 | DLNA / UPnP | Media renderer for Music Assistant, Home Assistant and other control points, and a browser for media servers on the panel |
 | AirPlay 2 | From an iPhone or a Mac; AirPlay 2 or classic RAOP profile ([docs/AIRPLAY_MODES.md](docs/AIRPLAY_MODES.md)) |
-| Bluetooth | Through a separate ESP32 satellite board over I2S and a UART link ([ModESP_Satelite](https://github.com/Zapadenec1982/ModESP_Satelite)): SBC, AAC, aptX, aptX HD; covers and track info over AVRCP |
+| Bluetooth | Through a separate ESP32 satellite board over I2S and a UART link ([ModESP_BT_Satellite](https://github.com/Zapadenec1982/ModESP_BT_Satellite)): SBC, AAC, aptX, aptX HD; covers and track info over AVRCP |
 | USB audio | A UAC2 sound card for a computer: 44.1 to 96 kHz, 16 or 24 bit, asynchronous with feedback, no driver needed on Windows 10 1703+, macOS or Linux |
 | microSD | FLAC, MP3, WAV and AAC/M4A from folders, with tags and embedded covers |
 

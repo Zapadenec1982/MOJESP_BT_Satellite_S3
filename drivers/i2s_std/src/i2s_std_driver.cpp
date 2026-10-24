@@ -14,6 +14,7 @@
 #include "i2s_std_driver.h"
 
 #include "esp_heap_caps.h"
+#include "esp_timer.h"
 
 #include <cstring>
 #include "esp_log.h"
@@ -271,18 +272,35 @@ bool I2sStdDriver::init() {
 bool I2sStdDriver::start() {
     if (!initialized_) return false;
     if (running_) return true;
+    const bool seeded = tx_ring_seeded_;
+    tx_ring_seeded_ = false;
     esp_err_t err = ESP_OK;
-    if (tx_) {
+    if (tx_ && !seeded) {
         // Disable resets the DMA cursor; auto-clear leaves played descriptors
         // as exact zeros. Seed EVERY descriptor before enabling TX so a restart
         // never sends an empty ring to the DAC's zero-data detector.
+        //
+        // A descriptor per call: IDF syncs the whole descriptor from the cache on every call,
+        // and with the write-back in pieces each sync may wait behind the display's while the
+        // clock is stopped (see set_rate). 64-frame calls made 64 of them, whole ones make 8.
+        static int32_t* s_quiet_desc = nullptr;   // DMA_FRAMES of keepalive, made once, PSRAM
+        if (!s_quiet_desc) {
+            s_quiet_desc = static_cast<int32_t*>(
+                heap_caps_malloc(DMA_FRAMES * 2 * sizeof(int32_t), MALLOC_CAP_SPIRAM));
+            if (s_quiet_desc) {
+                for (size_t i = 0; i < DMA_FRAMES * 2; i++) s_quiet_desc[i] = 1 << 8;
+            }
+        }
         int32_t quiet[64 * 2];
         for (auto& sample : quiet) sample = 1 << 8;
+        const int32_t* src       = s_quiet_desc ? s_quiet_desc : quiet;
+        const size_t   src_bytes = s_quiet_desc ? DMA_FRAMES * 2 * sizeof(int32_t)
+                                                : sizeof(quiet);
         size_t remaining = TX_DMA_DESCS * DMA_FRAMES * 2 * sizeof(int32_t);
         while (remaining) {
-            const size_t size = remaining < sizeof(quiet) ? remaining : sizeof(quiet);
+            const size_t size = remaining < src_bytes ? remaining : src_bytes;
             size_t loaded = 0;
-            err = i2s_channel_preload_data(tx_, quiet, size, &loaded);
+            err = i2s_channel_preload_data(tx_, src, size, &loaded);
             if (err != ESP_OK || loaded != size) {
                 ESP_LOGE(TAG, "[%s] tx preload: %s (%u/%u)", role_.c_str(),
                          esp_err_to_name(err), (unsigned)loaded, (unsigned)size);
@@ -291,6 +309,7 @@ bool I2sStdDriver::start() {
             remaining -= loaded;
         }
     }
+    tx_pos_frames_ = 0;   // seeded or not, IDF's writer starts the next write on a fresh descriptor
     // A duplex master's receive side runs only while its line input is wanted (see
     // set_line_input); an RX-only port always receives.
     const bool want_rx = rx_ && (!tx_ || line_input_ || link_.valid());
@@ -346,23 +365,38 @@ bool I2sStdDriver::set_rate(uint32_t hz, uint16_t mclk_multiple) {
     if (was_running && tx_) {
         // The software envelope being closed does not mean its fade has left
         // the 8-descriptor TX queue. Push a full ring plus one descriptor of
-        // DAC keepalive before stopping clocks, so no audible tail is cut off.
+        // DAC keepalive before stopping clocks, so no audible tail is cut off —
+        // and first the rest of the descriptor being written, so the drain ends on
+        // a descriptor's edge and the ring it leaves holds no auto-cleared frames.
         int32_t quiet[64 * 2];
         for (auto& sample : quiet) sample = 1 << 8;
-        size_t remaining = (TX_DMA_DESCS + 1) * DMA_FRAMES;
+        size_t remaining = (DMA_FRAMES - tx_pos_frames_) % DMA_FRAMES +
+                           (TX_DMA_DESCS + 1) * DMA_FRAMES;
         while (remaining) {
             const size_t frames = remaining < 64 ? remaining : 64;
             size_t bytes = 0;
             const esp_err_t err = i2s_channel_write(tx_, quiet, frames * 2 * sizeof(int32_t),
                                                    &bytes, 50);
             const size_t sent = bytes / (2 * sizeof(int32_t));
+            tx_pos_frames_ = (uint32_t)((tx_pos_frames_ + sent) % DMA_FRAMES);
             if (err != ESP_OK || sent != frames) {
                 ESP_LOGW(TAG, "[%s] TX fade drain incomplete; keeping current clock", name());
                 return false;
             }
             remaining -= sent;
         }
+        // Every descriptor holds keepalive now: the last one written was the one the DMA had
+        // just released, and the DMA is on the next, which the drain also wrote. So the
+        // start() below does not seed the ring again. Seeding is 64 cache syncs of a whole
+        // descriptor, made while the clock is stopped. With the cache write-back in pieces
+        // (sdkconfig.board) every sync from a task takes one global mutex, the display's
+        // frame-buffer syncs hold it, and waiting behind them kept the clock stopped long
+        // enough for the DAC to click on every rate change (24.10.2026: clicks with that
+        // option, none without it, none on 78f590f before it). What is left with this is the
+        // faint tick of the DAC relocking, which 78f590f has too (25.10.2026).
+        tx_ring_seeded_ = true;
     }
+    const int64_t stopped_at = esp_timer_get_time();
     if (was_running) stop();
     i2s_std_clk_config_t clk = I2S_STD_CLK_DEFAULT_CONFIG(hz);
     clk.clk_src = I2S_CLK_SRC_APLL;
@@ -437,10 +471,12 @@ bool I2sStdDriver::set_rate(uint32_t hz, uint16_t mclk_multiple) {
     trim_warned_ = false;
     // The PLL moved with it, and the slave port needs to know where to.
     s_apll_hz  = pll;
-    ESP_LOGI(TAG, "[%s] output now %lu Hz, MCLK x%u, PLL at %lu Hz", name(),
-             (unsigned long)hz, (unsigned)mult, (unsigned long)pll);
-    if (was_running) return start();
-    return true;
+    const bool ok = was_running ? start() : true;
+    // How long the DAC went without a clock: the number a click at a rate change is about.
+    ESP_LOGI(TAG, "[%s] output now %lu Hz, MCLK x%u, PLL at %lu Hz; clock stopped %lu us",
+             name(), (unsigned long)hz, (unsigned)mult, (unsigned long)pll,
+             was_running ? (unsigned long)(esp_timer_get_time() - stopped_at) : 0ul);
+    return ok;
 }
 
 // ── Trimming the clock, and the reference count that makes it legal ───────────────────────
@@ -851,7 +887,9 @@ size_t I2sStdDriver::write(const int32_t* stereo, size_t frames, uint32_t timeou
     size_t bytes = 0;
     i2s_channel_write(tx_, stereo, frames * 2 * sizeof(int32_t), &bytes, timeout_ms);
     if (bytes < frames * 2 * sizeof(int32_t)) tx_short_.fetch_add(1, std::memory_order_relaxed);
-    return bytes / (2 * sizeof(int32_t));
+    const size_t sent = bytes / (2 * sizeof(int32_t));
+    tx_pos_frames_ = (uint32_t)((tx_pos_frames_ + sent) % DMA_FRAMES);
+    return sent;
 }
 
 size_t I2sStdDriver::read(int32_t* stereo, size_t frames, uint32_t timeout_ms) {

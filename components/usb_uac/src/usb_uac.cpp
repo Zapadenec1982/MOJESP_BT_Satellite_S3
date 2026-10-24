@@ -91,7 +91,6 @@ void producer_task(void*) {
     uint32_t flush_gen = 0;
     int64_t  phase_t0 = 0;
     bool     need_rate = false;     // the ring must be asked for `rate`
-    uint32_t ran_rate = 0;          // the rate of the frames last written
     float    fill_ema = -1.f;
     uint32_t fb_last = 0;
     int64_t  loud_at = 0;
@@ -142,7 +141,6 @@ void producer_task(void*) {
             gen = ring.generation();
             ring.set_paused(false);
             ring.set_eos(PcmRing::OWNER_USB, gen, alt == 0);
-            ran_rate = 0;
             need_rate = alt != 0;
             phase = Phase::idle;
         } else if (!want && ring.owner() == PcmRing::OWNER_USB) {
@@ -158,20 +156,17 @@ void producer_task(void*) {
         if (mine && alt && need_rate) {
             need_rate = false;
             ring.set_eos(PcmRing::OWNER_USB, gen, false);
-            if (ran_rate) {
-                // A stream before this one wrote here: fade what is left of it out, and let the
-                // reset make the consumer prime again. Without it a stream restarted at the same
-                // rate met a consumer reading an empty ring with no cushion — six underruns at
-                // the start of a 48 kHz run (U1, 24.10.2026) — and a new rate would retune
-                // under the old rate's tail.
-                flush_gen = gen;
-                ring.request_flush(PcmRing::OWNER_USB, gen);
-                phase = Phase::flush;
-            } else {
-                phase = Phase::ask;
-                ring.request_new_session(PcmRing::OWNER_USB);
-                ring.ask_rate(rate);
-            }
+            // Every stream, the first since the claim too: fade out what is left, and let the
+            // reset make the consumer prime again. Without it a stream restarted at the same
+            // rate met a consumer reading an empty ring with no cushion — six underruns at the
+            // start of a 48 kHz run (U1, 24.10.2026) — and a new rate would retune under the
+            // old rate's tail. The first stream is no different: a claim made while the
+            // computer was silent marks the ring ended, an ended ring stops the consumer's
+            // priming, and a first stream at the clock's own rate (nothing to retune, so nothing
+            // primes after it) played with no cushion as well.
+            flush_gen = gen;
+            ring.request_flush(PcmRing::OWNER_USB, gen);
+            phase = Phase::flush;
             phase_t0 = now;
         }
         if (mine && phase == Phase::flush &&
@@ -186,7 +181,6 @@ void producer_task(void*) {
             const uint32_t answer = ring.out_rate();
             if (answer == rate) {
                 phase = Phase::run;
-                ran_rate = rate;
                 fill_ema = -1.f;
             } else if (answer != 0) {
                 phase = Phase::refused;

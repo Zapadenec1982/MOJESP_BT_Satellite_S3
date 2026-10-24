@@ -79,6 +79,13 @@ private:
     /// different audio PLL — the PLL is twice this MCLK (i2s_clock.h).
     uint16_t mclk_mult_ = 256;
     bool running_     = false;
+    /// set_rate() filled every TX descriptor with keepalive just before it stopped the clock,
+    /// so the start() that ends the retune does not seed them again (see set_rate()).
+    bool tx_ring_seeded_ = false;
+    /// Where IDF's TX writer stands inside its current descriptor, in frames: every write
+    /// fills descriptors in order from the start of one (start() leaves it at a boundary),
+    /// so this is everything written since start() modulo DMA_FRAMES.
+    uint32_t tx_pos_frames_ = 0;
     // What the receive channel is doing with the audio PLL, tracked here because the I2S
     // driver's own two answers disagree after a failure and the disagreement is fatal.
     /// The width the channel is actually configured for, which after a peer's announcement

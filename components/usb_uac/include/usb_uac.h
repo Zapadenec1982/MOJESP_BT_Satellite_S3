@@ -40,7 +40,7 @@ enum class State : uint8_t {
 /// Where the producer is with the ring.
 enum class Phase : uint8_t {
     idle,       ///< not the output, or nothing streaming
-    flush,      ///< the old rate's frames are fading out
+    flush,      ///< what is queued fades out, so the consumer primes again
     ask,        ///< asked the ring for the computer's rate, waiting for the clock
     run,        ///< writing
     refused,    ///< the clock would not go to this rate: silence until the rate changes

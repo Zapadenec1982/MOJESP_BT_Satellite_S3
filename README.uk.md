@@ -107,7 +107,7 @@ DSP-ланцюг, закон гучності й лімітери: [docs/AUDIO.u
 | Guition JC4880P443C | ESP32-P4 (2× RISC-V 360 МГц, 32 МБ PSRAM, 16 МБ flash) і ESP32-C6 (Wi-Fi 6) на SDIO з ESP-Hosted; IPS 4,3" 480×800 на ST7701S по MIPI-DSI; тач GT911; microSD; USB HS і FS |
 | PCM5102A | Стерео-ЦАП на I2S; P4 — майстер такту, без MCLK |
 | TPA3255 | Підсилювач класу D |
-| Bluetooth-супутник ESP32 | A2DP-приймач, окрема прошивка й репозиторій |
+| Bluetooth-супутник ESP32 | A2DP-приймач із власною прошивкою: [Bluetooth-супутник](#bluetooth-супутник) |
 | Поворотний енкодер | Гучність; його кнопка вмикає відтворення й паузу, утримання відкриває меню |
 
 Розпіновка, сигнальний шлях і причини, що за ними стоять: [docs/CONCEPT.uk.md](docs/CONCEPT.uk.md) і
@@ -124,6 +124,49 @@ DSP-ланцюг, закон гучності й лімітери: [docs/AUDIO.u
   Живіть панель від цього порту або поставте діод Шотткі в його лінію VBUS.
 - **C6 потрібна slave-прошивка ESP-Hosted** з того самого релізу, що й бібліотека хоста
   (3.0.7): [docs/C6_UPDATE.uk.md](docs/C6_UPDATE.uk.md), `tools/c6_updater/`.
+
+## Bluetooth-супутник
+
+Bluetooth-звук приходить з окремої плати — оригінального ESP32 з власною прошивкою:
+**[ModESP_BT_Satellite](https://github.com/Zapadenec1982/ModESP_BT_Satellite)** (ліцензія MIT).
+Ні ESP32-P4, ні ESP32-C6 не мають Bluetooth Classic, а A2DP без нього неможливий. Супутник приймає
+потік з телефона, декодує його і віддає панелі PCM по I2S; усе інше йде UART-лінком.
+
+![Підключення до панелі](docs/img/wiring.uk.svg)
+
+<table>
+<tr>
+<td><img src="docs/img/screens/panel-player.uk.png" alt="Панель грає Bluetooth: LHDC V5, 96 кГц"></td>
+<td><img src="docs/img/screens/panel-bluetooth.uk.png" alt="Bluetooth на панелі: телефон, налаштування, кодеки, спарені телефони"></td>
+<td><img src="docs/img/screens/web-bluetooth.uk.png" width="200" alt="Bluetooth у вебінтерфейсі"></td>
+</tr>
+</table>
+
+| Сигнал | Панель (ESP32-P4) | Супутник (ESP32-WROOM-32) |
+|---|---|---|
+| I2S BCLK | GPIO33 | GPIO13 |
+| I2S WS | GPIO30 | GPIO26 |
+| I2S DATA | GPIO31, вхід | GPIO27, вихід |
+| UART, панель → супутник | GPIO26 TX (J5) | GPIO16 RX |
+| UART, супутник → панель | GPIO27 RX (J5) | GPIO17 TX |
+| Земля | GND (JP1) | GND |
+
+- **Лінк:** UART 460 800 8N1, кадри COBS з CRC-16, протокол 1.10:
+  [docs/LINK_PROTOCOL.uk.md](docs/LINK_PROTOCOL.uk.md). Супутник тримає той самий текст слово в слово
+  як свій `docs/PROTOCOL.uk.md`, а `tools/check_protocol_mirror.py` звіряє копії.
+- **Кодеки:** SBC, AAC, aptX і aptX HD на 44,1 і 48 кГц; LHDC V5, до 96 кГц, коли супутник
+  зібрано з його декодером.
+- **Тактування:** супутник з протоколом 1.9 і новіше дає панелі тактувати лінію I2S, тож вхід і вихід
+  ідуть від одного такту і нічого не ресемплюється. Старіший супутник тактує лінію сам.
+- **Що передається:** назва, виконавець, альбом, позиція й обкладинка треку; стан відтворення;
+  абсолютна гучність в обидва боки, тож повзунок на телефоні й гучність панелі рухаються разом;
+  відтворення, пауза, наступний і попередній трек з панелі; підтвердження спарювання на екрані
+  панелі; налаштування Bluetooth і спарені телефони з панелі й вебінтерфейсу.
+- **У цьому репозиторії:** `modules/bt` (лінк, ключі `bt.*`, `/api/bt`) і `components/sat_link`
+  (кадри й повідомлення, тести на хості). Аудіобік —
+  [docs/AUDIO.uk.md](docs/AUDIO.uk.md), «Bluetooth через супутник».
+- **Збирання і прошивка супутника:** його
+  [README](https://github.com/Zapadenec1982/ModESP_BT_Satellite/blob/main/README.uk.md).
 
 ## Збирання
 

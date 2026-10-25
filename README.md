@@ -107,7 +107,7 @@ network sources: [docs/NETWORK.md](docs/NETWORK.md).
 | Guition JC4880P443C | ESP32-P4 (2× RISC-V 360 MHz, 32 MB PSRAM, 16 MB flash) and ESP32-C6 (Wi-Fi 6) over SDIO with ESP-Hosted; 4.3" 480×800 IPS on ST7701S over MIPI-DSI; GT911 touch; microSD; USB HS and FS |
 | PCM5102A | Stereo DAC on I2S; the P4 is the clock master, no MCLK |
 | TPA3255 | Class-D amplifier |
-| ESP32 Bluetooth satellite | A2DP sink, separate firmware and repository |
+| ESP32 Bluetooth satellite | A2DP sink with its own firmware: [Bluetooth satellite](#bluetooth-satellite) |
 | Rotary encoder | Volume; its button plays and pauses, a hold opens the menu |
 
 Pinout, signal path and the reasons behind them: [docs/CONCEPT.md](docs/CONCEPT.md) and
@@ -124,6 +124,51 @@ Things worth knowing about this board:
   Power the panel from that port, or put a Schottky diode in its VBUS line.
 - **The C6 needs the ESP-Hosted slave firmware** from the same release as the host library
   (3.0.7): [docs/C6_UPDATE.md](docs/C6_UPDATE.md), `tools/c6_updater/`.
+
+## Bluetooth satellite
+
+Bluetooth audio comes from a second board, an original ESP32 with its own firmware:
+**[ModESP_BT_Satellite](https://github.com/Zapadenec1982/ModESP_BT_Satellite)** (MIT licence).
+Neither the ESP32-P4 nor the ESP32-C6 has Bluetooth Classic, and A2DP needs it. The satellite
+receives the phone's stream, decodes it and hands the panel PCM over I2S; a UART link carries
+everything else.
+
+![Wiring to the panel](docs/img/wiring.svg)
+
+<table>
+<tr>
+<td><img src="docs/img/screens/panel-player.png" alt="The panel playing Bluetooth: LHDC V5, 96 kHz"></td>
+<td><img src="docs/img/screens/panel-bluetooth.png" alt="Bluetooth on the panel: the phone, settings, codecs, paired phones"></td>
+<td><img src="docs/img/screens/web-bluetooth.png" width="200" alt="Bluetooth in the web interface"></td>
+</tr>
+</table>
+
+| Signal | Panel (ESP32-P4) | Satellite (ESP32-WROOM-32) |
+|---|---|---|
+| I2S BCLK | GPIO33 | GPIO13 |
+| I2S WS | GPIO30 | GPIO26 |
+| I2S DATA | GPIO31, in | GPIO27, out |
+| UART, panel → satellite | GPIO26 TX (J5) | GPIO16 RX |
+| UART, satellite → panel | GPIO27 RX (J5) | GPIO17 TX |
+| Ground | GND (JP1) | GND |
+
+- **Link:** UART 460,800 8N1, COBS frames with CRC-16, protocol 1.10:
+  [docs/LINK_PROTOCOL.md](docs/LINK_PROTOCOL.md). The satellite keeps the same text word for word as
+  its `docs/PROTOCOL.md`, and `tools/check_protocol_mirror.py` compares the copies.
+- **Codecs:** SBC, AAC, aptX and aptX HD at 44.1 and 48 kHz; LHDC V5, up to 96 kHz, when the
+  satellite is built with its decoder.
+- **Clock:** a satellite of protocol 1.9 or later lets the panel clock the I2S line, so the input
+  and the output run on one clock and nothing is resampled. An older satellite clocks the line
+  itself.
+- **What travels:** the title, artist, album, position and cover of the track; the play state;
+  absolute volume both ways, so the phone's slider and the panel's volume move together;
+  play, pause, next and previous from the panel; pairing confirmed on the panel's screen;
+  Bluetooth settings and paired phones from the panel and the web interface.
+- **In this repository:** `modules/bt` (the link, the `bt.*` keys, `/api/bt`) and
+  `components/sat_link` (frames and messages, tested on the host). The audio side is
+  [docs/AUDIO.md](docs/AUDIO.md), "Bluetooth via the satellite".
+- **Building and flashing the satellite:** its
+  [README](https://github.com/Zapadenec1982/ModESP_BT_Satellite#building).
 
 ## Building
 

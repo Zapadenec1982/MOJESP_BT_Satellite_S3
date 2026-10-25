@@ -567,7 +567,7 @@ void AirplayModule::mirror_events(uint32_t dt_ms, bool mine) {
             sh.title_at.store(0);
         } else if (now - title_at > COVER_PAIRING_US) {
             sh.title_at.store(0);
-            if (player_core::cover_view(COVER).px) post_cover(CoverJob{nullptr, 0});
+            if (player_core::cover_present(player_core::cover_view(COVER))) post_cover(CoverJob{nullptr, 0});
         }
     }
 

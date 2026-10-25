@@ -13,6 +13,7 @@
 #include "esp_log.h"
 #include "esp_heap_caps.h"
 #include "mdns.h"
+#include "soc/soc_caps.h"   // SOC_WIFI_SUPPORTED: the radio is this chip's own, not a co-processor's
 
 #include <cstring>
 #include <cstdio>
@@ -273,6 +274,21 @@ void WiFiService::on_update(uint32_t dt_ms) {
     // shows eh_host_wifi_sta_get_ap_info). And it buys nothing: the note below records that
     // this path returns 0 on this stack anyway. Revisit after an esp_hosted bump, and then
     // only off the main loop.
+    //
+    // A chip with its own radio (SOC_WIFI_SUPPORTED: the ESP32-S3) has none of that: the read
+    // is local and comes back right, so there it runs.
+#if defined(SOC_WIFI_SUPPORTED) && SOC_WIFI_SUPPORTED
+    if (connected_ && !ap_mode_) {
+        rssi_timer_ += dt_ms;
+        if (rssi_timer_ >= RSSI_INTERVAL_MS) {
+            rssi_timer_ = 0;
+            int rssi = 0;
+            if (esp_wifi_sta_get_rssi(&rssi) == ESP_OK) {
+                state_set("wifi.rssi", static_cast<int32_t>(rssi));
+            }
+        }
+    }
+#else
     if (false && connected_ && !ap_mode_) {
         rssi_timer_ += dt_ms;
         if (rssi_timer_ >= RSSI_INTERVAL_MS) {
@@ -288,6 +304,7 @@ void WiFiService::on_update(uint32_t dt_ms) {
             }
         }
     }
+#endif
 
     // ── AP→STA periodic probe ──
     if (ap_mode_ && !ap_sta_probing_ && !deferred_reconnect_ && ssid_[0] != '\0') {

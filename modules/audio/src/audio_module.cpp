@@ -202,7 +202,7 @@ inline uint32_t f32_to_i32(const float* in, int32_t* out, size_t n, float scale)
     for (size_t i = 0; i < n; i++) {
         const float x = in[i];
         clamped += !(fabsf(x) <= 1.00001f);
-        const float v = x == x ? fminf(fmaxf(x, -1.0f), 1.0f) : 0.0f;
+        const float v = x == x ? audio_core::dsp_min(audio_core::dsp_max(x, -1.0f), 1.0f) : 0.0f;
         const int32_t q = (int32_t)(v * scale);
         out[i] = q ? q : DAC_KEEPALIVE;
     }
@@ -1615,7 +1615,9 @@ bool AudioModule::park_bt_off_pll() {
     if (!bt_) return false;
     const uint8_t bits = bt_->slot_bits();
     uint32_t hz = 48000;
-    if (!audio_core::i2s_slave_clock_fits(audio_core::I2S_XTAL_HZ, hz, bits)) hz = 32000;
+    // The default source: the P4's crystal, which cannot carry 32-bit slots at 48 kHz; the S3's
+    // 160 MHz, which can.
+    if (!audio_core::i2s_slave_clock_fits(audio_core::I2S_DEFAULT_SCLK_HZ, hz, bits)) hz = 32000;
     bt_->stop();
     return bt_->set_format(hz, bits);
 }

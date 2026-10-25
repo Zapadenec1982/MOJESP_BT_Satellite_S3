@@ -49,6 +49,7 @@ namespace modesp::nvs_helper { void erase_key(const char*,const char*) {} }
 namespace player_core {
 struct View { void* px=nullptr; };
 View cover_view(int) { return {}; }
+inline bool cover_present(const View& v) { return v.px != nullptr; }
 }
 struct CoverJob { uint8_t* jpg; size_t len; };
 void post_cover(CoverJob) {}

@@ -19,6 +19,8 @@ idf_component_register(
     SRCS "esp_dlna.c" "esp_dlna_avt.c" "esp_dlna_cmr.c" "esp_dlna_rcs.c"
          "httpd_uri_compat.c"
     INCLUDE_DIRS "include"
+    # generated/: project_info.h, the player's name for the device's details (esp_dlna.c).
+    PRIV_INCLUDE_DIRS "${CMAKE_SOURCE_DIR}/generated"
     REQUIRES esp_http_server espressif__esp_media_protocols
     EMBED_TXTFILES "xml/AVTransport.xml"
                    "xml/ConnectionManager.xml"

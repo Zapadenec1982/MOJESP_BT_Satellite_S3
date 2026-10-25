@@ -23,16 +23,41 @@
  *
  * Put together: a master that holds the PLL decides what a slave sharing it can do. That is
  * the whole reason 32-bit slots from the Bluetooth satellite arrived as noise.
+ *
+ * The ESP32-S3 has no audio PLL at all, and none of fact 4 applies to it: its I2S_CLK_SRC_DEFAULT
+ * is PLL_F160M, a fixed 160 MHz whatever the CPU runs at, which divides (fractionally) to every
+ * MCLK the master uses and carries a slave in 32-bit slots up to 96 kHz by itself. So on that chip
+ * the "crystal" of the rules below is 160 MHz (I2S_DEFAULT_SCLK_HZ), nothing ever needs the PLL,
+ * and the output is never trimmed (I2S_HAS_APLL). The host tests build the P4's arithmetic.
  */
 
 #pragma once
 
 #include <cstdint>
 
+#ifdef ESP_PLATFORM
+#include "soc/soc_caps.h"
+#endif
+
 namespace audio_core {
 
 /// The crystal on this panel, and I2S_CLK_SRC_DEFAULT with it while the chip is below rev 3.
 constexpr uint32_t I2S_XTAL_HZ = 40000000;
+
+/// Whether the chip has an audio PLL for I2S, and what I2S_CLK_SRC_DEFAULT is: the P4's crystal
+/// (below rev 3) next to its APLL, or the S3's 160 MHz PLL and nothing else.
+#if defined(ESP_PLATFORM) && !(defined(SOC_CLK_APLL_SUPPORTED) && SOC_CLK_APLL_SUPPORTED)
+constexpr bool     I2S_HAS_APLL        = false;
+constexpr uint32_t I2S_DEFAULT_SCLK_HZ = 160000000;
+#else
+constexpr bool     I2S_HAS_APLL        = true;
+constexpr uint32_t I2S_DEFAULT_SCLK_HZ = I2S_XTAL_HZ;
+#endif
+
+/// The largest bclk_div a port can hold: the bit-clock divider is a 6-bit field that stores
+/// div - 1 (rx_bck_div_num; hal i2s_ll.h, *_set_bck_div_num), and IDF does not check it. 160 MHz
+/// over a 16-bit stream at 32 kHz would ask for 78 and get 78 & 63.
+constexpr uint32_t I2S_BCLK_DIV_MAX = 64;
 
 /// The audio PLL's range on P4 (hal/esp32p4/clk_tree_ll.h).
 constexpr uint32_t APLL_MIN_HZ = 5303031;
@@ -64,14 +89,16 @@ constexpr bool i2s_slave_clock_fits(uint32_t sclk_hz, uint32_t rate_hz, uint8_t 
 constexpr uint32_t i2s_slave_bclk_div(uint32_t sclk_hz, uint32_t rate_hz, uint8_t slot_bits) {
     const uint64_t bclk = (uint64_t)rate_hz * 2u * slot_bits;
     if (!bclk || !sclk_hz) return 0;
-    const uint64_t most = ((uint64_t)sclk_hz * 100u - 1u) / (bclk * 199u);
+    uint64_t most = ((uint64_t)sclk_hz * 100u - 1u) / (bclk * 199u);
     if (most < 8u) return 0;
     // A whole source-to-MCLK divider of 2, when the numbers allow it, keeps the fractional
     // divider — and its cycle-to-cycle jitter — out of the clock that samples the wire.
     if ((uint64_t)sclk_hz % (2u * bclk) == 0) {
         const uint64_t whole = (uint64_t)sclk_hz / (2u * bclk);
-        if (whole >= 8u) return (uint32_t)whole;
+        if (whole >= 8u && whole <= I2S_BCLK_DIV_MAX) return (uint32_t)whole;
     }
+    // More looks per bit than the register holds is not more looks, it is a wrapped divider.
+    if (most > I2S_BCLK_DIV_MAX) most = I2S_BCLK_DIV_MAX;
     return (uint32_t)most;
 }
 
@@ -206,8 +233,11 @@ inline constexpr uint16_t SLAVE_PLAN_MULTIPLES[] = {1280, 1152, 1024, 768, 640, 
 constexpr SlaveClockPlan i2s_plan_for_slave(uint32_t rate_hz, uint8_t slot_bits,
                                             uint16_t board_mclk_multiple, uint32_t max_out_hz) {
     if (!rate_hz || !slot_bits || rate_hz > max_out_hz) return {};
-    if (i2s_slave_clock_fits(I2S_XTAL_HZ, rate_hz, slot_bits))
+    if (i2s_slave_clock_fits(I2S_DEFAULT_SCLK_HZ, rate_hz, slot_bits))
         return {rate_hz, board_mclk_multiple};
+    // No PLL to raise: what the default source cannot carry, nothing can (S3: 32-bit slots
+    // above 96 kHz).
+    if (!I2S_HAS_APLL) return {};
     for (const uint16_t m : SLAVE_PLAN_MULTIPLES) {
         const uint32_t pll = i2s_master_apll_hz(rate_hz, m);
         if (pll && i2s_slave_clock_fits(pll, rate_hz, slot_bits)) return {rate_hz, m};

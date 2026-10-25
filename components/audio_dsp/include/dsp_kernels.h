@@ -61,6 +61,30 @@ void svf_stereo_to(const float* in, float* out, size_t frames, const SvfCoef& c,
 /// spread across the block is not.
 void svf_stereo_ramp(float* x, size_t frames, const SvfCoef& a, const SvfCoef& b, SvfState& st);
 
+/// max and min for the per-sample loops.
+///
+/// On the P4 (RISC-V F) fmaxf and fminf are one instruction each, and that is what they stay
+/// here. The ESP32-S3's Xtensa FPU has no max or min, so there the same calls go into libm — a
+/// function call each, five a frame in the brickwall and six in the bass limiter: about 1 400 of
+/// the chain's 1 650 cycles a frame, measured on the S3 at 48 kHz (25.10.2026). A compare and a
+/// conditional move (olt.s, movt.s) gives the same result for every number those loops see.
+/// Only a NaN is treated differently (fmaxf returns the other operand), and every caller either
+/// rules a NaN out first or discards the whole block when one appears (DspChain::process, `bad`).
+inline float dsp_max(float a, float b) {
+#if defined(__XTENSA__)
+    return a < b ? b : a;
+#else
+    return fmaxf(a, b);
+#endif
+}
+inline float dsp_min(float a, float b) {
+#if defined(__XTENSA__)
+    return b < a ? b : a;
+#else
+    return fminf(a, b);
+#endif
+}
+
 /// Zero any state that has decayed below 1e-15. After a silence an IIR's integrators sink
 /// into subnormal numbers and can stay there under round-to-nearest; zero is exactly where
 /// they were heading, and the next signal starts them again from rest.

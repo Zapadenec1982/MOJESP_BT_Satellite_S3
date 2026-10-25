@@ -28,7 +28,8 @@ typedef struct {
     volatile uint32_t rx_bytes;    ///< payload bytes received, ever (ISR)
 
     // Packet timing, from the receive interrupt. The data endpoint carries one packet every
-    // microframe, so two packets more than one microframe apart (DSTS frame number) are packets
+    // microframe (high speed; every frame at full speed — read "frame" for "microframe" below
+    // there), so two packets more than one microframe apart (DSTS frame number) are packets
     // the controller did not take — the endpoint was not re-armed in time.
     volatile uint32_t pkts;          ///< data packets received, ever
     volatile uint32_t lost;          ///< microframes skipped between two packets, ever
@@ -39,8 +40,9 @@ typedef struct {
     volatile uint32_t ev_t_ms[16];   ///< esp_timer ms of each loss event
     volatile uint16_t ev_lost[16];   ///< microframes skipped
     volatile uint32_t ev_gap_us[16]; ///< interrupt gap that ended it
-    volatile uint32_t ev_pc[16];     ///< mepc as the late interrupt was taken: where the core was
-                                     ///< when it let the interrupt in — after whatever held it off
+    volatile uint32_t ev_pc[16];     ///< mepc (RISC-V) or the frame's pc (Xtensa) as the late
+                                     ///< interrupt was taken: where the core was when it let the
+                                     ///< interrupt in — after whatever held it off
     volatile uint32_t ev_caller[16]; ///< when that was portEXIT_CRITICAL's epilogue: its caller
     char              ev_task[16][9];///< the task that was running, first 8 characters
 } uac_shared_t;
@@ -51,9 +53,14 @@ extern uac_shared_t g_uac;
 
 /// Product and serial strings, UTF-8 and ASCII; copied. Call before uac_usb_init().
 void     uac_usb_set_strings(const char* product, const char* serial);
-/// UTMI PHY in device mode, high speed, then TinyUSB on rhport 1. Call from the task that will
-/// run uac_usb_task(): the controller's interrupt is allocated on the calling core.
+/// The PHY in device mode — UTMI at high speed on the P4, the internal full-speed one on the S3 —
+/// then TinyUSB on its rhport (1 on the P4, 0 on the S3). Call from the task that will run
+/// uac_usb_task(): the controller's interrupt is allocated on the calling core.
 bool     uac_usb_init(void);
+/// Which controller and speed this build drives (rhport 1 high speed on the P4, 0 full speed on
+/// the S3), for the log.
+int      uac_usb_rhport(void);
+bool     uac_usb_high_speed(void);
 /// TinyUSB's device task; blocks until there is an event.
 void     uac_usb_task(void);
 
@@ -64,7 +71,8 @@ uint16_t uac_usb_read(void* buf, uint16_t len);
 uint16_t uac_usb_fifo_depth(void);
 void     uac_usb_clear(void);
 
-/// Feedback, in samples per microframe as 16.16 — what the host is asked to send.
+/// Feedback, in samples per microframe (per frame at full speed) as 16.16 — what the host is
+/// asked to send.
 uint32_t uac_usb_nominal_feedback(uint32_t rate);
 void     uac_usb_set_feedback(uint32_t fb);
 

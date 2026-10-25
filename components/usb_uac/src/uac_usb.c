@@ -18,7 +18,12 @@
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "sdkconfig.h"
+#if CONFIG_IDF_TARGET_ARCH_RISCV
 #include "riscv/rvruntime-frames.h"
+#elif CONFIG_IDF_TARGET_ARCH_XTENSA
+#include "xtensa_context.h"
+#endif
 #include "tusb.h"
 #include "uac_usb.h"
 
@@ -49,8 +54,18 @@ enum {
 
 #define UAC_CHANNEL_CONFIG  (AUDIO20_CHANNEL_CONFIG_FRONT_LEFT | AUDIO20_CHANNEL_CONFIG_FRONT_RIGHT)
 
-#define UAC_EP_SZ_16  TUD_AUDIO_EP_SIZE(true, USB_UAC_MAX_RATE, 2, USB_UAC_CHANNELS)
-#define UAC_EP_SZ_24  TUD_AUDIO_EP_SIZE(true, USB_UAC_MAX_RATE, 4, USB_UAC_CHANNELS)
+#define UAC_EP_SZ_16  TUD_AUDIO_EP_SIZE(TUD_OPT_HIGH_SPEED, USB_UAC_MAX_RATE, 2, USB_UAC_CHANNELS)
+#define UAC_EP_SZ_24  TUD_AUDIO_EP_SIZE(TUD_OPT_HIGH_SPEED, USB_UAC_MAX_RATE, 4, USB_UAC_CHANNELS)
+
+#if !TUD_OPT_HIGH_SPEED
+/// The S3's DWC2 FIFO RAM, in words, shared by every endpoint (soc/esp32s3 usb_dwc_cfg.h), and
+/// what TinyUSB 0.21 takes of it: the receive FIFO for two of the largest OUT packet plus 30 words
+/// of overhead (dcd_dwc2.c, calc_device_grxfsiz), EP0 IN 16, the feedback IN 1. A failed fit is not
+/// an error there — audio_device.c ignores it — so it is one here.
+#define UAC_DWC2_FIFO_WORDS 256
+TU_VERIFY_STATIC(30 + 2 * ((CFG_TUD_AUDIO_FUNC_1_EP_OUT_SZ_MAX + 3) / 4) + 16 + 1 <= UAC_DWC2_FIFO_WORDS,
+                 "the full-speed OUT endpoint does not fit the S3's USB FIFO RAM: lower USB_UAC_MAX_RATE");
+#endif
 
 #define UAC_AC_UNITS_LEN (TUD_AUDIO20_DESC_CLK_SRC_LEN + TUD_AUDIO20_DESC_INPUT_TERM_LEN \
                           + TUD_AUDIO20_DESC_OUTPUT_TERM_LEN + TUD_AUDIO20_DESC_FEATURE_UNIT_LEN(2))
@@ -66,7 +81,14 @@ enum {
 #define UAC_CONFIG_TOTAL_LEN (TUD_CONFIG_DESC_LEN + UAC_FUNCTION_LEN)
 
 /// One streaming alternate setting: format, data endpoint, feedback endpoint.
-/// Data every microframe (bInterval 1); feedback every 8 (bInterval 4 = 1 ms), as TinyUSB's HS example.
+/// Data every (micro)frame (bInterval 1). Feedback every millisecond: bInterval 4 is 8 microframes
+/// at high speed, as TinyUSB's HS example; at full speed 1 is one frame — 4 would be 8 ms, and the
+/// DWC2 does not handle isochronous IN above 1 there (TinyUSB's uac2_speaker_fb example).
+#if TUD_OPT_HIGH_SPEED
+#define UAC_FB_INTERVAL 4
+#else
+#define UAC_FB_INTERVAL 1
+#endif
 #define UAC_AS_ALT(_alt, _subslot, _bits, _epsize)                                                 \
     TUD_AUDIO20_DESC_STD_AS_INT(ITF_NUM_AUDIO_STREAMING, _alt, 0x02, 0x00),                        \
     TUD_AUDIO20_DESC_CS_AS_INT(UAC_ENTITY_INPUT_TERMINAL, AUDIO20_CTRL_NONE, AUDIO20_FORMAT_TYPE_I,  \
@@ -81,7 +103,7 @@ enum {
     TUD_AUDIO20_DESC_CS_AS_ISO_EP(AUDIO20_CS_AS_ISO_DATA_EP_ATT_NON_MAX_PACKETS_OK,                \
                                   AUDIO20_CTRL_NONE, AUDIO20_CS_AS_ISO_DATA_EP_LOCK_DELAY_UNIT_MILLISEC, \
                                   0x0001),                                                         \
-    TUD_AUDIO20_DESC_STD_AS_ISO_FB_EP(EPNUM_AUDIO_FB, 4, 4)
+    TUD_AUDIO20_DESC_STD_AS_ISO_FB_EP(EPNUM_AUDIO_FB, 4, UAC_FB_INTERVAL)
 
 static const tusb_desc_device_t s_desc_device = {
     .bLength            = sizeof(tusb_desc_device_t),
@@ -129,6 +151,7 @@ static const uint8_t s_desc_config[] = {
 };
 TU_VERIFY_STATIC(sizeof(s_desc_config) == UAC_CONFIG_TOTAL_LEN, "UAC2 descriptor length");
 
+#if TUD_OPT_HIGH_SPEED
 static const tusb_desc_device_qualifier_t s_desc_qualifier = {
     .bLength            = sizeof(tusb_desc_device_qualifier_t),
     .bDescriptorType    = TUSB_DESC_DEVICE_QUALIFIER,
@@ -148,18 +171,21 @@ static const uint8_t s_desc_other_speed[] = {
     TU_BIT(7) | TUSB_DESC_CONFIG_ATT_SELF_POWERED, 50,
 };
 
-uint8_t const* tud_descriptor_device_cb(void) { return (uint8_t const*)&s_desc_device; }
-uint8_t const* tud_descriptor_configuration_cb(uint8_t index) { (void)index; return s_desc_config; }
 uint8_t const* tud_descriptor_device_qualifier_cb(void) { return (uint8_t const*)&s_desc_qualifier; }
 uint8_t const* tud_descriptor_other_speed_configuration_cb(uint8_t index) {
     (void)index;
     return s_desc_other_speed;
 }
+#endif  // TUD_OPT_HIGH_SPEED: a full-speed-only device STALLs DEVICE_QUALIFIER (TinyUSB's weak
+        // callbacks return NULL), which is what the USB 2.0 spec asks of it.
+
+uint8_t const* tud_descriptor_device_cb(void) { return (uint8_t const*)&s_desc_device; }
+uint8_t const* tud_descriptor_configuration_cb(uint8_t index) { (void)index; return s_desc_config; }
 
 // ── Strings ─────────────────────────────────────────────────────────────────────────────────────
 
 #define STR_MAX 32
-static char     s_product[STR_MAX * 4 + 1] = "P4 Player";
+static char     s_product[STR_MAX * 4 + 1] = "ModESP Player";
 static char     s_serial[STR_MAX + 1]      = "000000000000";
 static uint16_t s_str_buf[STR_MAX + 1];
 
@@ -224,7 +250,11 @@ void tud_resume_cb(void)  { g_uac.suspended = 0; }
 
 // ── Clock source and feature unit ───────────────────────────────────────────────────────────────
 
+#if USB_UAC_MAX_RATE >= 96000
 static const uint32_t s_rates[] = {44100, 48000, 88200, 96000};
+#else
+static const uint32_t s_rates[] = {44100, 48000};   // full speed: tusb_config.h says why
+#endif
 #define N_RATES TU_ARRAY_SIZE(s_rates)
 
 /// Host volume range: −80 dB to 0 dB in 0.5 dB steps, in 1/256 dB.
@@ -329,9 +359,20 @@ bool tud_audio_set_req_entity_cb(uint8_t rhport, tusb_control_request_t const* r
 
 // ── Streaming ───────────────────────────────────────────────────────────────────────────────────
 
-/// DSTS of the P4's USB-DWC2.0 (TinyUSB rhport 1, base 0x50000000 in dwc2_esp32.h); SOFFN, the
-/// (micro)frame number, is bits 21:8 — at high speed it counts microframes.
-#define DWC2_HS_DSTS (*(volatile uint32_t*)(0x50000000UL + 0x808))
+/// DSTS of the controller TinyUSB drives (dwc2_esp32.h): the P4's USB-DWC2.0 at 0x50000000 (rhport
+/// 1), the S3's one OTG controller at 0x60080000 (rhport 0). SOFFN, the (micro)frame number, is
+/// bits 21:8 — at high speed it counts microframes (14 bits), at full speed frames (11 bits).
+#if CONFIG_IDF_TARGET_ESP32P4
+#define DWC2_DSTS (*(volatile uint32_t*)(0x50000000UL + 0x808))
+#else
+#define DWC2_DSTS (*(volatile uint32_t*)(0x60080000UL + 0x808))
+#endif
+#if TUD_OPT_HIGH_SPEED
+#define UAC_FN_MASK 0x3FFFu
+#else
+#define UAC_FN_MASK 0x7FFu
+#endif
+#define UAC_FN_HALF ((UAC_FN_MASK + 1u) / 2u)
 
 bool tud_audio_set_itf_cb(uint8_t rhport, tusb_control_request_t const* req) {
     (void)rhport;
@@ -356,35 +397,45 @@ bool tud_audio_set_itf_close_ep_cb(uint8_t rhport, tusb_control_request_t const*
 bool tud_audio_rx_done_isr(uint8_t rhport, uint16_t n_bytes_received, uint8_t func_id, uint8_t ep_out,
                            uint8_t cur_alt_setting) {
     (void)rhport; (void)func_id; (void)ep_out; (void)cur_alt_setting;
-    const uint32_t fn  = (DWC2_HS_DSTS >> 8) & 0x3FFF;
+    const uint32_t fn  = (DWC2_DSTS >> 8) & UAC_FN_MASK;
     const int64_t  now = esp_timer_get_time();
     if (s_prev_valid) {
-        const uint32_t d   = (fn - s_prev_fn) & 0x3FFF;
+        const uint32_t d   = (fn - s_prev_fn) & UAC_FN_MASK;
         const uint32_t gap = (uint32_t)(now - s_prev_us);
         if (gap > g_uac.gap_max_us) g_uac.gap_max_us = gap;
         if (d == 0) {
             g_uac.same_frame++;
-        } else if (d > 1 && d < 0x2000) {
+        } else if (d > 1 && d < UAC_FN_HALF) {
             const uint32_t i = g_uac.ev_head % UAC_EVENTS;
-            uint32_t pc;
+            uint32_t pc = 0;
+#if CONFIG_IDF_TARGET_ARCH_RISCV
             __asm__ volatile("csrr %0, mepc" : "=r"(pc));
+#endif
             g_uac.ev_t_ms[i]   = (uint32_t)(now / 1000);
             g_uac.ev_lost[i]   = (uint16_t)(d - 1);
             g_uac.ev_gap_us[i] = gap;
-            g_uac.ev_pc[i]     = pc;
             // Who held the interrupt off: the interrupted task's frame sits at its TCB's
-            // pxTopOfStack (portasm.S, rtos_int_enter). If it was leaving a critical section,
-            // vPortExitCriticalMultiCore's own frame still holds the return address into its
-            // caller at sp + 12 (the epilogue's "lw ra,12(sp)" is where mepc points).
+            // pxTopOfStack (portasm.S, rtos_int_enter / _frxt_int_enter). On RISC-V, if it was
+            // leaving a critical section, vPortExitCriticalMultiCore's own frame still holds the
+            // return address into its caller at sp + 12 (the epilogue's "lw ra,12(sp)" is where
+            // mepc points). On Xtensa the frame has the interrupted pc and a0, the windowed return
+            // address of the function it was in (the top two bits are the window increment).
             TaskHandle_t t = xTaskGetCurrentTaskHandleForCore(xPortGetCoreID());
             g_uac.ev_caller[i] = 0;
             g_uac.ev_task[i][0] = '\0';
             if (t) {
+#if CONFIG_IDF_TARGET_ARCH_RISCV
                 const RvExcFrame* f = *(RvExcFrame* const*)t;
                 g_uac.ev_caller[i] = *(const uint32_t*)(f->sp + 12);
+#elif CONFIG_IDF_TARGET_ARCH_XTENSA
+                const XtExcFrame* f = *(XtExcFrame* const*)t;
+                pc = (uint32_t)f->pc;
+                g_uac.ev_caller[i] = ((uint32_t)f->a0 & 0x3FFFFFFFu) | 0x40000000u;
+#endif
                 const char* name = pcTaskGetName(t);
                 for (int k = 0; k < 8 && name[k]; k++) g_uac.ev_task[i][k] = name[k], g_uac.ev_task[i][k + 1] = '\0';
             }
+            g_uac.ev_pc[i] = pc;
             g_uac.ev_head++;
             g_uac.lost += d - 1;
             g_uac.loss_events++;
@@ -410,8 +461,11 @@ void tud_audio_feedback_params_cb(uint8_t func_id, uint8_t alt_itf, audio_feedba
 }
 
 uint32_t uac_usb_nominal_feedback(uint32_t rate) {
-    // Samples per microframe in 16.16 (USB 2.0 §5.12.4.2, high speed).
-    return (uint32_t)(((uint64_t)rate << 16) / 8000u);
+    // Samples per (micro)frame in 16.16 (USB 2.0 §5.12.4.2). At full speed the spec's format is
+    // 10.14 in three bytes, but TinyUSB 0.21 sends a UAC2 value as it is given, in four, and
+    // Windows' UAC2 driver wants 16.16 at full speed too (audio_device.h); Linux takes either.
+    // So 16.16 per 1 ms frame at full speed, per 125 us microframe at high speed.
+    return (uint32_t)(((uint64_t)rate << 16) / (TUD_OPT_HIGH_SPEED ? 8000u : 1000u));
 }
 
 void uac_usb_set_feedback(uint32_t fb) { tud_audio_fb_set(fb); }
@@ -421,6 +475,7 @@ void uac_usb_set_feedback(uint32_t fb) { tud_audio_fb_set(fb); }
 static usb_phy_handle_t s_phy;
 
 bool uac_usb_init(void) {
+#if TUD_OPT_HIGH_SPEED
     // ESP32-P4: USB-DWC2.0 sits on the UTMI PHY, which is high speed only (usb_phy.c).
     usb_phy_config_t phy = {
         .controller = USB_PHY_CTRL_OTG,
@@ -428,13 +483,29 @@ bool uac_usb_init(void) {
         .otg_mode   = USB_OTG_MODE_DEVICE,
         .otg_speed  = USB_PHY_SPEED_HIGH,
     };
+#else
+    // ESP32-S3: the internal full-speed PHY. Taking it detaches USB-Serial/JTAG from the
+    // connector until the next reset — which is why the console is on UART0 (sdkconfig.board).
+    usb_phy_config_t phy = {
+        .controller = USB_PHY_CTRL_OTG,
+        .target     = USB_PHY_TARGET_INT,
+        .otg_mode   = USB_OTG_MODE_DEVICE,
+        .otg_speed  = USB_PHY_SPEED_FULL,
+    };
+#endif
     if (usb_new_phy(&phy, &s_phy) != ESP_OK) return false;
 
-    tusb_rhport_init_t const dev_init = {.role = TUSB_ROLE_DEVICE, .speed = TUSB_SPEED_HIGH};
-    return tusb_init(1, &dev_init);
+    tusb_rhport_init_t const dev_init = {
+        .role  = TUSB_ROLE_DEVICE,
+        .speed = TUD_OPT_HIGH_SPEED ? TUSB_SPEED_HIGH : TUSB_SPEED_FULL,
+    };
+    return tusb_init(TUD_OPT_RHPORT, &dev_init);
 }
 
 void uac_usb_task(void) { tud_task(); }
+
+int  uac_usb_rhport(void) { return TUD_OPT_RHPORT; }
+bool uac_usb_high_speed(void) { return TUD_OPT_HIGH_SPEED != 0; }
 
 uint8_t uac_usb_frame_bytes(uint8_t alt) {
     return alt == 1 ? 2 * USB_UAC_CHANNELS : alt == 2 ? 4 * USB_UAC_CHANNELS : 0;

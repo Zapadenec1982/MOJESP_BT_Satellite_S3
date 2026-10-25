@@ -1011,7 +1011,7 @@ void DspChain::process(float* stereo, size_t frames) {
         // a branch they were five branches a frame. The same numbers — every operand is a
         // magnitude or a gain, never −0 — unless one is a NaN; then the block is thrown away
         // below and the limiter reset, so nothing that differs survives it.
-        cmax = fmaxf(cmax, fmaxf(al, ar));
+        cmax = dsp_max(cmax, dsp_max(al, ar));
         // A NaN fails every comparison: this catches one wherever it came from.
         bad |= !(al <= 1e6f) | !(ar <= 1e6f);
         const float yl = line[2 * pos] * lg, yr = line[2 * pos + 1] * lg;
@@ -1020,9 +1020,9 @@ void DspChain::process(float* stereo, size_t frames) {
         if (++pos == L) pos = 0;
         stereo[2 * i] = yl;
         stereo[2 * i + 1] = yr;
-        pl = fmaxf(pl, fabsf(yl));
-        pr = fmaxf(pr, fabsf(yr));
-        gmin = fminf(gmin, lg);
+        pl = dsp_max(pl, fabsf(yl));
+        pr = dsp_max(pr, fabsf(yr));
+        gmin = dsp_min(gmin, lg);
         lg += ldg;
         if (++lk == D) {
             lk = 0;
@@ -1131,8 +1131,8 @@ void DspChain::run_bass(float* __restrict stereo, size_t frames) {
             const float apr = std::fmaf(-k2, v1, xr);
             svf_nodes(v2, a, db2, db3, u1, lpr);
             const float hpr = apr - lpr;
-            ph = fmaxf(ph, fmaxf(fabsf(hpl), fabsf(hpr)));
-            pl = fmaxf(pl, fmaxf(fabsf(lpl), fabsf(lpr)));
+            ph = dsp_max(ph, dsp_max(fabsf(hpl), fabsf(hpr)));
+            pl = dsp_max(pl, dsp_max(fabsf(lpl), fabsf(lpr)));
             eh = std::fmaf(hpl, hpl, std::fmaf(hpr, hpr, eh));
             el = std::fmaf(lpl, lpl, std::fmaf(lpr, lpr, el));
         }
@@ -1165,7 +1165,7 @@ void DspChain::run_bass(float* __restrict stereo, size_t frames) {
             g = bass_env_.g;
             dg = bass_env_.dg;
             // g runs straight from knot to knot, so its smallest value is at one of them.
-            gmin = fminf(gmin, fminf(bass_env_.g, bass_env_.G1));
+            gmin = dsp_min(gmin, dsp_min(bass_env_.g, bass_env_.G1));
         }
     }
     det_s_[0] = da0; det_s_[1] = da1; det_s_[2] = db0; det_s_[3] = db1;
@@ -1180,7 +1180,7 @@ void DspChain::run_bass(float* __restrict stereo, size_t frames) {
 void DspChain::bass_knot(float ph, float pl, float eh, float el) {
     // The bass gain this knot may have: with |high| + g·|low| ≤ the threshold over both chunks
     // the knot touches, a straight line of g between knots keeps it there.
-    const float Ph = fmaxf(ph, bass_ph_prev_), Pl = fmaxf(pl, bass_pl_prev_);
+    const float Ph = dsp_max(ph, bass_ph_prev_), Pl = dsp_max(pl, bass_pl_prev_);
     bass_ph_prev_ = ph;
     bass_pl_prev_ = pl;
     float req = 1.0f;

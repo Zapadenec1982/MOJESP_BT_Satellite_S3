@@ -13,6 +13,12 @@
  */
 
 #include "cover.h"
+#include "sdkconfig.h"
+
+// This file is the build that decodes tiles for a display (CONFIG_COVER_DECODE_TILE, the P4).
+// A board without one keeps the file that arrived instead: cover_bytes.cpp.
+#if CONFIG_COVER_DECODE_TILE
+
 #include "cover_guard.h"
 
 #include "driver/jpeg_decode.h"
@@ -549,11 +555,20 @@ CoverView cover_view(CoverSource source) {
 CoverView cover_now(int32_t source, bool push, CoverSource& tile) {
     if (!cover_tile_for(source, push, tile)) return CoverView{};
     CoverView v = cover_view(tile);
-    if (tile == CoverSource::Network && !v.px) {
+    if (tile == CoverSource::Network && !cover_present(v)) {
         tile = CoverSource::Radio;
         v = cover_view(tile);
     }
     return v;
 }
 
+// A tile build does not keep the file: the decoded tile is the picture (cover.h).
+bool cover_bytes_get(CoverSource, CoverBytes& out) {
+    out = CoverBytes{};
+    return false;
+}
+void cover_bytes_put(CoverBytes& b) { b = CoverBytes{}; }
+
 }  // namespace player_core
+
+#endif  // CONFIG_COVER_DECODE_TILE

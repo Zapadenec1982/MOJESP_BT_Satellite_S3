@@ -12,6 +12,13 @@
  * Two slots, alternating. The UI may be drawing from one when the next track's artwork
  * arrives, and a buffer rewritten underneath a draw is a torn image; the producer always
  * fills the one that is not current.
+ *
+ * A board without a display keeps the picture as it ARRIVED instead (CONFIG_COVER_DECODE_TILE=n,
+ * the ESP32-S3): nothing on it draws pixels, the browser decodes a JPEG or a PNG by itself, and
+ * a chip with neither a JPEG engine nor a PPA would spend seconds and megabytes in the software
+ * decoder for a tile nobody looks at. What such a build publishes is the file's bytes
+ * (cover_bytes_get) and the picture's colour, worked out from an eighth-scale decode by the
+ * ROM's TJpgDec; CoverView::px stays null and CoverView::bytes says a picture is there.
  */
 
 #pragma once
@@ -34,7 +41,31 @@ struct CoverView {
     int             h   = 0;
     uint32_t        gen = 0;         ///< bumps on every change, including to "none"
     uint32_t        rgb = 0;         ///< the picture's colour, RGB888 (cover_tone); 0: none
+    /// A build that keeps the picture as its file (CONFIG_COVER_DECODE_TILE=n): how many bytes
+    /// cover_bytes_get() would hand over. 0 when there is no artwork, and always 0 in a build
+    /// that decodes tiles — there `px` is the picture.
+    size_t          bytes = 0;
 };
+
+/// Whether a view holds a picture, in either kind of build: a tile, or the file's bytes.
+inline bool cover_present(const CoverView& v) { return v.px != nullptr || v.bytes != 0; }
+
+/// The picture of one source as the file that arrived, JPEG or PNG, for a client that decodes it
+/// itself (GET /api/cover on a board without a display). The bytes stay valid until
+/// cover_bytes_put(), whatever the producers publish meanwhile: a reference is held, not a copy
+/// taken, because the reader sends them to a socket and a socket can take its time.
+struct CoverBytes {
+    const uint8_t* data = nullptr;
+    size_t         len  = 0;
+    bool           png  = false;     ///< PNG; a JPEG otherwise
+    uint32_t       gen  = 0;         ///< the source's generation these bytes were published at
+    void*          ref  = nullptr;   ///< what cover_bytes_put() releases
+};
+
+/// The current picture of `source` as bytes. False when it has none — and always in a build that
+/// decodes tiles, which does not keep the file. Every true needs one cover_bytes_put().
+bool cover_bytes_get(CoverSource source, CoverBytes& out);
+void cover_bytes_put(CoverBytes& b);
 
 /// The colour of a tile (RGB565, w×h), for the Player's background:
 /// where the picture's colour is, black bars and black grounds ignored, a vivid colour
@@ -47,7 +78,9 @@ uint32_t cover_tone(const uint16_t* px, int w, int h);
 /// the web draw it fading into the surface (ui.cover_rgb). RGB888; 0 for 0 — no picture, no tint.
 uint32_t cover_backdrop(uint32_t rgb);
 
-/// Decodes `len` bytes of JPEG (or PNG via the software fallback) into the free slot.
+/// Decodes `len` bytes of JPEG (or PNG via the software fallback) into the free slot — or, in a
+/// build that keeps the file (CONFIG_COVER_DECODE_TILE=n), checks that they are a JPEG or a PNG
+/// of a sane size, copies them and works out their colour.
 ///
 /// Sources have independent tiles. Decoder work is serialized across producers.
 /// A supplied generation cancels publication if clear() ran during decoding.
@@ -93,7 +126,7 @@ CoverView cover_now(int32_t source, bool push, CoverSource& tile);
 /// The Player's picture as one number, for the web (ui.cover): 0 for none, otherwise different
 /// for every new picture and for every tile it may come from. Never negative.
 inline int32_t cover_id(const CoverView& v, CoverSource tile) {
-    if (!v.px) return 0;
+    if (!cover_present(v)) return 0;
     return (int32_t)((((v.gen & 0x07FFFFFFu) << 3) | ((uint32_t)tile & 7u)) + 1u);
 }
 

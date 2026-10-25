@@ -1,11 +1,11 @@
 /**
  * @file test_web_media.cpp
- * @brief GET /api/library and GET /api/cover bodies (modules/ui_lvgl/include/web_media.h), and
+ * @brief GET /api/library and GET /api/cover bodies (components/web_media/include/web_media.h), and
  *        the cover rule the panel and the web share (components/cover/include/cover.h).
  */
 
 #include "doctest.h"
-#include "../../modules/ui_lvgl/include/web_media.h"
+#include "../../components/web_media/include/web_media.h"
 #include "../../components/cover/include/cover.h"
 
 #define JSMN_STATIC

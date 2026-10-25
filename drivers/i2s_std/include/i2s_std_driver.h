@@ -11,6 +11,8 @@
 
 #pragma once
 
+#include "sdkconfig.h"
+
 #include "modesp/hal/audio_sink.h"
 #include "modesp/hal/hal_types.h"
 #include "etl/string.h"
@@ -51,7 +53,16 @@ public:
 
     /// Frames per DMA descriptor and descriptor counts (DMA-SRAM budget: see .cpp).
     static constexpr uint32_t DMA_FRAMES   = 480;   // 10 ms @ 48 kHz
+#if CONFIG_IDF_TARGET_ESP32P4
     static constexpr uint32_t TX_DMA_DESCS = 8;     // 80 ms ring; a duplex port gets it for RX too
+#else
+    // The ESP32-S3: 512 KB of SRAM in all, and a duplex descriptor costs 3.75 KB in each direction
+    // — at eight, 61 KB, a quarter of what was left after boot. What eighty milliseconds was the
+    // margin for, a flash erase holding the cores, does not happen there: code runs from PSRAM
+    // and IDF keeps the cache on through a flash write (CONFIG_SPIRAM_XIP_FROM_PSRAM). Forty
+    // milliseconds is eight audio blocks of slack for a task alone on its core at priority 22.
+    static constexpr uint32_t TX_DMA_DESCS = 4;     // 40 ms ring; a duplex port gets it for RX too
+#endif
     /// An RX-only (slave) port is sized in BYTES, not milliseconds, and the board now opens
     /// it at its WIDEST slot so IDF never has to reallocate - see park_bt_off_pll(). That
     /// turns the byte budget from a peak the system meets occasionally into a constant it

@@ -28,6 +28,24 @@
 #include "esp_dlna_rcs.h"
 #include "freertos/event_groups.h"
 #include "esp_log.h"
+#include "sdkconfig.h"
+
+/* The device's details as a control point shows them: the project's name for the player
+   (generated/project_info.h, system.device_name with the board's overlay) and the chip it
+   runs on. */
+#if __has_include("project_info.h")
+#include "project_info.h"
+#endif
+#ifdef MODESP_DEVICE_NAME
+#define DLNA_MODEL_NAME MODESP_DEVICE_NAME
+#else
+#define DLNA_MODEL_NAME "P4 Player"
+#endif
+#if CONFIG_IDF_TARGET_ESP32P4
+#define DLNA_MODEL_DESCRIPTION "ESP32-P4 network stereo player with DSP"
+#else
+#define DLNA_MODEL_DESCRIPTION "ESP32-S3 network stereo player with DSP"
+#endif
 
 /* p4-player: ADF's audio_mem.h is one calloc wrapper and would drag audio_sal in behind
    it. The allocation below is a handful of bytes, once, at start-up. */
@@ -65,8 +83,8 @@ esp_dlna_handle_t esp_dlna_start(dlna_config_t *config)
            player would read about their player. */
         .manufacturer       = "ModESP",
         .manufacturer_url   = "https://github.com/Zapadenec1982/ModESP_Framework",
-        .model_description  = "ESP32-P4 network stereo player with DSP",
-        .model_name         = "P4 Player",
+        .model_description  = DLNA_MODEL_DESCRIPTION,
+        .model_name         = DLNA_MODEL_NAME,
         .model_number       = "1",
         .model_url          = "https://github.com/Zapadenec1982/ModESP_Framework",
         .logo               = {

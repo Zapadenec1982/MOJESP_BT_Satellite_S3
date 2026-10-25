@@ -25,9 +25,10 @@ carry no mark.
 
 1. `esp_dlna.c` — `audio_mem.h` / `audio_calloc()` replaced with `<stdlib.h>` / `calloc()`: the ADF
    header would drag in `audio_sal` for the sake of one allocation.
-2. `esp_dlna.c` — device description strings (`manufacturer` "ModESP", `model_name` "P4 Player",
-   `model_description`, URLs) in place of the ADF example's strings: the phone shows them in its
-   device list.
+2. `esp_dlna.c` — device description strings (`manufacturer` "ModESP", `model_name` — the
+   project's device name from `generated/project_info.h`, "P4 Player" on the panel and "S3 Player"
+   on the ESP32-S3 board — `model_description` naming the chip, URLs) in place of the ADF example's
+   strings: the phone shows them in its device list.
 3. `esp_dlna.c` — `esp_dlna_start()` frees the handle when `esp_upnp_init()` fails.
 4. `esp_dlna_avt.c` — `SetAVTransportURI` also hands `CurrentURIMetaData` to the renderer as
    `AVT_SET_TRACK_METADATA`, so the renderer knows the track title.

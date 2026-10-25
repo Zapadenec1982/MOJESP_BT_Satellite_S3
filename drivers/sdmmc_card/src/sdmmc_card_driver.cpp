@@ -14,6 +14,10 @@
  *   - The P4 has ONE SDMMC controller with two slots and ESP-Hosted owns the other for the
  *     C6. That is why host.init/host.deinit below are no-ops, and it is the single most
  *     load-bearing line in this file.
+ *
+ * On a board whose Wi-Fi is the chip's own (the ESP32-S3) nobody else touches the controller,
+ * so the card brings it up and takes it down itself — SDMMC_HOST_DEFAULT() as IDF ships it — and
+ * there is no on-chip LDO behind the socket to cycle (SOC_SDMMC_IO_POWER_EXTERNAL is the P4's).
  */
 
 #include "sdmmc_card_driver.h"
@@ -27,6 +31,7 @@
 #include "driver/sdmmc_host.h"
 #include "sd_pwr_ctrl_by_on_chip_ldo.h"
 #include "soc/soc_caps.h"
+#include "sdkconfig.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
@@ -34,6 +39,15 @@
 #include <cstring>
 
 static const char* TAG = "sdmmc_card";
+
+// The controller is ESP-Hosted's when the Wi-Fi co-processor sits on its other slot (the P4
+// panel: the C6 over SDIO). The P4 is named too, so that a renamed esp_hosted option can never
+// quietly hand the card a controller the C6 link is running on.
+#if defined(CONFIG_ESP_HOSTED_HOST_TRANSPORT_BUS_SDIO) || CONFIG_IDF_TARGET_ESP32P4
+#define SDMMC_HOST_SHARED 1
+#else
+#define SDMMC_HOST_SHARED 0
+#endif
 
 namespace {
 
@@ -47,7 +61,15 @@ void set_str(char* dst, size_t cap, const char* src) {
 }
 
 /// Identify the card when the bus works but the filesystem does not.
+///
+/// Where the card owns the controller (no ESP-Hosted on it: the S3), the failed mount before this
+/// has already taken the host down again (esp_vfs_fat_sdmmc_mount calls host.deinit), so the probe
+/// brings it up for itself and down after.
 void probe_card(sdmmc_host_t& host, sdmmc_slot_config_t& slot) {
+#if !SDMMC_HOST_SHARED
+    if (sdmmc_host_init() != ESP_OK) return;
+    struct HostDown { ~HostDown() { sdmmc_host_deinit(); } } host_down;
+#endif
     if (sdmmc_host_init_slot((int)host.slot, &slot) != ESP_OK) return;
     static sdmmc_card_t probe;
     if (sdmmc_card_init(&host, &probe) != ESP_OK) {
@@ -64,11 +86,13 @@ void probe_card(sdmmc_host_t& host, sdmmc_slot_config_t& slot) {
              probe.max_freq_khz);
 }
 
+#if SDMMC_HOST_SHARED
 /// ESP-Hosted already brought the SDMMC controller up for the C6 on the other slot, so the
 /// card must not init or tear it down. Straight from Espressif's own
 /// esp_hosted/examples/mcu_hosted_sdio_sdmmc_combined, which is exactly this arrangement.
 esp_err_t sdmmc_host_init_noop(void)   { return ESP_OK; }
 esp_err_t sdmmc_host_deinit_noop(void) { return ESP_OK; }
+#endif
 
 } // namespace
 
@@ -95,8 +119,10 @@ bool SdmmcCardDriver::mount() {
     // (CHANGELOG 2.12.11). Taking Wi-Fi down with a card
     // that failed to mount is the worst possible trade, so this stays even when it looks
     // like an omission.
+#if SDMMC_HOST_SHARED
     host.init   = &sdmmc_host_init_noop;
     host.deinit = &sdmmc_host_deinit_noop;
+#endif
 
 #if SOC_SDMMC_IO_POWER_EXTERNAL
     // On the P4 the SD *IO* rail is fed by an on-chip LDO, not by the 3V3 that powers
@@ -152,6 +178,7 @@ bool SdmmcCardDriver::mount() {
         if (attempt > 0) {
             ESP_LOGW(TAG, "mount attempt %d failed (%s) — power-cycling the card",
                      attempt, esp_err_to_name(err));
+#if SOC_SDMMC_IO_POWER_EXTERNAL
             if (ldo_) {
                 sd_pwr_ctrl_del_on_chip_ldo(static_cast<sd_pwr_ctrl_handle_t>(ldo_));
                 ldo_ = nullptr;
@@ -165,6 +192,7 @@ bool SdmmcCardDriver::mount() {
                     ldo_ = pwr;
                 }
             }
+#endif
             vTaskDelay(pdMS_TO_TICKS(50));
         }
         err = esp_vfs_fat_sdmmc_mount(mp, &host, &slot, &mcfg, &card);

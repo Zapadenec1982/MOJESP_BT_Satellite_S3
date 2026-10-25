@@ -292,3 +292,29 @@ TEST_CASE("the drift the servo exists to absorb is well inside its authority") {
     constexpr int32_t WORST_MEASURED_PPM = 40;
     CHECK(WORST_MEASURED_PPM * 2 < I2S_TRIM_MAX_PPM);
 }
+
+TEST_CASE("the S3's 160 MHz carries the satellite's 32-bit slots on its own") {
+    // The ESP32-S3 has no audio PLL; I2S_CLK_SRC_DEFAULT is PLL_F160M (i2s_clock.h). These are
+    // the formats the satellite sends, with the looks per bit the slave port takes.
+    constexpr uint32_t S3 = 160000000u;
+    CHECK(i2s_slave_clock_fits(S3, 96000, 32));
+    CHECK(i2s_slave_bclk_div(S3, 44100, 32) == 28);
+    CHECK(i2s_slave_bclk_div(S3, 48000, 32) == 26);
+    CHECK(i2s_slave_bclk_div(S3, 96000, 32) == 13);
+    CHECK_FALSE(i2s_slave_clock_fits(S3, 176400, 32));
+    // A slow 16-bit stream asks for more looks than the 6-bit divider can hold: capped, not
+    // wrapped (78 & 63 would be 14 looks on a register that was told 78).
+    CHECK(i2s_slave_bclk_div(S3, 32000, 16) == I2S_BCLK_DIV_MAX);
+    CHECK(i2s_slave_bclk_div(S3, 44100, 16) == 56);
+}
+
+TEST_CASE("no divider is ever larger than the register") {
+    const uint32_t sources[] = {I2S_XTAL_HZ, 122880000u, 160000000u};
+    const uint32_t rates[] = {8000u, 16000u, 32000u, 44100u, 48000u, 96000u};
+    const uint8_t widths[] = {16, 32};
+    for (uint32_t s : sources)
+        for (uint32_t hz : rates)
+            for (uint8_t bits : widths)
+                CHECK(i2s_slave_bclk_div(s, hz, bits) <= I2S_BCLK_DIV_MAX);
+}
+

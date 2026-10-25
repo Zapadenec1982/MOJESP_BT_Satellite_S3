@@ -15,12 +15,20 @@
 
 #include <cstddef>
 
+#if __has_include("project_info.h")
+#include "project_info.h"   // generated: system.device_name, with the board's overlay
+#endif
+#ifndef MODESP_DEVICE_NAME
+#define MODESP_DEVICE_NAME "P4 Player"
+#endif
+
 namespace device_name {
 
 /// 32 bytes, the satellite's limit (LINK_PROTOCOL.md, BT_CONFIG_SET), and the NUL.
 constexpr size_t CAP = 33;
-/// Until a name is kept: system.device_name in project.json, which never reaches SharedState.
-constexpr const char* FALLBACK = "P4 Player";
+/// Until a name is kept: system.device_name in project.json — "P4 Player" on the panel, the
+/// board's overlay on the S3 ("S3 Player") — which never reaches SharedState.
+constexpr const char* FALLBACK = MODESP_DEVICE_NAME;
 
 /// The name kept, or FALLBACK while there is none.
 void get(char* out, size_t n);

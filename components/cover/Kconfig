@@ -1,0 +1,19 @@
+menu "Cover art"
+
+    config COVER_DECODE_TILE
+        bool "Decode artwork into an RGB565 tile for a display"
+        depends on SOC_JPEG_CODEC_SUPPORTED && SOC_PPA_SUPPORTED
+        default y
+        help
+            On: every cover is decoded once (the JPEG engine, with stb_image for what it
+            cannot read, and the PPA to scale) into a 280x280 RGB565 tile that a display draws
+            and the web's GET /api/cover rebuilds a BMP from. What the P4 panel runs; it needs
+            both engines, so a chip without them (the ESP32-S3) has only the mode below.
+
+            Off: the cover is kept as the file that arrived, JPEG or PNG, and handed to the
+            web as it is (cover_bytes_get); the browser decodes it. Its colour for the web's
+            backdrop comes from an eighth-scale decode by the ROM's TJpgDec where the chip
+            has one (baseline JPEG; none for PNG or progressive). For a board without a
+            display: no tile memory, no software decoder, no seconds of CPU per cover.
+
+endmenu

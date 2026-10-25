@@ -1,7 +1,7 @@
 /**
  * @file ui_web_media.cpp
  * @brief GET /api/library and GET /api/cover — see ui_web_media.h. The bodies are written by
- *        include/web_media.h, which the host suite tests.
+ *        components/web_media/include/web_media.h, which the host suite tests.
  *
  * Both read what the panel's own pages read, and nothing more:
  *   - the library is the card's index (components/playlist), which screen_library.cpp draws —

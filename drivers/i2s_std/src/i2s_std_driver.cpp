@@ -9,6 +9,13 @@
  * The TX ring must outlast a flash sector erase (Boya BY25Q has no auto-suspend, both
  * caches stall) so the DAC never runs dry; an RX stall only loses a few input samples.
  * Bench 2026-09-15: the whole audio core costs ~110 KB of DMA-SRAM (rings + ASRC + stacks).
+ *
+ * Two chips, one file. The P4 clocks a master from its audio PLL and has to count who holds
+ * that PLL (most of what is below). The ESP32-S3 has no audio PLL: every port runs from the
+ * 160 MHz PLL_F160M through a fractional divider (exact for 44.1/48/88.2/96 kHz at 256x), a
+ * slave in 32-bit slots fits on it without help from the master, and the output is never
+ * trimmed — can_trim() says no, and the audio core takes its resampler instead. I2S_STD_HAS_APLL
+ * is the switch; on the P4 every line below behaves as before.
  */
 
 #include "i2s_std_driver.h"
@@ -26,16 +33,41 @@
 #include "soc/gpio_sig_map.h"
 #include "soc/i2s_periph.h"
 #include "soc/i2s_struct.h"
+#include "soc/soc_caps.h"
+#if CONFIG_IDF_TARGET_ESP32P4
 #include "soc/ahb_dma_struct.h"
+#else
+#include "soc/gdma_struct.h"
+#endif
 // The audio PLL's reference count, which trim_ppm() has to steer before it may move the PLL.
-// A public header of esp_hw_support, and the only handle anyone has on that counter.
+// A public header of esp_hw_support, and the only handle anyone has on that counter. (It
+// declares nothing on a chip without the PLL.)
 #include "clk_ctrl_os.h"
 
 #include "i2s_clock.h"   // the arithmetic that decides what this chip can be clocked at
 
 static const char* TAG = "I2sStd";
 
+// The audio PLL: the P4's, which a master runs from and set_rate()/trim_ppm() count holders of.
+// The S3 has none, and I2S_CLK_SRC_APLL does not exist there to be named.
+#if SOC_I2S_SUPPORTS_APLL && SOC_CLK_APLL_SUPPORTED
+#define I2S_STD_HAS_APLL 1
+static constexpr i2s_clock_src_t MASTER_CLK_SRC = I2S_CLK_SRC_APLL;
+#else
+#define I2S_STD_HAS_APLL 0
+static constexpr i2s_clock_src_t MASTER_CLK_SRC = I2S_CLK_SRC_DEFAULT;
+#endif
+static_assert(audio_core::I2S_HAS_APLL == (I2S_STD_HAS_APLL != 0),
+              "i2s_clock.h and this driver disagree about the audio PLL");
+
+// On the S3 with PSRAM, IDF compiles everything with -mdisable-hardware-atomics, because S32C1I
+// cannot reach PSRAM (CONFIG_STDATOMIC_S32C1I_SPIRAM_WORKAROUND): std::atomic then calls newlib's
+// helpers, which use S32C1I on internal RAM (where these counters are) and an ISR-safe spinlock
+// on PSRAM, and are linked into IRAM (esp_libc.lf, stdatomic: noflash). Still safe from the
+// IRAM-resident callbacks below — just not "always lock free" by the compiler's definition.
+#if !CONFIG_STDATOMIC_S32C1I_SPIRAM_WORKAROUND
 static_assert(std::atomic<uint32_t>::is_always_lock_free, "ISR counters must be lock-free");
+#endif
 static bool IRAM_ATTR count_queue_overflow(i2s_chan_handle_t, i2s_event_data_t*, void* ctx) {
     static_cast<std::atomic<uint32_t>*>(ctx)->fetch_add(1, std::memory_order_relaxed);
     return false;
@@ -51,6 +83,7 @@ static bool IRAM_ATTR count_rx_block(i2s_chan_handle_t, i2s_event_data_t*, void*
     // or a transmit FIFO that ran dry on ANY AHB-DMA channel (this port does not know which
     // channel IDF gave it), and this port's own I2S receive FIFO hung waiting for the DMA.
     // All are sticky raw bits nothing else here enables, so read-and-clear counts each burst.
+#if CONFIG_IDF_TARGET_ESP32P4
     for (int ch = 0; ch < 3; ch++) {
         if (AHB_DMA.in_intr[ch].raw.infifo_ovf_chn_int_raw) {
             AHB_DMA.in_intr[ch].clr.val = 1u << 5;          // infifo_ovf_chn_int_clr
@@ -61,8 +94,33 @@ static bool IRAM_ATTR count_rx_block(i2s_chan_handle_t, i2s_event_data_t*, void*
             e->hw_tx_fifo_udf.fetch_add(1, std::memory_order_relaxed);
         }
     }
+#else
+    // The S3's GDMA: five channels, and two FIFO levels each (L1 next to the peripheral, L3 next
+    // to memory) with their own overflow/underflow bits.
+    for (int ch = 0; ch < SOC_GDMA_PAIRS_PER_GROUP; ch++) {
+        const uint32_t in_raw = GDMA.channel[ch].in.int_raw.val;
+        if (in_raw & ((1u << 6) | (1u << 8))) {             // infifo_ovf_l1, infifo_ovf_l3
+            GDMA.channel[ch].in.int_clr.val = in_raw & ((1u << 6) | (1u << 8));
+            e->hw_rx_fifo_ovf.fetch_add(1, std::memory_order_relaxed);
+        }
+        const uint32_t out_raw = GDMA.channel[ch].out.int_raw.val;
+        if (out_raw & ((1u << 5) | (1u << 7))) {            // outfifo_udf_l1, outfifo_udf_l3
+            GDMA.channel[ch].out.int_clr.val = out_raw & ((1u << 5) | (1u << 7));
+            e->hw_tx_fifo_udf.fetch_add(1, std::memory_order_relaxed);
+        }
+    }
+#endif
+#if SOC_I2S_NUM > 2
     i2s_dev_t* const dev = e->port == 0 ? &I2S0 : e->port == 1 ? &I2S1 : e->port == 2 ? &I2S2 : nullptr;
-    if (dev && dev->int_raw.rx_hung_int_raw) {
+#else
+    i2s_dev_t* const dev = e->port == 0 ? &I2S0 : e->port == 1 ? &I2S1 : nullptr;
+#endif
+#if CONFIG_IDF_TARGET_ESP32P4
+    const bool hung = dev && dev->int_raw.rx_hung_int_raw;
+#else
+    const bool hung = dev && dev->int_raw.rx_hung;
+#endif
+    if (hung) {
         dev->int_clr.val = 1u << 2;                          // rx_hung_int_clr
         e->hw_rx_hung.fetch_add(1, std::memory_order_relaxed);
     }
@@ -102,7 +160,9 @@ void I2sStdDriver::configure(const char* role, const modesp::I2SBusResource* bus
 // 98 MHz) is the last rate that fits. Above it the source converts, which is now the only
 // thing the resampler is for. A rate that cannot be made is REFUSED, loudly and before a
 // note is played, so the ceiling is a guard rather than a guess.
-using audio_core::I2S_XTAL_HZ;      // the crystal, and I2S_CLK_SRC_DEFAULT with it here
+// I2S_CLK_SRC_DEFAULT: the crystal on the P4 (below rev 3), PLL_F160M on the S3. The rules below
+// say "the crystal" in the P4's terms; on the S3 read "the 160 MHz source".
+using audio_core::I2S_DEFAULT_SCLK_HZ;
 
 // ── The audio PLL, which IDF owns and will not talk about ─────────────────────────────────
 //
@@ -122,7 +182,14 @@ static uint32_t s_apll_hz    = 0;      ///< what the master last set it to; 0 = 
 static bool     s_apll_slave = false;  ///< a slave port holds it too, so it cannot be moved
 
 constexpr uint32_t MIN_RATE_HZ = 44100;
+#if I2S_STD_HAS_APLL
 constexpr uint32_t MAX_RATE_HZ = 192000;
+#else
+// 160 MHz divides exactly to every 256x MCLK up to 96 kHz, and to 192 kHz, but not to 176.4 kHz:
+// IDF's fractional search overflows there and lands 13.7 % fast (hal_utils.c, 32-bit products).
+// The audio core plays up to 96 kHz anyway (AudioModule::PLAY_MAX_HZ); what is above converts.
+constexpr uint32_t MAX_RATE_HZ = 96000;
+#endif
 
 modesp::audio::AudioCaps I2sStdDriver::caps() const {
     modesp::audio::AudioCaps c;
@@ -205,7 +272,7 @@ bool I2sStdDriver::init() {
     // which is 11.29 MHz, against a source above twice that. 40 MHz clears it. The bench note
     // of 2026-09-15 about "sample rate is too large" was measured at 48 kHz in 32-BIT slots,
     // where the requirement is above 49 MHz — a different case, not this one.
-    std_cfg.clk_cfg.clk_src = bus_->master ? I2S_CLK_SRC_APLL : I2S_CLK_SRC_DEFAULT;
+    std_cfg.clk_cfg.clk_src = bus_->master ? MASTER_CLK_SRC : I2S_CLK_SRC_DEFAULT;
     switch (bus_->mclk_multiple) {
         case 128: std_cfg.clk_cfg.mclk_multiple = I2S_MCLK_MULTIPLE_128; break;
         case 384: std_cfg.clk_cfg.mclk_multiple = I2S_MCLK_MULTIPLE_384; break;
@@ -240,11 +307,13 @@ bool I2sStdDriver::init() {
     // A slave opened on the crystal holds NOTHING, and saying otherwise here used to be
     // harmless only because set_rate() refuses a slave before it reads these. apll_refs()
     // reads them too, and a wrong count there is a panic rather than a refusal.
-    rx_cfg_apll_ = rx_apll_ref_ = (rx_ != nullptr && bus_->master);
+    rx_cfg_apll_ = rx_apll_ref_ = (I2S_STD_HAS_APLL && rx_ != nullptr && bus_->master);
     // And this is where the PLL's frequency comes from: the master, at twice its MCLK. The
     // slave port reads it to work out whether a format it is asked for is clockable at all.
     mclk_mult_ = bus_->mclk_multiple ? bus_->mclk_multiple : 256;
+#if I2S_STD_HAS_APLL
     if (bus_->master) s_apll_hz = audio_core::i2s_master_apll_hz(bus_->sample_rate_hz, mclk_mult_);
+#endif
 
     // Registration is legal only before enabling DMA. ISR callbacks only count;
     // all formatting/reporting happens in the control task.
@@ -339,6 +408,7 @@ bool I2sStdDriver::set_rate(uint32_t hz, uint16_t mclk_multiple) {
     // and that frequency is what a SLAVE port sharing the PLL has to live within. Raising it
     // is how 32-bit slots become clockable; it also lowers this port's own ceiling, so a rate
     // the PLL cannot reach at this multiple is refused here rather than half-applied.
+#if I2S_STD_HAS_APLL
     const uint32_t pll = audio_core::i2s_master_apll_hz(hz, mult);
     if (!pll) {
         ESP_LOGW(TAG, "[%s] %lu Hz at %ux MCLK needs a PLL above %lu Hz, which this chip does "
@@ -346,6 +416,15 @@ bool I2sStdDriver::set_rate(uint32_t hz, uint16_t mclk_multiple) {
                  (unsigned long)audio_core::APLL_MAX_HZ);
         return false;
     }
+#else
+    // One fixed source: IDF wants it above 1.99 x MCLK (i2s_std.c, i2s_std_calculate_clock).
+    const uint32_t pll = 0;
+    if ((uint64_t)I2S_DEFAULT_SCLK_HZ * 100u <= (uint64_t)hz * mult * 199u) {
+        ESP_LOGW(TAG, "[%s] %lu Hz at %ux MCLK needs a source above %lu Hz", name(),
+                 (unsigned long)hz, (unsigned)mult, (unsigned long)I2S_DEFAULT_SCLK_HZ);
+        return false;
+    }
+#endif
 
     // Not while the input port is on the PLL. With a slave attached the park below leaves TWO
     // holders instead of one, the frequency stays where it is, and IDF reports success anyway
@@ -399,7 +478,7 @@ bool I2sStdDriver::set_rate(uint32_t hz, uint16_t mclk_multiple) {
     const int64_t stopped_at = esp_timer_get_time();
     if (was_running) stop();
     i2s_std_clk_config_t clk = I2S_STD_CLK_DEFAULT_CONFIG(hz);
-    clk.clk_src = I2S_CLK_SRC_APLL;
+    clk.clk_src = MASTER_CLK_SRC;
     // The multiple goes through as a number. IDF only multiplies by it (i2s_std.c,
     // i2s_std_calculate_clock), and the slave plan asks for 640x and 1280x, which the enum
     // does not name; mapping those to 256 would put the PLL where the slave cannot live.
@@ -452,10 +531,36 @@ bool I2sStdDriver::set_rate(uint32_t hz, uint16_t mclk_multiple) {
     // count goes to two again, which is fine: the frequency asked for is the one already
     // there, so there is nothing to freeze.
     if (err == ESP_OK && rx_ && !rx_cfg_apll_) {
+#if I2S_STD_HAS_APLL
         rx_apll_ref_ = true;                   // acquired by the call, pass or fail
         err = i2s_channel_reconfig_std_clock(rx_, &clk);
         if (err == ESP_OK) rx_cfg_apll_ = true;
+#else
+        err = i2s_channel_reconfig_std_clock(rx_, &clk);   // one source: nothing to count
+#endif
     }
+#if !I2S_STD_HAS_APLL
+    // What the fractional divider actually made, not what was asked. IDF's search multiplies in
+    // 32 bits and can land several percent off without a word (hal_utils.c); the rates allowed
+    // above all come out exact at 256x, so anything more than a rounding away is a refusal.
+    if (err == ESP_OK && tx_) {
+        i2s_tuning_info_t info = {};
+        const uint64_t want = (uint64_t)hz * mult;
+        if (i2s_channel_tune_rate(tx_, nullptr, &info) == ESP_OK && want &&
+            (uint64_t)(info.curr_mclk_hz > want ? info.curr_mclk_hz - want : want - info.curr_mclk_hz)
+                * 1000000u > want * 50u) {
+            ESP_LOGW(TAG, "[%s] %lu Hz x%u came out at MCLK %lu Hz, not %llu: refused", name(),
+                     (unsigned long)hz, (unsigned)mult, (unsigned long)info.curr_mclk_hz,
+                     (unsigned long long)want);
+            err = ESP_ERR_INVALID_STATE;
+            i2s_std_clk_config_t back = I2S_STD_CLK_DEFAULT_CONFIG(rate_);
+            back.clk_src = MASTER_CLK_SRC;
+            back.mclk_multiple = static_cast<i2s_mclk_multiple_t>(mclk_mult_);
+            i2s_channel_reconfig_std_clock(tx_, &back);
+            if (rx_) i2s_channel_reconfig_std_clock(rx_, &back);
+        }
+    }
+#endif
     if (err != ESP_OK) {
         ESP_LOGW(TAG, "[%s] cannot retune to %lu Hz: %s", name(), (unsigned long)hz,
                  esp_err_to_name(err));
@@ -470,12 +575,22 @@ bool I2sStdDriver::set_rate(uint32_t hz, uint16_t mclk_multiple) {
     trim_ppm_    = 0;
     trim_warned_ = false;
     // The PLL moved with it, and the slave port needs to know where to.
+#if I2S_STD_HAS_APLL
     s_apll_hz  = pll;
+#endif
     const bool ok = was_running ? start() : true;
     // How long the DAC went without a clock: the number a click at a rate change is about.
+#if I2S_STD_HAS_APLL
     ESP_LOGI(TAG, "[%s] output now %lu Hz, MCLK x%u, PLL at %lu Hz; clock stopped %lu us",
              name(), (unsigned long)hz, (unsigned)mult, (unsigned long)pll,
              was_running ? (unsigned long)(esp_timer_get_time() - stopped_at) : 0ul);
+#else
+    (void)pll;
+    ESP_LOGI(TAG, "[%s] output now %lu Hz, MCLK x%u from the %lu MHz PLL; clock stopped %lu us",
+             name(), (unsigned long)hz, (unsigned)mult,
+             (unsigned long)(I2S_DEFAULT_SCLK_HZ / 1000000u),
+             was_running ? (unsigned long)(esp_timer_get_time() - stopped_at) : 0ul);
+#endif
     return ok;
 }
 
@@ -527,6 +642,10 @@ int I2sStdDriver::apll_refs() const {
 }
 
 bool I2sStdDriver::can_trim() const {
+    // Without the audio PLL a trim is a rewrite of the fractional divider, which IDF does by
+    // first forcing it to 2 (i2s_ll_tx_set_raw_clk_div) — a glitch on a running DAC — and which
+    // shares the 32-bit overflow above. The audio core's resampler absorbs the drift instead.
+    if (!I2S_STD_HAS_APLL) return false;
     if (!initialized_ || !bus_->master || !tx_ || !rate_ || !mclk_mult_) return false;
     if (apll_refs() < 1) return false;
     // Both ends of the authority, because a servo that can only move one way is not a servo.
@@ -538,6 +657,10 @@ bool I2sStdDriver::can_trim() const {
 bool I2sStdDriver::trim_ppm(int32_t ppm, int32_t* applied_ppm) {
     trim_attempts_.fetch_add(1, std::memory_order_relaxed);
     if (applied_ppm) *applied_ppm = trim_ppm_;
+#if !I2S_STD_HAS_APLL
+    (void)ppm;
+    return false;   // can_trim() says why
+#else
     if (!initialized_ || !bus_->master || !tx_ || !rate_ || !mclk_mult_) return false;
     if (ppm >  audio_core::I2S_TRIM_MAX_PPM) ppm =  audio_core::I2S_TRIM_MAX_PPM;
     if (ppm < -audio_core::I2S_TRIM_MAX_PPM) ppm = -audio_core::I2S_TRIM_MAX_PPM;
@@ -600,6 +723,7 @@ bool I2sStdDriver::trim_ppm(int32_t ppm, int32_t* applied_ppm) {
         *applied_ppm = mclk ? (int32_t)(((int64_t)info.delta_mclk_hz * 1000000) / mclk) : 0;
     }
     return true;
+#endif  // I2S_STD_HAS_APLL
 }
 
 void I2sStdDriver::set_line_input(bool on) {
@@ -748,14 +872,14 @@ bool I2sStdDriver::set_format(uint32_t hz, uint8_t bits) {
     // INVALID_ARG from the clock check, but by then the PLL reference has been acquired and
     // is never given back (i2s_std.c:386-398). Two of those and the master's own retune is
     // dead for the rest of the uptime — which is the state this panel was found in.
-    const bool xtal_ok = audio_core::i2s_slave_clock_fits(I2S_XTAL_HZ, hz, bits);
+    const bool xtal_ok = audio_core::i2s_slave_clock_fits(I2S_DEFAULT_SCLK_HZ, hz, bits);
     const bool apll_ok = audio_core::i2s_slave_clock_fits(s_apll_hz, hz, bits);
     if (!xtal_ok && !apll_ok) {
         ESP_LOGE(TAG, "[%s] %lu Hz / %u-bit slots needs a source above %lu Hz; the crystal is "
                       "%lu and the PLL is at %lu — refused without touching the port",
                  role_.c_str(), (unsigned long)hz, bits,
                  (unsigned long)(audio_core::i2s_slave_mclk_hz(hz, bits) / 100ull * 199ull),
-                 (unsigned long)I2S_XTAL_HZ, (unsigned long)s_apll_hz);
+                 (unsigned long)I2S_DEFAULT_SCLK_HZ, (unsigned long)s_apll_hz);
         return false;
     }
 
@@ -770,7 +894,7 @@ bool I2sStdDriver::set_format(uint32_t hz, uint8_t bits) {
         I2S_SLOT_MODE_STEREO);
 
     i2s_std_clk_config_t clk = I2S_STD_CLK_DEFAULT_CONFIG(hz);
-    clk.clk_src = xtal_ok ? I2S_CLK_SRC_DEFAULT : I2S_CLK_SRC_APLL;
+    clk.clk_src = xtal_ok ? I2S_CLK_SRC_DEFAULT : MASTER_CLK_SRC;
 
     const uint32_t prev_hz   = rate_;
     const uint8_t  prev_bits = slot_bits_;
@@ -798,9 +922,9 @@ bool I2sStdDriver::set_format(uint32_t hz, uint8_t bits) {
     // the stored clock too, so it is chosen the same way: the most the source allows for the
     // format being entered, but on the clock-first path no more than the intermediate width
     // also allows, and on the slot-first path the stored one must still fit the new width.
-    const uint32_t new_sclk  = xtal_ok ? I2S_XTAL_HZ : s_apll_hz;
-    const bool     prev_xtal = audio_core::i2s_slave_clock_fits(I2S_XTAL_HZ, prev_hz, prev_bits);
-    const uint32_t prev_sclk = prev_xtal ? I2S_XTAL_HZ : s_apll_hz;
+    const uint32_t new_sclk  = xtal_ok ? I2S_DEFAULT_SCLK_HZ : s_apll_hz;
+    const bool     prev_xtal = audio_core::i2s_slave_clock_fits(I2S_DEFAULT_SCLK_HZ, prev_hz, prev_bits);
+    const uint32_t prev_sclk = prev_xtal ? I2S_DEFAULT_SCLK_HZ : s_apll_hz;
     const uint32_t final_div = audio_core::i2s_slave_bclk_div(new_sclk, hz, bits);
     const uint32_t step_div  = audio_core::i2s_slave_bclk_div(new_sclk, hz, prev_bits);
     const uint32_t first_div = step_div < final_div ? step_div : final_div;
@@ -844,8 +968,8 @@ bool I2sStdDriver::set_format(uint32_t hz, uint8_t bits) {
             prev_bits == 32 ? I2S_DATA_BIT_WIDTH_32BIT : I2S_DATA_BIT_WIDTH_16BIT,
             I2S_SLOT_MODE_STEREO);
         i2s_std_clk_config_t back_clk = I2S_STD_CLK_DEFAULT_CONFIG(prev_hz);
-        const bool back_xtal = audio_core::i2s_slave_clock_fits(I2S_XTAL_HZ, prev_hz, prev_bits);
-        back_clk.clk_src = back_xtal ? I2S_CLK_SRC_DEFAULT : I2S_CLK_SRC_APLL;
+        const bool back_xtal = audio_core::i2s_slave_clock_fits(I2S_DEFAULT_SCLK_HZ, prev_hz, prev_bits);
+        back_clk.clk_src = back_xtal ? I2S_CLK_SRC_DEFAULT : MASTER_CLK_SRC;
         back_clk.bclk_div = prev_div;
 
         // And back in the OPPOSITE order to the attempt, which is the order that is legal.
@@ -877,7 +1001,8 @@ bool I2sStdDriver::set_format(uint32_t hz, uint8_t bits) {
     s_apll_slave = !xtal_ok;
     ESP_LOGI(TAG, "[%s] now reading %lu Hz, %u-bit slots, clocked from the %s, %lu looks per bit",
              role_.c_str(), (unsigned long)hz, bits,
-             xtal_ok ? "crystal" : "PLL (which the output now holds still)",
+             xtal_ok ? (I2S_STD_HAS_APLL ? "crystal" : "160 MHz PLL")
+                     : "PLL (which the output now holds still)",
              (unsigned long)slave_bclk_div_);
     return was_running ? start() : true;
 }

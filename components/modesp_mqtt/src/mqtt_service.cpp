@@ -18,6 +18,7 @@
 #include "modesp/services/device_id.h"
 #include "esp_crt_bundle.h"
 #include "esp_wifi.h"
+#include "soc/soc_caps.h"
 #include "esp_app_desc.h"
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
@@ -584,7 +585,11 @@ void MqttService::publish_heartbeat() {
     // to the C6 with a 5 s timeout, made from the task that feeds the 5 s watchdog, and it
     // reads rssi=0 on this stack anyway — see the 17.09.2026 note in wifi_service.cpp, where
     // the same call reset the board. The field stays for the payload's consumers.
-    const int rssi = 0;
+    // A chip with its own radio (the ESP32-S3) reads it locally.
+    int rssi = 0;
+#if defined(SOC_WIFI_SUPPORTED) && SOC_WIFI_SUPPORTED
+    if (esp_wifi_sta_get_rssi(&rssi) != ESP_OK) rssi = 0;
+#endif
 
     // Get firmware version
     const esp_app_desc_t* app_desc = esp_app_get_description();

@@ -1,7 +1,7 @@
 {
   "manifest_version": 1,
   "driver": "sdmmc_card",
-  "description": "microSD/TF слот на контролері SDMMC: живлення від вбудованого LDO, FAT32 через esp_vfs_fat; хост спільний з esp_hosted (C6), тому init/deinit хоста — no-op",
+  "description": "microSD/TF слот на контролері SDMMC, FAT32 через esp_vfs_fat. P4: живлення від вбудованого LDO, хост спільний з esp_hosted (C6), тому init/deinit хоста — no-op; S3: хост свій, піни через GPIO matrix",
   "category": "storage",
   "hardware_type": "sdmmc_slot",
   "transport": "wired",

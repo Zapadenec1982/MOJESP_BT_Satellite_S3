@@ -1,6 +1,7 @@
 /**
  * @file web_media.h
- * @brief The bodies of GET /api/library and GET /api/cover (src/ui_web_media.cpp).
+ * @brief The bodies of GET /api/library and GET /api/cover (modules/ui_lvgl/src/ui_web_media.cpp;
+ *        /api/library also modules/ui_headless).
  *
  * Header-only and free of IDF and LVGL, so the host suite holds them to their shape
  * (tests/host/test_web_media.cpp). The handlers do the reading — the card's index, the cover

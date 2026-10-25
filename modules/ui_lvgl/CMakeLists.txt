@@ -63,6 +63,7 @@ idf_component_register(
     # esp_driver_ppa: the rotated panel's flush turns blocks straight into the frame buffer (src/ppa_flush.cpp).
     PRIV_REQUIRES dlna_client bt esp_lcd esp_driver_ppa esp_timer esp_app_format audio_dsp playlist cover stations user_store
                   modesp_net esp_http_server esp_mm
+                  web_media   # the bodies of /api/library and /api/cover (shared with ui_headless)
                   # radio_catalog: the catalog page draws the page, the countries and the genres
                   # the radio module publishes there, and leaves its asks there (radio_catalog_ui.h).
                   radio_catalog

@@ -68,8 +68,8 @@ struct Stats {
     int16_t  host_volume  = 0;     ///< 1/256 dB, what the host's slider says
     bool     host_mute    = false;
     uint32_t streams      = 0;     ///< total alternate-setting changes
-    uint32_t pkts         = 0;     ///< data packets in the last second; 8000 at high speed
-    uint32_t lost         = 0;     ///< total microframes with no packet taken
+    uint32_t pkts         = 0;     ///< data packets in the last second; 8000 at high speed, 1000 at full
+    uint32_t lost         = 0;     ///< total (micro)frames with no packet taken
     uint32_t loss_events  = 0;     ///< total times packets were lost
     uint32_t same_frame   = 0;     ///< total packets the controller had held for a late interrupt
     uint32_t gap_max_us   = 0;     ///< longest gap between packet interrupts in the last second

@@ -63,7 +63,8 @@ void device_task(void*) {
         vTaskDelete(nullptr);
         return;
     }
-    ESP_LOGI(TAG, "UAC2 device on the HS port (rhport 1)");
+    ESP_LOGI(TAG, "UAC2 device on rhport %d, %s speed", uac_usb_rhport(),
+             uac_usb_high_speed() ? "high" : "full");
     for (;;) uac_usb_task();
 }
 

@@ -23,8 +23,10 @@ UPnP-стек під ним не вендорений: `espressif/esp_media_prot
 
 1. `esp_dlna.c` — `audio_mem.h` / `audio_calloc()` замінено на `<stdlib.h>` / `calloc()`: заголовок
    ADF тягнув би `audio_sal` заради одного виділення.
-2. `esp_dlna.c` — рядки опису пристрою (`manufacturer` «ModESP», `model_name` «P4 Player»,
-   `model_description`, URL) замість рядків прикладу ADF: їх показує телефон у списку пристроїв.
+2. `esp_dlna.c` — рядки опису пристрою (`manufacturer` «ModESP», `model_name` — ім'я пристрою
+   проєкту з `generated/project_info.h`: «P4 Player» на панелі, «S3 Player» на платі ESP32-S3 —
+   `model_description` з назвою чипа, URL) замість рядків прикладу ADF: їх показує телефон у списку
+   пристроїв.
 3. `esp_dlna.c` — `esp_dlna_start()` звільняє дескриптор, коли `esp_upnp_init()` не вдався.
 4. `esp_dlna_avt.c` — `SetAVTransportURI` віддає рендереру й `CurrentURIMetaData` як
    `AVT_SET_TRACK_METADATA`, щоб рендерер знав назву треку.

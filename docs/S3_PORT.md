@@ -128,9 +128,17 @@ dsp_kernels.h`) are a compare and a conditional move on Xtensa (`olt.s`, `movt.s
 |---|---|---|
 | as ported | 33–38 % | 53–88 % |
 | hot DSP in IRAM (`main/dsp_iram.lf`) | 32–33 % | 51–55 % |
-| and `dsp_max`/`dsp_min` | **17 %** | **24 %** |
+| and `dsp_max`/`dsp_min` | 17 % | 24 % |
+| and one filter section a pass | **~16 %** | — |
 
-At 96 kHz that is about a third of a core. The DSP's per-block functions sit in IRAM on the S3
+At 96 kHz that is about a third of a core. One section a pass: two SVF sections need more than
+the 16 FP registers Xtensa has, and the pair spilled to the stack (~52 cycles a section against
+~35 alone); the output is bit-identical either way and the P4 keeps its pairs (`DspChain::paired_`).
+Per stage now, in cycles a stereo frame: subsonic ~90, loudness ~150, bass limiter ~400,
+brickwall ~105. Ready-made alternatives were compared and none is cheaper on the S3 at this
+quality (Espressif's `esp_audio_effects` is int-only, binary-only and slower per filter; esp-dsp's
+biquad runs plain-FPU code on the S3 at ~17 cycles a sample a section, no faster than the SVF, and
+is the Direct Form whose noise the SVF replaced). The DSP's per-block functions sit in IRAM on the S3
 (`main/dsp_iram.lf`): out of the 16 KB instruction cache the two cores share, they do not wait on
 PSRAM while Wi-Fi runs on the other core.
 

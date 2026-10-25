@@ -307,9 +307,9 @@ public:
     void process(float* stereo, size_t frames);
     /// Blocks thrown away by that guard since start-up.
     uint32_t faults() const { return faults_; }
-    /// The filter sections two to a pass (the default), or one, as the chain ran them until
-    /// 15.10.2026. The output is the same bit for bit either way; the switch exists so the host
-    /// tests can show exactly that. The firmware never turns it off.
+    /// The filter sections two to a pass, or one, as the chain ran them until 15.10.2026. The
+    /// output is the same bit for bit either way (the host tests show exactly that); the default
+    /// follows the core — see `paired_`.
     void set_paired_passes(bool on) { paired_ = on; }
     /// How many loops over the block the filter sections took in the last process(): a pair
     /// or a lone section is one, a band crossfading three (outgoing, incoming, the blend), the
@@ -439,7 +439,14 @@ private:
     bool     want_[MAX_BANDS] = {};      ///< enabled and designable
     int      band_count_ = 0;
     bool     eq_on_ = true;
+    /// Two sections a pass on RISC-V: the P4's 32 FP registers hold both, and a pair saves a loop
+    /// over the block. One on Xtensa, whose 16 do not: on the S3 a pair spills ~35 loads and stores
+    /// a frame and costs ~52 cycles a section where a lone one costs ~35 (26.10.2026).
+#if defined(__XTENSA__)
+    bool     paired_ = false;            ///< set_paired_passes()
+#else
     bool     paired_ = true;             ///< set_paired_passes()
+#endif
     uint32_t passes_ = 0;                ///< filter_passes()
     uint32_t fade_len_ = 960;            ///< FADE_S in frames at the current rate
     float    fade_buf_[BLOCK * 2];       ///< the outgoing design's output, during a fade

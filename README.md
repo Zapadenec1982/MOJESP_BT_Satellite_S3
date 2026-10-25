@@ -21,16 +21,20 @@ The panel, 800×480:
 
 <table>
 <tr>
-<td><img src="docs/img/screens/panel-player.png" alt="Player"></td>
+<td><img src="docs/img/screens/panel-player.png" alt="Player, Bluetooth"></td>
+<td><img src="docs/img/screens/panel-player-airplay.png" alt="Player, AirPlay"></td>
+</tr>
+<tr>
 <td><img src="docs/img/screens/panel-source.png" alt="Source"></td>
-</tr>
-<tr>
 <td><img src="docs/img/screens/panel-equalizer.png" alt="Equalizer"></td>
-<td><img src="docs/img/screens/panel-speakers.png" alt="Speakers"></td>
 </tr>
 <tr>
+<td><img src="docs/img/screens/panel-speakers.png" alt="Speakers"></td>
 <td><img src="docs/img/screens/panel-stations.png" alt="Stations"></td>
+</tr>
+<tr>
 <td><img src="docs/img/screens/panel-settings.png" alt="Settings"></td>
+<td><img src="docs/img/screens/panel-tone.png" alt="Tone"></td>
 </tr>
 </table>
 

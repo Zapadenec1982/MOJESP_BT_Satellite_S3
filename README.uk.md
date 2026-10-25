@@ -21,16 +21,20 @@ float DSP-ланцюг і подає на зовнішній ЦАП і підс�
 
 <table>
 <tr>
-<td><img src="docs/img/screens/panel-player.uk.png" alt="Плеєр"></td>
+<td><img src="docs/img/screens/panel-player.uk.png" alt="Плеєр, Bluetooth"></td>
+<td><img src="docs/img/screens/panel-player-airplay.uk.png" alt="Плеєр, AirPlay"></td>
+</tr>
+<tr>
 <td><img src="docs/img/screens/panel-source.uk.png" alt="Джерело"></td>
-</tr>
-<tr>
 <td><img src="docs/img/screens/panel-equalizer.uk.png" alt="Еквалайзер"></td>
-<td><img src="docs/img/screens/panel-speakers.uk.png" alt="Колонки"></td>
 </tr>
 <tr>
+<td><img src="docs/img/screens/panel-speakers.uk.png" alt="Колонки"></td>
 <td><img src="docs/img/screens/panel-stations.uk.png" alt="Станції"></td>
+</tr>
+<tr>
 <td><img src="docs/img/screens/panel-settings.uk.png" alt="Налаштування"></td>
+<td><img src="docs/img/screens/panel-tone.uk.png" alt="Тембр"></td>
 </tr>
 </table>
 

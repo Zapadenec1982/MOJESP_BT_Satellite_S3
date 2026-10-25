@@ -125,6 +125,13 @@ DSP-ланцюг, закон гучності й лімітери: [docs/AUDIO.u
 - **C6 потрібна slave-прошивка ESP-Hosted** з того самого релізу, що й бібліотека хоста
   (3.0.7): [docs/C6_UPDATE.uk.md](docs/C6_UPDATE.uk.md), `tools/c6_updater/`.
 
+### ESP32-S3 без екрана
+
+Та сама прошивка збирається й для плати **ESP32-S3 N16R8** без дисплея (`boards/s3_player`): власний
+Wi-Fi замість C6, UI-модуль без екрана (`modules/ui_headless`: обкладинка й бібліотека для вебу,
+за бажання енкодер — гучність, пуск/пауза, mute), USB-аудіо на full speed (44.1 і 48 кГц), консоль на
+UART-роз'ємі «COM». Підключення, збирання і відмінності від P4: [docs/S3_PORT.uk.md](docs/S3_PORT.uk.md).
+
 ## Bluetooth-супутник
 
 Bluetooth-звук приходить з окремої плати — оригінального ESP32 з власною прошивкою:
@@ -187,6 +194,9 @@ idf.py -p <port> flash
 - У Windows спрямуйте `IDF_COMPONENT_CACHE_PATH` на короткий шлях: esp_hosted 3.0.7 не
   розпаковується в типовий кеш (шляхи понад 260 символів).
 - Зібраний вебінтерфейс закомічено в `data/www/`. Щоб перезібрати: `cd webui && npm ci && npm run deploy`.
+- Плата ESP32-S3 збирається у власній теці, поруч зі збіркою P4:
+  `idf.py -B build_s3 -D SDKCONFIG=build_s3/sdkconfig set-target esp32s3`, далі `build` з тими самими
+  двома параметрами ([docs/S3_PORT.uk.md](docs/S3_PORT.uk.md)).
 
 Тести на хості (pytest плюс C++-раннер doctest; C++-частині потрібні `g++` і `cmake`):
 
@@ -253,6 +263,7 @@ components/           фреймворк (modesp_core, modesp_services, modesp_h
 modules/              модулі продукту, вибрані в project.json
 drivers/              dsi_st7701, gt911, i2s_std, rotary_encoder, sdmmc_card, uart_link, …
 boards/p4_player/     board.json, bindings.json, sdkconfig.board
+boards/s3_player/     те саме для ESP32-S3 без екрана (docs/S3_PORT.uk.md)
 webui/                вебінтерфейс на Svelte 4 (збирається в data/www/)
 tools/                генератор коду, збирання шрифтів та іконок, підгонка EQ, раннер тестів на хості
 tools/c6_updater/     одноразовий образ P4, що прошиває ESP-Hosted на C6
@@ -271,6 +282,8 @@ docs/                 довідники системи, аудіо, мереж�
   інтернет-радіо, DLNA, AirPlay, MQTT.
 - [docs/UI.uk.md](docs/UI.uk.md): панель і вебінтерфейс, мови, шрифти й іконки.
 - [docs/LINK_PROTOCOL.uk.md](docs/LINK_PROTOCOL.uk.md): байтовий лінк із Bluetooth-супутником.
+- [docs/S3_PORT.uk.md](docs/S3_PORT.uk.md): плата ESP32-S3 без екрана. Підключення, збирання і що
+  працює інакше, ніж на P4.
 - Процедури: [docs/PANEL.uk.md](docs/PANEL.uk.md) (запуск панелі),
   [docs/C6_UPDATE.uk.md](docs/C6_UPDATE.uk.md) (прошивка C6),
   [docs/MIC_CAPTURE.uk.md](docs/MIC_CAPTURE.uk.md) (запис із бортового мікрофона),

@@ -125,6 +125,14 @@ Things worth knowing about this board:
 - **The C6 needs the ESP-Hosted slave firmware** from the same release as the host library
   (3.0.7): [docs/C6_UPDATE.md](docs/C6_UPDATE.md), `tools/c6_updater/`.
 
+### ESP32-S3 without a display
+
+The same firmware also builds for an **ESP32-S3 N16R8** board with no screen (`boards/s3_player`):
+native Wi-Fi instead of the C6, a headless UI module (`modules/ui_headless`: the web's cover and
+library, an optional encoder for volume, play/pause and mute), USB audio at full speed (44.1 and
+48 kHz), the console on the UART "COM" connector. Wiring, building and what differs from the P4:
+[docs/S3_PORT.md](docs/S3_PORT.md).
+
 ## Bluetooth satellite
 
 Bluetooth audio comes from a second board, an original ESP32 with its own firmware:
@@ -189,6 +197,9 @@ idf.py -p <port> flash
 - On Windows, point `IDF_COMPONENT_CACHE_PATH` at a short path: esp_hosted 3.0.7 does not
   unpack into the default cache (paths over 260 characters).
 - The built web UI is committed in `data/www/`. To rebuild it: `cd webui && npm ci && npm run deploy`.
+- The ESP32-S3 board builds in a directory of its own, next to the P4 one:
+  `idf.py -B build_s3 -D SDKCONFIG=build_s3/sdkconfig set-target esp32s3`, then `build` with the
+  same two options ([docs/S3_PORT.md](docs/S3_PORT.md)).
 
 Host tests (pytest plus a C++ doctest runner; the C++ part needs `g++` and `cmake`):
 
@@ -256,6 +267,7 @@ components/           framework (modesp_core, modesp_services, modesp_hal, modes
 modules/              product modules, selected in project.json
 drivers/              dsi_st7701, gt911, i2s_std, rotary_encoder, sdmmc_card, uart_link, …
 boards/p4_player/     board.json, bindings.json, sdkconfig.board
+boards/s3_player/     the same for the headless ESP32-S3 (docs/S3_PORT.md)
 webui/                Svelte 4 web UI (built into data/www/)
 tools/                code generator, font and icon builds, EQ fitting, host test runner
 tools/c6_updater/     one-shot P4 image that flashes the ESP-Hosted firmware onto the C6
@@ -274,6 +286,8 @@ Every document in `docs/` is in English and in Ukrainian (`*.uk.md`):
   internet radio, DLNA, AirPlay, MQTT.
 - [docs/UI.md](docs/UI.md): the panel and web UI, languages, fonts and icons.
 - [docs/LINK_PROTOCOL.md](docs/LINK_PROTOCOL.md): the byte-level link to the Bluetooth satellite.
+- [docs/S3_PORT.md](docs/S3_PORT.md): the headless ESP32-S3 board. Wiring, building, and what
+  runs differently from the P4.
 - Procedures: [docs/PANEL.md](docs/PANEL.md) (panel bring-up),
   [docs/C6_UPDATE.md](docs/C6_UPDATE.md) (C6 firmware),
   [docs/MIC_CAPTURE.md](docs/MIC_CAPTURE.md) (capture from the onboard microphone),

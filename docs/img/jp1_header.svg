@@ -1,0 +1,101 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 760" font-family="Roboto, 'Segoe UI', Arial, sans-serif">
+  <defs>
+    <style>
+      .t  { font-size: 22px; font-weight: 700; fill: #1f2328; }
+      .s  { font-size: 13px; fill: #57606a; }
+      .g  { font-size: 14px; font-weight: 700; fill: #1f2328; }
+      .f  { font-size: 14px; fill: #1f2328; }
+      .n  { font-size: 12.5px; fill: #57606a; }
+      .hdr { fill: #24292f; }
+      .pin { stroke: #ffffff; stroke-width: 2; }
+      .i2sa { fill: #0969da; }
+      .amp  { fill: #cf222e; }
+      .bt   { fill: #8250df; }
+      .enc  { fill: #1a7f37; }
+      .i2c  { fill: #9a6700; }
+      .c6   { fill: #6e7781; }
+      .pwr  { fill: #e16f24; }
+      .gnd  { fill: #1f2328; }
+      .nc   { fill: #afb8c1; }
+    </style>
+  </defs>
+  <rect width="1200" height="760" fill="#ffffff"/>
+
+  <text class="t" x="40" y="42">JP1 — контакти і сигнали</text>
+  <text class="s" x="40" y="64">Гребінка 2×13, ряди зверху вниз, як на фото гребінки. Призначення — boards/p4_player/board.json і CONCEPT.md «JP1».</text>
+
+  <!-- header body -->
+  <rect class="hdr" x="545" y="88" width="110" height="540" rx="6"/>
+
+  <!-- Row y = 110 + 40*(r-1); left pin x=575, right pin x=625 -->
+  <!-- 1 -->
+  <circle class="pin pwr" cx="575" cy="110" r="13"/><circle class="pin pwr" cx="625" cy="110" r="13"/>
+  <text class="g" x="530" y="115" text-anchor="end">3V3</text><text class="f" x="470" y="115" text-anchor="end">«+» енкодера</text>
+  <text class="g" x="670" y="115">5V</text>
+  <!-- 2 -->
+  <circle class="pin pwr" cx="575" cy="150" r="13"/><circle class="pin pwr" cx="625" cy="150" r="13"/>
+  <text class="g" x="530" y="155" text-anchor="end">3V3</text>
+  <text class="g" x="670" y="155">5V</text>
+  <!-- 3 -->
+  <circle class="pin gnd" cx="575" cy="190" r="13"/><circle class="pin gnd" cx="625" cy="190" r="13"/>
+  <text class="g" x="530" y="195" text-anchor="end">GND</text>
+  <text class="g" x="670" y="195">GND</text>
+  <!-- 4 -->
+  <circle class="pin i2sa" cx="575" cy="230" r="13"/><circle class="pin bt" cx="625" cy="230" r="13"/>
+  <text class="g" x="530" y="235" text-anchor="end">GPIO52</text><text class="f" x="458" y="235" text-anchor="end">I2S0 DOUT → DIN ЦАПа</text>
+  <text class="g" x="670" y="235">GPIO33</text><text class="f" x="740" y="235">BT BCLK (вхід або вихід)</text>
+  <!-- 5 -->
+  <circle class="pin i2sa" cx="575" cy="270" r="13"/><circle class="pin bt" cx="625" cy="270" r="13"/>
+  <text class="g" x="530" y="275" text-anchor="end">GPIO51</text><text class="f" x="458" y="275" text-anchor="end">I2S0 WS → LRCK ЦАПа</text>
+  <text class="g" x="670" y="275">GPIO31</text><text class="f" x="740" y="275">BT DATA ← супутник</text>
+  <!-- 6 -->
+  <circle class="pin i2sa" cx="575" cy="310" r="13"/><circle class="pin bt" cx="625" cy="310" r="13"/>
+  <text class="g" x="530" y="315" text-anchor="end">GPIO50</text><text class="f" x="458" y="315" text-anchor="end">I2S0 BCK → BCK ЦАПа</text>
+  <text class="g" x="670" y="315">GPIO30</text><text class="f" x="740" y="315">BT WS (вхід або вихід)</text>
+  <!-- 7 -->
+  <circle class="pin nc" cx="575" cy="350" r="13"/><circle class="pin nc" cx="625" cy="350" r="13"/>
+  <text class="g" x="530" y="355" text-anchor="end">GPIO49</text><text class="f" x="458" y="355" text-anchor="end">I2S0 MCLK, тримається LOW</text>
+  <text class="g" x="670" y="355">GPIO29</text><text class="f" x="740" y="355">I2S0 DIN, у збірці не читається</text>
+  <!-- 8 -->
+  <circle class="pin enc" cx="575" cy="390" r="13"/><circle class="pin gnd" cx="625" cy="390" r="13"/>
+  <text class="g" x="530" y="395" text-anchor="end">GPIO35</text><text class="f" x="458" y="395" text-anchor="end">кнопка енкодера · strapping</text>
+  <text class="g" x="670" y="395">GND</text>
+  <!-- 9 -->
+  <circle class="pin amp" cx="575" cy="430" r="13"/><circle class="pin nc" cx="625" cy="430" r="13"/>
+  <text class="g" x="530" y="435" text-anchor="end">GPIO34</text><text class="f" x="458" y="435" text-anchor="end">amp_enable → TPA3255 /RESET, XSMT ЦАПа · strapping</text>
+  <text class="g" x="670" y="435">ESP_3V3</text><text class="f" x="760" y="435">не використовується</text>
+  <!-- 10 -->
+  <circle class="pin enc" cx="575" cy="470" r="13"/><circle class="pin c6" cx="625" cy="470" r="13"/>
+  <text class="g" x="530" y="475" text-anchor="end">GPIO32</text><text class="f" x="458" y="475" text-anchor="end">енкодер A</text>
+  <text class="g" x="670" y="475">C6 U0RXD</text><text class="f" x="770" y="475">UART0 ESP32-C6 — відновлення</text>
+  <!-- 11 -->
+  <circle class="pin enc" cx="575" cy="510" r="13"/><circle class="pin c6" cx="625" cy="510" r="13"/>
+  <text class="g" x="530" y="515" text-anchor="end">GPIO28</text><text class="f" x="458" y="515" text-anchor="end">енкодер B</text>
+  <text class="g" x="670" y="515">C6 U0TXD</text><text class="f" x="770" y="515">(C6_UPDATE.md)</text>
+  <!-- 12 -->
+  <circle class="pin i2c" cx="575" cy="550" r="13"/><circle class="pin c6" cx="625" cy="550" r="13"/>
+  <text class="g" x="530" y="555" text-anchor="end">I2C SDA</text><text class="f" x="458" y="555" text-anchor="end">ES_I2C: тач і кодек</text>
+  <text class="g" x="670" y="555">C6 IO9</text><text class="f" x="770" y="555">BOOT</text>
+  <!-- 13 -->
+  <circle class="pin i2c" cx="575" cy="590" r="13"/><circle class="pin c6" cx="625" cy="590" r="13"/>
+  <text class="g" x="530" y="595" text-anchor="end">I2C SCL</text><text class="f" x="458" y="595" text-anchor="end">GPIO7/8, 400 кГц</text>
+  <text class="g" x="670" y="595">C6 CHIP_PU</text><text class="f" x="770" y="595">скидання</text>
+
+  <!-- notes -->
+  <text class="n" x="40" y="660">BT BCLK і WS: виходи, коли тактує панель (супутник ≥ 1.9, сила драйвера 2 і 3); входи I2S1, коли тактує супутник.</text>
+  <text class="n" x="40" y="680">GPIO34 і GPIO35 — strapping-піни: на них немає нічого, що зовнішній чип драйвить під час скидання.</text>
+  <text class="n" x="40" y="700">UART до супутника — не тут, а на J5: GPIO26 TX, GPIO27 RX (схема підключення — wiring.svg).</text>
+
+  <!-- legend -->
+  <g transform="translate(40,730)">
+    <circle class="pin i2sa" cx="8" cy="0" r="8"/><text class="n" x="22" y="4">I2S0 → ЦАП</text>
+    <circle class="pin bt" cx="128" cy="0" r="8"/><text class="n" x="142" y="4">BT-супутник</text>
+    <circle class="pin amp" cx="250" cy="0" r="8"/><text class="n" x="264" y="4">amp_enable</text>
+    <circle class="pin enc" cx="368" cy="0" r="8"/><text class="n" x="382" y="4">енкодер</text>
+    <circle class="pin i2c" cx="466" cy="0" r="8"/><text class="n" x="480" y="4">ES_I2C</text>
+    <circle class="pin c6" cx="556" cy="0" r="8"/><text class="n" x="570" y="4">консоль C6</text>
+    <circle class="pin pwr" cx="668" cy="0" r="8"/><text class="n" x="682" y="4">живлення</text>
+    <circle class="pin gnd" cx="770" cy="0" r="8"/><text class="n" x="784" y="4">земля</text>
+    <circle class="pin nc" cx="852" cy="0" r="8"/><text class="n" x="866" y="4">не використовується</text>
+  </g>
+</svg>

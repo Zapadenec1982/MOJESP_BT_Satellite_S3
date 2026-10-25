@@ -1,0 +1,140 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 830" font-family="Roboto, 'Segoe UI', Arial, sans-serif">
+  <defs>
+    <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="context-stroke"/>
+    </marker>
+    <style>
+      .t  { font-size: 22px; font-weight: 700; fill: #1f2328; }
+      .s  { font-size: 13px; fill: #57606a; }
+      .h  { font-size: 16px; font-weight: 700; fill: #1f2328; }
+      .p  { font-size: 14px; fill: #1f2328; }
+      .n  { font-size: 12.5px; fill: #57606a; }
+      .box { fill: #f6f8fa; stroke: #8c959f; stroke-width: 1.5; }
+      .mod { fill: #ffffff; stroke: #57606a; stroke-width: 1.5; }
+      .w  { fill: none; stroke-width: 2.5; }
+      .i2sa { stroke: #0969da; }
+      .amp  { stroke: #cf222e; }
+      .bt   { stroke: #8250df; }
+      .uart { stroke: #bc4c00; }
+      .enc  { stroke: #1a7f37; }
+      .gnd  { stroke: #57606a; }
+    </style>
+  </defs>
+  <rect width="1200" height="830" fill="#ffffff"/>
+
+  <text class="t" x="40" y="42">Підключення до панелі JC4880P443C</text>
+  <text class="s" x="40" y="64">Піни — boards/p4_player/board.json і CONCEPT.md «Розпіновка»; піни супутника — його README. Живлення модулів не показано.</text>
+
+  <!-- ===== Panel ===== -->
+  <rect class="box" x="40" y="90" width="360" height="680" rx="8"/>
+  <text class="h" x="60" y="118">ESP32-P4 · гребінка JP1, роз'єм J5</text>
+
+  <text class="p" x="390" y="155" text-anchor="end">GPIO50 · I2S0 BCK</text>
+  <text class="p" x="390" y="185" text-anchor="end">GPIO51 · I2S0 WS</text>
+  <text class="p" x="390" y="215" text-anchor="end">GPIO52 · I2S0 DOUT</text>
+  <text class="n" x="60" y="250">I2S0 — майстер; частота йде за джерелом,</text>
+  <text class="n" x="60" y="266">44,1–96 кГц, слоти 32 біти</text>
+
+  <text class="p" x="390" y="295" text-anchor="end">GPIO34 · amp_enable (HIGH = грає)</text>
+  <text class="n" x="60" y="318">GPIO34 і GPIO35 — strapping-піни</text>
+
+  <text class="p" x="390" y="375" text-anchor="end">GPIO33 · BT BCLK</text>
+  <text class="p" x="390" y="405" text-anchor="end">GPIO30 · BT WS</text>
+  <text class="p" x="390" y="435" text-anchor="end">GPIO31 · BT DATA</text>
+
+  <text class="p" x="390" y="495" text-anchor="end">GPIO26 · J5 UART1 TX</text>
+  <text class="p" x="390" y="525" text-anchor="end">GPIO27 · J5 UART1 RX</text>
+  <text class="p" x="390" y="555" text-anchor="end">GND</text>
+
+  <text class="p" x="390" y="615" text-anchor="end">GPIO32 · енкодер A</text>
+  <text class="p" x="390" y="645" text-anchor="end">GPIO28 · енкодер B</text>
+  <text class="p" x="390" y="675" text-anchor="end">GPIO35 · кнопка енкодера</text>
+  <text class="n" x="60" y="696">на платі: R34 10 кОм ↑ і кнопка BOOT</text>
+  <text class="p" x="390" y="725" text-anchor="end">3V3</text>
+  <text class="p" x="390" y="755" text-anchor="end">GND</text>
+
+  <!-- ===== PCM5102A ===== -->
+  <rect class="mod" x="640" y="110" width="250" height="160" rx="6"/>
+  <text class="h" x="660" y="135">PCM5102A · ЦАП</text>
+  <text class="p" x="652" y="155">BCK</text>
+  <text class="p" x="652" y="185">LRCK</text>
+  <text class="p" x="652" y="215">DIN</text>
+  <text class="p" x="652" y="245">XSMT</text>
+  <text class="n" x="730" y="167">SCK, FMT, DEMP → GND</text>
+  <text class="n" x="730" y="185">PLL від BCK, без MCLK</text>
+  <text class="n" x="730" y="203">LOW на XSMT = mute</text>
+  <text class="p" x="882" y="255" text-anchor="end">L / R</text>
+
+  <!-- ===== TPA3255 ===== -->
+  <rect class="mod" x="950" y="110" width="210" height="190" rx="6"/>
+  <text class="h" x="968" y="135">TPA3255 · Class-D</text>
+  <text class="n" x="968" y="163">PVDD 24 В — окреме живлення</text>
+  <text class="n" x="968" y="181">виходи → колонки</text>
+  <text class="p" x="962" y="255">IN L / R</text>
+  <text class="p" x="962" y="285">/RESET</text>
+
+  <!-- ===== BT satellite ===== -->
+  <rect class="mod" x="640" y="350" width="320" height="220" rx="6"/>
+  <text class="p" x="652" y="375">GPIO13 · I2S BCLK</text>
+  <text class="p" x="652" y="405">GPIO26 · I2S WS</text>
+  <text class="p" x="652" y="435">GPIO27 · I2S DOUT</text>
+  <text class="p" x="652" y="495">GPIO16 · UART RX</text>
+  <text class="p" x="652" y="525">GPIO17 · UART TX</text>
+  <text class="p" x="652" y="555">GND</text>
+  <text class="h" x="800" y="375">BT-супутник</text>
+  <text class="n" x="800" y="394">ESP32-WROOM-32</text>
+  <text class="n" x="800" y="418">A2DP: SBC, AAC,</text>
+  <text class="n" x="800" y="435">aptX, aptX HD</text>
+  <text class="n" x="800" y="495">460800 8N1, COBS</text>
+  <text class="n" x="800" y="512">LINK_PROTOCOL.md</text>
+
+  <!-- ===== Encoder ===== -->
+  <rect class="mod" x="640" y="595" width="260" height="175" rx="6"/>
+  <text class="p" x="652" y="615">A</text>
+  <text class="p" x="652" y="645">B</text>
+  <text class="p" x="652" y="675">SW</text>
+  <text class="p" x="652" y="725">«+»</text>
+  <text class="p" x="652" y="755">GND</text>
+  <text class="h" x="710" y="615">Енкодер з кнопкою</text>
+  <text class="n" x="710" y="636">PCNT, 4 фронти на клацання</text>
+  <text class="n" x="710" y="725">лише 3V3, не 5 В</text>
+
+  <!-- ===== Wires ===== -->
+  <!-- I2S0 to the DAC -->
+  <path class="w i2sa" d="M400,150 H640" marker-end="url(#ar)"/>
+  <path class="w i2sa" d="M400,180 H640" marker-end="url(#ar)"/>
+  <path class="w i2sa" d="M400,210 H640" marker-end="url(#ar)"/>
+  <!-- DAC to amplifier -->
+  <path class="w gnd" d="M890,250 H950" marker-end="url(#ar)"/>
+  <!-- amp_enable to XSMT and /RESET -->
+  <path class="w amp" d="M400,290 H560 V240 H640" marker-end="url(#ar)"/>
+  <path class="w amp" d="M560,290 V312 H925 V280 H950" marker-end="url(#ar)"/>
+  <circle cx="560" cy="290" r="4" fill="#cf222e"/>
+  <text class="n" x="575" y="332">10 кОм униз: ЦАП і підсилювач мовчать до старту прошивки</text>
+  <!-- BT I2S -->
+  <path class="w bt" d="M400,370 H640" marker-start="url(#ar)" marker-end="url(#ar)"/>
+  <path class="w bt" d="M400,400 H640" marker-start="url(#ar)" marker-end="url(#ar)"/>
+  <path class="w bt" d="M640,430 H400" marker-end="url(#ar)"/>
+  <text class="n" x="410" y="452">BCLK, WS: тактує панель,</text>
+  <text class="n" x="410" y="468">якщо супутник ≥ 1.9; інакше — він</text>
+  <!-- UART link -->
+  <path class="w uart" d="M400,490 H640" marker-end="url(#ar)"/>
+  <path class="w uart" d="M640,520 H400" marker-end="url(#ar)"/>
+  <path class="w gnd" d="M400,550 H640"/>
+  <!-- Encoder -->
+  <path class="w enc" d="M640,610 H400" marker-end="url(#ar)"/>
+  <path class="w enc" d="M640,640 H400" marker-end="url(#ar)"/>
+  <path class="w enc" d="M640,670 H400" marker-end="url(#ar)"/>
+  <path class="w gnd" d="M400,720 H640"/>
+  <path class="w gnd" d="M400,750 H640"/>
+
+  <!-- ===== Legend ===== -->
+  <g transform="translate(40,805)">
+    <path class="w i2sa" d="M0,0 H34"/><text class="n" x="42" y="4">I2S0 → ЦАП</text>
+    <path class="w amp" d="M150,0 H184"/><text class="n" x="192" y="4">amp_enable</text>
+    <path class="w bt" d="M300,0 H334"/><text class="n" x="342" y="4">I2S від супутника</text>
+    <path class="w uart" d="M490,0 H524"/><text class="n" x="532" y="4">UART-лінк (J5)</text>
+    <path class="w enc" d="M660,0 H694"/><text class="n" x="702" y="4">енкодер</text>
+    <path class="w gnd" d="M790,0 H824"/><text class="n" x="832" y="4">аналог, 3V3, земля</text>
+  </g>
+</svg>

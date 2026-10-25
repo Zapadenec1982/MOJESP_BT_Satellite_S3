@@ -3,14 +3,15 @@
 check_protocol_mirror.py — verify that the link protocol contract is mirrored byte-for-byte
 between this repository (the P4 player) and the Bluetooth satellite repository.
 
-The contract is two copies on purpose (see the header of docs/LINK_PROTOCOL.md): neither
-firmware may depend on the other tree existing on disk, so the document and the shared
-wire headers are duplicated by hand — and this script is what keeps the duplicates honest.
-They have drifted before (audit 2026-09-21, plan 5.6 D / 10.6).
+The contract is kept in both repositories on purpose (see the header of docs/LINK_PROTOCOL.md):
+neither firmware may depend on the other tree existing on disk, so the document, in English and
+in Ukrainian, and the shared wire headers are duplicated by hand — and this script is what keeps
+the duplicates honest.
 
 Mirrored files (player path -> satellite path):
 
     docs/LINK_PROTOCOL.md                               -> docs/PROTOCOL.md
+    docs/LINK_PROTOCOL.uk.md                            -> docs/PROTOCOL.uk.md
     components/sat_link/include/sat_link/cover_wire.h   -> components/satlink/include/satlink/cover_wire.h
     components/sat_link/include/sat_link/format_sync.h  -> components/satlink/include/satlink/format_sync.h
 
@@ -23,7 +24,9 @@ counterpart — its wire constants come from format_sync.h, which is.
 
 Only line endings are normalised (CRLF -> LF) before comparison: the player tree is
 checked out with core.autocrlf=true, the satellite tree is LF, and that is not a protocol
-difference. Everything else — whitespace, a comment, a version label — is.
+difference. Everything else — whitespace, a comment, a version label — is. The one exception
+is the first line of each document, the link to the other language's file, which names that
+file in its own repository (LINK_PROTOCOL.uk.md here, PROTOCOL.uk.md there); it is skipped.
 
 Usage:
 
@@ -51,6 +54,7 @@ SATELLITE_HEADERS = Path("components/satlink/include/satlink")
 # (player path, satellite path), each relative to its repository root.
 MIRRORED: list[tuple[Path, Path]] = [
     (Path("docs/LINK_PROTOCOL.md"), Path("docs/PROTOCOL.md")),
+    (Path("docs/LINK_PROTOCOL.uk.md"), Path("docs/PROTOCOL.uk.md")),
     (PLAYER_HEADERS / "cover_wire.h", SATELLITE_HEADERS / "cover_wire.h"),
     (PLAYER_HEADERS / "format_sync.h", SATELLITE_HEADERS / "format_sync.h"),
 ]
@@ -64,6 +68,13 @@ MARKER_LINES = 5
 def normalise(data: bytes) -> str:
     """CRLF -> LF and nothing else: a BOM, trailing whitespace or a comment is a difference."""
     return data.replace(b"\r\n", b"\n").decode("utf-8", errors="surrogateescape")
+
+
+def comparable(path: Path, text: str) -> str:
+    """What is compared: a document without its first line (the language link), a header whole."""
+    if path.suffix == ".md":
+        return text.split("\n", 1)[1] if "\n" in text else ""
+    return text
 
 
 def mirrored_pairs(player_root: Path) -> list[tuple[Path, Path]]:
@@ -97,8 +108,8 @@ def compare(player_root: Path, satellite_root: Path) -> list[str]:
                 f"(mirror of {player_rel.as_posix()})"
             )
             continue
-        a = normalise(player_file.read_bytes())
-        b = normalise(sat_file.read_bytes())
+        a = comparable(player_rel, normalise(player_file.read_bytes()))
+        b = comparable(sat_rel, normalise(sat_file.read_bytes()))
         if a == b:
             continue
         diff = difflib.unified_diff(

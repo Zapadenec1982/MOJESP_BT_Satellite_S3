@@ -1,12 +1,13 @@
 """
-The link protocol lives twice — docs/LINK_PROTOCOL.md plus the shared wire headers here,
-docs/PROTOCOL.md plus components/satlink/ in modesp-bt-satellite — and
-tools/check_protocol_mirror.py keeps the copies byte-identical (modulo CRLF/LF).
+The link protocol lives in both repositories — docs/LINK_PROTOCOL.md and .uk.md plus the shared
+wire headers here, docs/PROTOCOL.md and .uk.md plus components/satlink/ in modesp-bt-satellite —
+and tools/check_protocol_mirror.py keeps the copies byte-identical (modulo CRLF/LF and the
+documents' first line, the link to the other language).
 
 The fabricated-tree tests always run and pin the script's behaviour. The last test runs
 the real comparison against the satellite checkout named by P4_SATELLITE_ROOT and FAILS
 on any mismatch; without the variable it skips, and tools/run_host_tests.py says so
-(CI has no satellite checkout yet — plan 5.6 D).
+(CI has no satellite checkout).
 """
 import os
 import subprocess
@@ -20,7 +21,9 @@ import check_protocol_mirror as mirror  # tools/ is on sys.path (conftest.py)
 ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = ROOT / "tools" / "check_protocol_mirror.py"
 
-DOC = "# Протокол лінка, байт за байтом\n\nЦя версія **1.6**.\n"
+BODY_EN = "\n# Device–host link protocol\n\nThis is version **1.6**.\n"
+BODY_UK = "\n# Протокол лінка, байт за байтом\n\nЦя версія **1.6**.\n"
+DOC = "**English** · [Українська](PROTOCOL.uk.md)\n" + BODY_EN          # the satellite's copy
 COVER = ("#pragma once\n"
          "/* Protocol 1.5: track-scoped cover reset and JPEG data. Shared with satellite. */\n"
          "#define COVER_RESET 0x17\n")
@@ -44,11 +47,13 @@ def write(root, rel, text, newline="\n"):
 def trees(tmp_path):
     """A player tree checked out CRLF (as on Windows) and an LF satellite tree that mirror."""
     player, sat = tmp_path / "player", tmp_path / "satellite"
-    write(player, "docs/LINK_PROTOCOL.md", DOC, "\r\n")
+    write(player, "docs/LINK_PROTOCOL.md", "**English** · [Українська](LINK_PROTOCOL.uk.md)\n" + BODY_EN, "\r\n")
+    write(player, "docs/LINK_PROTOCOL.uk.md", "[English](LINK_PROTOCOL.md) · **Українська**\n" + BODY_UK, "\r\n")
     write(player, f"{PLAYER_HDR}/cover_wire.h", COVER, "\r\n")
     write(player, f"{PLAYER_HDR}/format_sync.h", FORMAT, "\r\n")
     write(player, f"{PLAYER_HDR}/stream_control.h", P4_ONLY, "\r\n")
     write(sat, "docs/PROTOCOL.md", DOC)
+    write(sat, "docs/PROTOCOL.uk.md", "[English](PROTOCOL.md) · **Українська**\n" + BODY_UK)
     write(sat, f"{SAT_HDR}/cover_wire.h", COVER)
     write(sat, f"{SAT_HDR}/format_sync.h", FORMAT)
     return player, sat
@@ -62,7 +67,22 @@ def test_identical_modulo_line_endings_passes(trees):
 def test_only_the_declared_files_are_compared(trees):
     player, _ = trees
     names = {player_rel.name for player_rel, _ in mirror.mirrored_pairs(player)}
-    assert names == {"LINK_PROTOCOL.md", "cover_wire.h", "format_sync.h"}
+    assert names == {"LINK_PROTOCOL.md", "LINK_PROTOCOL.uk.md", "cover_wire.h", "format_sync.h"}
+
+
+def test_a_documents_first_line_is_not_compared_but_the_rest_is(trees):
+    player, sat = trees
+    write(sat, "docs/PROTOCOL.uk.md", "[English](elsewhere.md) · **Українська**\n" + BODY_UK)
+    assert mirror.compare(player, sat) == []          # only the language link differs
+    write(sat, "docs/PROTOCOL.uk.md", "[English](PROTOCOL.md) · **Українська**\n" + BODY_UK + "x\n")
+    problems = mirror.compare(player, sat)
+    assert len(problems) == 1 and "PROTOCOL.uk.md" in problems[0]
+
+
+def test_a_headers_first_line_is_compared(trees):
+    player, sat = trees
+    write(sat, f"{SAT_HDR}/format_sync.h", "// a different first line\n" + FORMAT.split("\n", 1)[1])
+    assert len(mirror.compare(player, sat)) == 1
 
 
 def test_content_difference_fails_with_unified_diff(trees):

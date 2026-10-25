@@ -1,5 +1,5 @@
-# audio — the audio core (docs/CONCEPT.md «Сигнальний тракт і тактування»,
-# «Контракт SharedState: джерела»): its own task on core 1, sources
+# audio — the audio core (docs/CONCEPT.md, "Signal path and clocking",
+# "SharedState contract: sources"): its own task on core 1, sources
 # (tone / AUX / BT), ASRC (components/audio_resampler), PEQ (esp-dsp biquads), volume,
 # limiter → I2S-A. Transports are DRIVERS (drivers/i2s_std) resolved from bindings.json
 # through the audio seam (modesp/hal/audio_sink.h, IAudioSink::as_port); the module

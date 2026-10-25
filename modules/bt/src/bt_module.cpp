@@ -340,7 +340,8 @@ bool BtModule::on_init() {
 
     // ── the wire task ──
     // Internal RAM for both the ring and the stack: this task runs while the flash cache is
-    // off during an NVS or LittleFS write, and a PSRAM stack dies there (CONCEPT «Обмеження плати»).
+    // off during an NVS or LittleFS write, and a PSRAM stack dies there (docs/CONCEPT.md,
+    // "Board constraints").
     if (!link_->can_wait())
         ESP_LOGW(TAG, "this wire cannot report an overflow — losses will not be counted");
     w.ring = xRingbufferCreateWithCaps(FRAME_RING_BYTES, RINGBUF_TYPE_NOSPLIT,

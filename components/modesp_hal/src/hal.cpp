@@ -116,7 +116,7 @@ bool HAL::init(const BoardConfig& config) {
         if (sdmmc_slots_.full()) break;
         sdmmc_slots_.push_back(c);
         // Pins are logged in full because this panel's card wiring is unconfirmed
-        // (CONCEPT «microSD»): if the mount fails, the log already says what was tried.
+        // (docs/CONCEPT.md, "microSD"): if the mount fails, the log already says what was tried.
         ESP_LOGI(TAG, "  SDMMC '%s' slot %u, %u-bit, clk=%d cmd=%d d0=%d d1=%d d2=%d d3=%d "
                       "cd=%d, %u kHz -> %s",
                  c.id.c_str(), (unsigned)c.slot, (unsigned)c.width,

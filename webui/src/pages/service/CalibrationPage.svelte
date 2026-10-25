@@ -1,5 +1,5 @@
 <script>
-  // The speakers' port (docs/AUDIO.md «Калібрування колонок: частота порту»): found step by step —
+  // The speakers' port (docs/AUDIO.md, "Speaker calibration: port frequency"): found step by step —
   // by the panel's microphone or by hand — each step a line of text and a button that sets the tone
   // that step needs; the page's title says what it is for, Колонки what was found. No tone
   // controls outside the steps; the settings the port sets are Налаштування › Тонке налаштування

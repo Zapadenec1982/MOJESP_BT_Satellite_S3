@@ -2,7 +2,8 @@
  * @file usb_uac.cpp
  * @brief The producer and the measurement (usb_uac.h); the USB side is uac_usb.c.
  *
- * Two tasks on core 1 — the core that keeps the controller's interrupt on time (CONCEPT «USB»):
+ * Two tasks on core 1 — the core that keeps the controller's interrupt on time
+ * (docs/CONCEPT.md, "USB"):
  * TinyUSB's device task, which also owns the interrupt (allocated where uac_usb_init() runs),
  * and the producer. Every millisecond the producer empties TinyUSB's receive FIFO, converts to
  * float and, when USB is the output, writes into the player's ring. The ring is the elastic

@@ -183,10 +183,6 @@ near(at(st, 100), 3, 0.05, 'Бас +6: +3 dB at 100 Hz');
 near(at(st, 20), 6, 0.3, 'and near +6 under it');
 near(at(st, 10000), -1.5, 0.05, 'Високі -3: -1.5 dB at 10 kHz');
 eq(Y.systemBands({ bass: 9 })[0].gain, 6, 'held to ±6, as the core holds them');
-// where they stand: the room's cut on Бас's shelf, Бас keeping its ±6 over it (DspChain::PLACE_DB)
-eq(Y.systemBands({ place: 1 })[0].gain, -3, 'by a wall: -3 dB on the shelf');
-eq(Y.systemBands({ bass: -6, place: 2 })[0].gain, -12, 'in a corner, Бас -6 under it: -12');
-eq(Y.systemBands({ bass: 6, place: 2 }), [], 'Бас +6 in a corner: flat, no shelf');
 // the loudness: the high shelf is K_HI / K_LO of the low one
 st = Y.systemBands({ loudDb: 5.605 });
 eq(st.map((b) => [b.f, Math.round(b.gain * 1000) / 1000, !!b.bilinear]), [[148.6, 5.605, true], [10000, 2.253, true]], 'two bilinear shelves');

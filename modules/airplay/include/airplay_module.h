@@ -1,7 +1,7 @@
 /**
  * @file airplay_module.h
  * @brief AirPlay 2 as a source of its own: audio.source 6
- *        (docs/CONCEPT.md «Значення `audio.source`»).
+ *        (docs/CONCEPT.md, "`audio.source` values").
  *
  * The receiver is components/airplay2, upstream code behind a narrow seam. This module is
  * the player's side of it: when the receiver runs, what the phone's events mean in

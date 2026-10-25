@@ -334,7 +334,7 @@ void AudioModule::take_eq(const audio_core::EqConfig& cfg, audio_core::EqBand* b
         ESP_LOGW(TAG, "eq.json: mode '%s' needs a second DAC — running 2.0", out_mode_);
     }
     // Only section 0 drives the one stereo pair this firmware has. The parser keeps the
-    // rest so nothing is lost when the file is written back (CONCEPT «Виходи»).
+    // rest so nothing is lost when the file is written back (docs/CONCEPT.md, "Outputs").
     const audio_core::EqSection& sec = cfg.sec[0];
     count = sec.count;
     for (int i = 0; i < count; i++) bands[i] = sec.bands[i];
@@ -595,16 +595,7 @@ int32_t AudioModule::timbre() {
         const int32_t v = read_int(key, 0);
         return v < -6 ? -6 : v > 6 ? 6 : v;
     };
-    int32_t place = read_int("audio.placement", 0);
-    if (place < 0 || place > 2) place = 0;
-    return (int32_t)(((uint32_t)place << 16) | ((uint32_t)(uint8_t)(int8_t)db("audio.bass_db") << 8) |
-                     (uint8_t)(int8_t)db("audio.treble_db"));
-}
-
-void AudioModule::apply_timbre(int32_t v) {
-    const int32_t place = (v >> 16) & 3;
-    dsp_.set_tone((float)(int8_t)(v >> 8), (float)(int8_t)v,
-                  audio_core::DspChain::PLACE_DB[place > 2 ? 0 : place]);
+    return (int32_t)(((uint32_t)(uint8_t)(int8_t)db("audio.bass_db") << 8) | (uint8_t)(int8_t)db("audio.treble_db"));
 }
 
 bool AudioModule::on_init() {
@@ -729,7 +720,7 @@ bool AudioModule::on_init() {
     last_loud_ref_ = loud_ref();
     dsp_.set_loud_ref((float)last_loud_ref_);
     last_timbre_ = timbre();
-    apply_timbre(last_timbre_);
+    dsp_.set_tone((float)(int8_t)(last_timbre_ >> 8), (float)(int8_t)last_timbre_);
     last_balance_ = read_int("audio.balance_db10", 0);
     dsp_.set_balance_db((float)last_balance_ / 10.0f);
     log_bass("boot");
@@ -832,8 +823,8 @@ bool AudioModule::on_init() {
 
     cmd_q_ = xQueueCreate(16, sizeof(Cmd));
     run_ = true;
-    // Audio task: core 1, high priority, stack in INTERNAL RAM (CONCEPT «Обмеження плати» — a PSRAM
-    // stack dies on the first NVS write while the cache is off).
+    // Audio task: core 1, high priority, stack in INTERNAL RAM (docs/CONCEPT.md, "Board
+    // constraints" — a PSRAM stack dies on the first NVS write while the cache is off).
     if (xTaskCreatePinnedToCore(audio_task_entry, "audio", 8192, this, 22, &task_, 1) != pdPASS) {
         ESP_LOGE(TAG, "audio task not created");
         run_ = false;
@@ -2078,7 +2069,7 @@ void AudioModule::task_loop() {
             case CmdType::LOUDNESS:  dsp_.set_loudness((float)c.value / 100.0f); break;
             case CmdType::LOUD_REF:  dsp_.set_loud_ref((float)c.value); break;
             case CmdType::PORT:      dsp_.set_port((float)(c.value >> 4), (float)(c.value & 15)); break;
-            case CmdType::TIMBRE:    apply_timbre(c.value); break;
+            case CmdType::TIMBRE:    dsp_.set_tone((float)(int8_t)(c.value >> 8), (float)(int8_t)c.value); break;
             case CmdType::BALANCE:   dsp_.set_balance_db((float)c.value / 10.0f); break;
             case CmdType::TONE_MODE: {
                 const int32_t m = (c.value == TONE_RAW || c.value == TONE_BURSTS) ? c.value : TONE_CHAIN;

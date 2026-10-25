@@ -4,7 +4,7 @@
  *        RadioModule side that turns states into requests and pages into states.
  *
  * Plain HTTP, never TLS. The panel holds one TLS session at a time, and while the radio
- * plays it belongs to the station (docs/NETWORK.md «Інтернет-радіо»); what comes back here is a page
+ * plays it belongs to the station (docs/NETWORK.md, "Internet radio"); what comes back here is a page
  * of metadata, not audio. Measured 04.10.2026: the service answers on port 80 with no
  * redirect, and it is down to one server, so the list of servers is asked for rather than
  * written down — two other ESP32 radios still point at mirrors that no longer exist.

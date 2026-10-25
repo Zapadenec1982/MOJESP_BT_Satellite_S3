@@ -54,7 +54,7 @@ menu "SDIO soak test"
             Before each phase the test allocates DMA-capable internal SRAM until no more than
             this much is free, emulating the memory pressure the display, LVGL and the audio
             core put on the same pool. The player itself runs at about 27 KB free
-            (docs/CONCEPT.md «Мережа»), which is the point of the exercise: the link is not
+            (docs/CONCEPT.md, "Network"), which is the point of the exercise: the link is not
             measured in isolation on the real device. List the targets from most free to
             least, because the tight ones are the ones that can end the run.
 

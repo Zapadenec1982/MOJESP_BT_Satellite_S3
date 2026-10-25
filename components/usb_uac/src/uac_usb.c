@@ -213,7 +213,8 @@ static bool     s_prev_valid;
 void tud_mount_cb(void)   { g_uac.mounted = 1; g_uac.suspended = 0; }
 void tud_umount_cb(void)  { g_uac.mounted = 0; g_uac.alt = 0; g_uac.stream_gen++; }
 /// Also what pulling the cable looks like on this board: VBUS stays up through the other port
-/// (CONCEPT «Зведені VBUS»), so the controller never sees a disconnect — only the bus going quiet.
+/// (docs/CONCEPT.md, "Tied VBUS"), so the controller never sees a disconnect — only the bus
+/// going quiet.
 void tud_suspend_cb(bool remote_wakeup_en) {
     (void)remote_wakeup_en;
     g_uac.suspended = 1;

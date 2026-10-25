@@ -564,30 +564,6 @@
       "persist": true,
       "description": "Баланс у десятих dB: більше нуля — тихіше лівий канал, менше — правий. Лише приглушує, запасу не забирає; 0 — не діє"
     },
-    "audio.placement": {
-      "type": "int",
-      "access": "readwrite",
-      "default": 0,
-      "persist": true,
-      "options": [
-        {
-          "value": 0,
-          "id": "free",
-          "label": "Вільно"
-        },
-        {
-          "value": 1,
-          "id": "wall",
-          "label": "Біля стіни"
-        },
-        {
-          "value": 2,
-          "id": "corner",
-          "label": "У кутку"
-        }
-      ],
-      "description": "Розміщення колонок (Колонки › Розміщення): біля стіни бас −3 dB, у кутку −6 dB — на полиці «Бас» (100 Гц), тож власний «Бас» лишається ±6 поверх цього; вільно — не діє"
-    },
     "audio.loud_db": {
       "type": "float",
       "access": "read",
@@ -734,10 +710,6 @@
           {
             "key": "audio.balance_db10",
             "widget": "slider"
-          },
-          {
-            "key": "audio.placement",
-            "widget": "select"
           },
           {
             "key": "audio.port_hz",

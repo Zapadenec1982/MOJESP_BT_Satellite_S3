@@ -6,8 +6,8 @@
  * at a time, and the audio task must never block — so the two are separated by the lock-free
  * ring in components/audio_dsp, and the audio core simply finds frames there or does not.
  *
- * Rate: the output clock follows the session's first track (docs/AUDIO.md «Частота виходу і
- * сесії»); a later track at another rate is converted to it. The resampler written for
+ * Rate: the output clock follows the session's first track (docs/AUDIO.md, "Output rate and
+ * sessions"); a later track at another rate is converted to it. The resampler written for
  * Bluetooth therefore sits on this path too — but at a CONSTANT ratio, because a file has no clock of its own to drift against.
  * That makes it strictly simpler here than the case it was written for: no ring-fill feedback,
  * no ppm trim.
@@ -88,7 +88,7 @@ char s_last_track_path[160] = "/data/last_track";
 /// independently and a build may carry either one without the other, so depending on the
 /// audio module's header would be a lie about how they are wired. The generated header is
 /// the MANIFEST set, which is exactly the contract these two modules do share — see
-/// docs/CONCEPT.md «Значення `audio.source`». It used to be this number, written out here by hand.
+/// docs/CONCEPT.md, "`audio.source` values". It used to be this number, written out here by hand.
 constexpr int32_t AUDIO_SRC_FILE = modesp::gen::AUDIO_SOURCE_FILE;
 
 /// As long as anything SharedState can carry for a path — the side table's width, since

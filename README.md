@@ -1,3 +1,5 @@
+**English** · [Українська](README.uk.md)
+
 # ModESP Streamer
 
 Firmware for a network stereo streamer with DSP, built on the **Guition JC4880P443C** panel
@@ -12,6 +14,40 @@ through a 32-bit float DSP chain and drives an external DAC and class-D amplifie
 A personal project: one unit, built for one listening room and used every day. It is
 published as a reference for anyone building something similar on the ESP32-P4. It is not a
 product and comes with no support.
+
+## Screenshots
+
+The panel, 800×480:
+
+<table>
+<tr>
+<td><img src="docs/img/screens/panel-player.png" alt="Player"></td>
+<td><img src="docs/img/screens/panel-source.png" alt="Source"></td>
+</tr>
+<tr>
+<td><img src="docs/img/screens/panel-equalizer.png" alt="Equalizer"></td>
+<td><img src="docs/img/screens/panel-speakers.png" alt="Speakers"></td>
+</tr>
+<tr>
+<td><img src="docs/img/screens/panel-stations.png" alt="Stations"></td>
+<td><img src="docs/img/screens/panel-settings.png" alt="Settings"></td>
+</tr>
+</table>
+
+The web interface on a phone:
+
+<table>
+<tr>
+<td><img src="docs/img/screens/web-player.png" width="250" alt="Player"></td>
+<td><img src="docs/img/screens/web-source.png" width="250" alt="Source"></td>
+<td><img src="docs/img/screens/web-equalizer.png" width="250" alt="Equalizer"></td>
+</tr>
+<tr>
+<td><img src="docs/img/screens/web-speakers.png" width="250" alt="Speakers"></td>
+<td><img src="docs/img/screens/web-stations.png" width="250" alt="Stations"></td>
+<td><img src="docs/img/screens/web-settings.png" width="250" alt="Settings"></td>
+</tr>
+</table>
 
 ## Sources
 
@@ -139,16 +175,16 @@ one.
 
 ```
 ┌──────────────────────────────────────────────────────────────────────┐
-│  PRODUCT MODULES                                                      │
-│  ui_lvgl · audio (core, DSP) · player (microSD) · radio · dlna        │
-│  airplay · bt (satellite link) · usb_audio · storage                  │
+│  PRODUCT MODULES                                                     │
+│  ui_lvgl · audio (core, DSP) · player (microSD) · radio · dlna       │
+│  airplay · bt (satellite link) · usb_audio · storage                 │
 ├──────────────────────────────────────────────────────────────────────┤
-│  ModESP FRAMEWORK (control plane)                                     │
-│  SharedState · PersistService · NVS · HAL · drivers                   │
-│  Wi-Fi (ESP-Hosted → C6) · HTTP (REST) · WebSocket · MQTT · OTA       │
-│  code generator (manifests → UI, headers, i18n) · Svelte web UI       │
+│  ModESP FRAMEWORK (control plane)                                    │
+│  SharedState · PersistService · NVS · HAL · drivers                  │
+│  Wi-Fi (ESP-Hosted → C6) · HTTP (REST) · WebSocket · MQTT · OTA      │
+│  code generator (manifests → UI, headers, i18n) · Svelte web UI      │
 ├──────────────────────────────────────────────────────────────────────┤
-│  ESP-IDF v5.5.5 · FreeRTOS · ESP32-P4                                 │
+│  ESP-IDF v5.5.5 · FreeRTOS · ESP32-P4                                │
 └──────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -179,7 +215,7 @@ tests/host/           C++ host tests (doctest)
 docs/                 system, audio, network, UI and protocol references; procedures
 ```
 
-Most documents in `docs/` are in Ukrainian:
+Every document in `docs/` is in English and in Ukrainian (`*.uk.md`):
 
 - [docs/CONCEPT.md](docs/CONCEPT.md): the system. Hardware, pinout, signal path and clocking,
   firmware architecture, hard constraints. Start here.

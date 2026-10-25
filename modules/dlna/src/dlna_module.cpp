@@ -10,8 +10,8 @@
  * It is a CONTROL plane and nothing else. No sample passes through this file: a pushed URL
  * is handed to the network stream engine in modules/radio through `radio.play_url`, exactly
  * as the screen hands it a station, and what comes back is read from `radio.state`. Modules
- * do not include each other (CONCEPT «Контракт SharedState: джерела»); SharedState keys are
- * the contract between them.
+ * do not include each other (docs/CONCEPT.md, "SharedState contract: sources"); SharedState
+ * keys are the contract between them.
  *
  * Shape:
  *   • the protocol      — espressif/esp_media_protocols (SSDP, SOAP, GENA), prebuilt
@@ -93,7 +93,7 @@ constexpr const char* NVS_TRY  = "starting";
 /// there has to be a change here.
 constexpr int HTTP_PORT = 80;
 
-/// audio.source value that means "the network stream" (CONCEPT «Значення `audio.source`»).
+/// audio.source value that means "the network stream" (docs/CONCEPT.md, "`audio.source` values").
 /// A pushed track is played by the same engine as a radio station, so it takes the same
 /// source. From generated/state_enums.h — see the note on the same constant in radio_module.cpp.
 constexpr int32_t AUDIO_SRC_RADIO = modesp::gen::AUDIO_SOURCE_RADIO;
@@ -101,7 +101,7 @@ constexpr int32_t AUDIO_SRC_RADIO = modesp::gen::AUDIO_SOURCE_RADIO;
 /// How long a pushed track may take to show any sign of life before it is given up on.
 ///
 /// It covers a DNS lookup, a connection and the engine's own reporting interval, on a link
-/// that loses packets under load (docs/NETWORK.md «Wi-Fi через ESP32-C6»). Generous on
+/// that loses packets under load (docs/NETWORK.md, "Wi-Fi through the ESP32-C6"). Generous on
 /// purpose: the cost of waiting too long is a progress bar that says "loading" for a few
 /// seconds, and the cost of giving up too early is a track that plays while the control point
 /// shows it stopped.
@@ -438,10 +438,10 @@ void ssdp_start() {
     //
     // Not because of anything measured — a run of silent resets that looked like evidence
     // for this turned out to be the capture script resetting the board, not the board
-    // resetting itself. The reason is the rule CONCEPT «Обмеження плати» already records: a
-    // task whose stack is in PSRAM must not run while the flash cache is disabled, and on this
-    // device NVS and the data partition are written from other tasks often enough that a
-    // long-lived task cannot promise never to be scheduled during one. Four kilobytes of
+    // resetting itself. The reason is the rule docs/CONCEPT.md, "Board constraints" already
+    // records: a task whose stack is in PSRAM must not run while the flash cache is disabled,
+    // and on this device NVS and the data partition are written from other tasks often enough
+    // that a long-lived task cannot promise never to be scheduled during one. Four kilobytes of
     // internal memory is a smaller price than a fault that appears once a week.
     cfg.stack_in_ext       = false;
     cfg.task_core          = 0;

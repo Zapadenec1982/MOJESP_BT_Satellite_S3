@@ -1,619 +1,655 @@
-# Аудіоядро
+**English** · [Українська](AUDIO.uk.md)
 
-Аудіоядро — модуль `modules/audio` (клас `AudioModule`) і бібліотека `components/audio_dsp`.
-Воно вибирає джерело, пропускає його через DSP-ланцюг і віддає на I2S0 → PCM5102A → TPA3255.
-Керування й статус — тільки ключі SharedState `audio.*`
-([`modules/audio/manifest.json`](../modules/audio/manifest.json)); жоден семпл через шину
-повідомлень не проходить. Контракт джерел для інших модулів — `docs/CONCEPT.md`, «Контракт
-SharedState: джерела»; де кожен ключ виставляється на склі й у вебі — `docs/UI.md`.
+# Audio core
+
+The audio core is the `modules/audio` module (class `AudioModule`) and the `components/audio_dsp`
+library. It selects the source, runs it through the DSP chain and hands it to I2S0 → PCM5102A →
+TPA3255. Control and status are SharedState `audio.*` keys only
+([`modules/audio/manifest.json`](../modules/audio/manifest.json)); no sample passes through the
+message bus. The source contract for other modules: `docs/CONCEPT.md`, "SharedState contract:
+sources"; where each key is set on the glass and in the web: `docs/UI.md`.
 
 ```
-джерело ─┬─ I2S-вхід (BT, AUX) ────────┐
-         ├─ кільце PCM (файл, радіо/DLNA, AirPlay, USB)
-         └─ тест-тон ──────────────────┤
+source ──┬─ I2S input (BT, AUX) ───────┐
+         ├─ PCM ring (file, radio/DLNA, AirPlay, USB)
+         └─ test tone ─────────────────┤
                                        ▼
-        огинаюча → DSP-ланцюг → вихідний гейт → int32 → I2S0 TX → PCM5102A → TPA3255
+        envelope → DSP chain → output gate → int32 → I2S0 TX → PCM5102A → TPA3255
 ```
 
-## I2S-порти
+## I2S ports
 
-Порти — драйвер `drivers/i2s_std` за записами `i2s_buses` у
-[`boards/p4_player/board.json`](../boards/p4_player/board.json) і ролями з
-[`bindings.json`](../boards/p4_player/bindings.json). Модуль бачить їх лише через шов
+The ports are the `drivers/i2s_std` driver, set up from the `i2s_buses` entries in
+[`boards/p4_player/board.json`](../boards/p4_player/board.json) and the roles in
+[`bindings.json`](../boards/p4_player/bindings.json). The module sees them only through the seam
 `components/modesp_hal/include/modesp/hal/audio_sink.h` (`IAudioSink::as_port()` →
 `IAudioPort`: stereo int32, `read`/`write`, `set_rate`, `set_format`, `set_link_master`,
-`set_line_input`). Розпіновка гребінки JP1 — `docs/CONCEPT.md`, «Розпіновка».
+`set_line_input`). The JP1 header pinout: `docs/CONCEPT.md`, "Pinout".
 
-| Порт | Запис | Роль у `audio` | Піни (GPIO) | Такт |
+| Port | Entry | Role in `audio` | Pins (GPIO) | Clock |
 |---|---|---|---|---|
-| I2S0 | `i2s_a`, master, 32-бітні слоти, MCLK 256·fs | `port_main`: TX → PCM5102A; RX — лінк BT (протокол 1.9) або AUX | MCLK 49, BCLK 50, WS 51, DOUT 52, DIN 29 | APLL |
-| I2S1 | `i2s_b`, slave, відкривається на 32 кГц / 32 біти | `port_bt`: RX від супутника, що сам тактує лінк | BCLK 33, WS 30, DIN 31 | XTAL 40 МГц; APLL лише коли формат інакше не вміщається |
-| I2S2 | не в `board.json` | мікрофон панелі (ES8311), відкривається на час виміру | — `docs/MIC_CAPTURE.md` | XTAL, 48 кГц |
+| I2S0 | `i2s_a`, master, 32-bit slots, MCLK 256·fs | `port_main`: TX → PCM5102A; RX — the BT link (protocol 1.9) or AUX | MCLK 49, BCLK 50, WS 51, DOUT 52, DIN 29 | APLL |
+| I2S1 | `i2s_b`, slave, opens at 32 kHz / 32 bits | `port_bt`: RX from a satellite that clocks the link itself | BCLK 33, WS 30, DIN 31 | XTAL 40 MHz; APLL only when the format does not fit otherwise |
+| I2S2 | not in `board.json` | the panel's microphone (ES8311), opened for the duration of a measurement | — `docs/MIC_CAPTURE.md` | XTAL, 48 kHz |
 
-- **Майстер на APLL**: синтезує MCLK точно (12,288 МГц на 48 кГц); APLL = 2·MCLK. Від XTAL такі
-  частоти виходять лише дробовим дільником з джитером на BCLK.
-- **Slave на XTAL**: такт береться з дроту, APLL йому нічого не дає, а другий власник APLL
-  заморожує його частоту й блокує ретюн виходу.
-- **PCM5102A синтезує свій такт з BCLK**; MCLK на GPIO49 виводиться лише з джерелом AUX, для решти
-  пін тримається низько (`set_line_input`).
-- **DMA**: дескриптор 480 кадрів. TX — 8 дескрипторів = 3840 кадрів (80 мс на 48 кГц, 40 мс на
-  96 кГц); RX дуплексного порту — так само. RX-only slave-порт — 6 × 120 кадрів (бюджет
-  DMA-пам'яті сталий, бо порт відкривається на найширшому слоті). Переривання I2S — пріоритет 3:
-  IDF передає лише останній завершений RX-блок на переривання, тож пізнє обслуговування губить
-  попередній.
-- **TX недогодований** → DMA сам шле нулі (`auto_clear_after_cb`), лог `TX DMA ran dry`.
-- **Ніколи не цифровий нуль на шині**: семпл 0 замінюється на 256 (1 LSB 24-біт, −138 dBFS).
-  PCM5102A після ~21 мс точних нулів вимикає аналоговий вихід, і вихід з цього mute — клацання.
-- **Запис кешу DMA шматками по 1 КБ** (`CONFIG_ESP_MM_CACHE_MSYNC_C2M_CHUNKED_OPS`,
-  `boards/p4_player/sdkconfig.board`): драйвер I2S після кожного `write` записує буфер TX з кешу
-  під спінлоком з вимкненими перериваннями ядра 1 (там і аудіозадача, і переривання USB), а
-  USB-аудіо має 125 мкс до наступного пакета.
-- **`amp_enable`** (`gpio_outputs`, GPIO34, HIGH = грає): TPA3255 /RESET + PCM5102A XSMT. HAL
-  тримає лінію вимкненою до старту модуля; далі нею керує лише аудіозадача (розділ «Краї
-  звуку»).
+- **Master on APLL**: synthesises MCLK exactly (12.288 MHz at 48 kHz); APLL = 2·MCLK. From XTAL
+  such frequencies come only out of a fractional divider, with jitter on BCLK.
+- **Slave on XTAL**: the clock comes from the wire, APLL gives it nothing, and a second APLL owner
+  freezes its frequency and blocks the output retune.
+- **PCM5102A synthesises its clock from BCLK**; MCLK on GPIO49 is output only with the AUX source,
+  for the rest the pin is held low (`set_line_input`).
+- **DMA**: a descriptor is 480 frames. TX — 8 descriptors = 3840 frames (80 ms at 48 kHz, 40 ms
+  at 96 kHz); RX of the duplex port — the same. The RX-only slave port — 6 × 120 frames (the DMA
+  memory budget is fixed, because the port opens at the widest slot). I2S interrupt — priority 3:
+  IDF passes on only the last completed RX block per interrupt, so late servicing loses the
+  previous one.
+- **TX starved** → the DMA sends zeros by itself (`auto_clear_after_cb`), log `TX DMA ran dry`.
+- **Never a digital zero on the bus**: sample 0 is replaced with 256 (1 LSB of 24 bits, −138 dBFS).
+  After ~21 ms of exact zeros PCM5102A turns its analogue output off, and coming out of that mute
+  is a click.
+- **DMA cache write-back in 1 KB chunks** (`CONFIG_ESP_MM_CACHE_MSYNC_C2M_CHUNKED_OPS`,
+  `boards/p4_player/sdkconfig.board`): after every `write` the I2S driver writes the TX buffer back
+  from the cache under a spinlock with core 1's interrupts disabled (both the audio task and the
+  USB interrupt are there), and USB audio has 125 µs until the next packet.
+- **`amp_enable`** (`gpio_outputs`, GPIO34, HIGH = playing): TPA3255 /RESET + PCM5102A XSMT. The
+  HAL keeps the line off until the module starts; from then on only the audio task drives it
+  (section "Edges of sound").
 
-## Частота виходу і сесії
+## Output rate and sessions
 
-- Вихідний такт іде за джерелом: порт приймає 44,1…192 кГц, ядро ставить не вище
-  **96 кГц** (`PLAY_MAX_HZ`, `modules/audio/include/audio_module.h`). Над 48 кГц звук лежить за вихідним фільтром
-  підсилювача й колонками, а DSP на 192 кГц коштує вдвічі більше, ніж на 96.
-- **Одна частота на сесію джерела.** Сесію відкриває вибір джерела; частоту вибирає перший трек
-  (продюсер питає `PcmRing::ask_rate`, ядро ретюнить порт і відповідає `set_out_rate`).
-  Наступні треки іншої частоти продюсер конвертує до неї з фіксованим співвідношенням, тож
-  змішаний 44,1/48 плейлист грає без пауз. Ретюн зупиняє BCLK, PLL ЦАП перезахоплюється, і це
-  чутно; тому один раз на сесію.
-- Нова сесія всередині джерела — лише коли продюсер просить її сам
-  (`PcmRing::request_new_session`): USB — на кожен новий потік, бо частоту вибирає комп'ютер.
-  Bluetooth ретюнить вихід на кожен прийнятий формат (розділ «Bluetooth через супутник»).
-- Ретюн — лише в тиші: обидва гейти закриті, кадри старої частоти дограні
-  (`PcmRing::rate_change_due`: кільце порожнє або чекає flush). Після ретюну перепроєктовується
-  все, що залежить від fs (смуги, лімітери, рампи, спектр, тон), ланцюг скидається, вихід
-  тримається закритим 100 мс.
-- Частота понад 96 кГц або відхилена портом → `audio_core::fallback_rate()`: найближчий член тієї
-  самої родини (44,1·2ⁿ або 48·2ⁿ) — понад стелю найвищий не вище 96 кГц (176,4 → 88,2,
-  192 → 96, співвідношення 2), відхилена всередині діапазону — база родини (44,1 або 48 кГц).
-  Одна спроба; якщо порт не бере й її, такт лишається, де є, і продюсер конвертує в нього.
-- Конвертор із фіксованим співвідношенням у продюсерів — `audio_core::RateConverter`
-  (`components/audio_pipe`) на ресемплері `components/audio_resampler` (dbry, BSD-3); банк
-  фільтрів будується на пару частот, а не на трек.
+- The output clock follows the source: the port accepts 44.1…192 kHz, the core sets no higher
+  than **96 kHz** (`PLAY_MAX_HZ`, `modules/audio/include/audio_module.h`). Above 48 kHz the sound
+  lies beyond the amplifier's output filter and the speakers, and DSP at 192 kHz costs twice as
+  much as at 96.
+- **One rate per source session.** Selecting a source opens a session; the first track picks the
+  rate (the producer asks `PcmRing::ask_rate`, the core retunes the port and answers
+  `set_out_rate`). The producer converts later tracks at another rate to it with a fixed ratio, so
+  a mixed 44.1/48 playlist plays without gaps. A retune stops BCLK, the DAC's PLL re-locks, and
+  that is audible; hence once per session.
+- A new session within a source only when the producer asks for one itself
+  (`PcmRing::request_new_session`): USB — on every new stream, because the computer chooses the
+  rate. Bluetooth retunes the output on every adopted format (section "Bluetooth via the
+  satellite").
+- A retune happens only in silence: both gates closed, the old rate's frames played out
+  (`PcmRing::rate_change_due`: the ring is empty or waiting for a flush). After a retune everything
+  that depends on fs is redesigned (bands, limiters, ramps, spectrum, tone), the chain is reset, and
+  the output is held closed for 100 ms.
+- A rate above 96 kHz or one the port refuses → `audio_core::fallback_rate()`: the nearest member
+  of the same family (44.1·2ⁿ or 48·2ⁿ) — above the ceiling, the highest one not above 96 kHz
+  (176.4 → 88.2, 192 → 96, ratio 2); refused inside the range, the family's base (44.1 or 48 kHz).
+  One attempt; if the port does not take that either, the clock stays where it is and the producer
+  converts into it.
+- The producers' fixed-ratio converter is `audio_core::RateConverter` (`components/audio_pipe`) on
+  the resampler `components/audio_resampler` (dbry, BSD-3); the filter bank is built per pair of
+  rates, not per track.
 
-## Кільце PCM і його власники
+## The PCM ring and its owners
 
-`audio_core::PcmRing` (`components/audio_dsp/include/pcm_ring.h`) — одне SPSC-кільце
-interleaved stereo float між продюсерами й аудіозадачею; без блокувань з обох боків.
+`audio_core::PcmRing` (`components/audio_dsp/include/pcm_ring.h`) is one SPSC ring of
+interleaved stereo float between the producers and the audio task; lock-free on both sides.
 
-- Ємність 24 000 кадрів (0,5 с на 48 кГц), PSRAM. Виділяють `player` і `radio` при старті
-  (повторний `init` того самого розміру нічого не робить); з появою кільця в `audio.sources`
-  з'являються «файл» і «радіо».
-- Власники (`Owner`): `OWNER_FILE` — `modules/player`; `OWNER_RADIO` — `modules/radio`
-  (DLNA-рендерер грає через нього, `docs/NETWORK.md`); `OWNER_AIRPLAY` —
-  `components/airplay2/port/audio_output_ring.cpp`; `OWNER_USB` — `components/usb_uac`. Запис не
-  від власника відкидається.
-- `claim()` спорожняє кільце одразу. `claim_after_fade()` спершу віддає чужу чергу, яку ще чути,
-  споживачу на згасання й скидання і чекає до `FLUSH_WAIT_NAPS` = 60 × ~5 мс (~300 мс); не
-  дочекався — забирає все одно.
-- `apply_source()` скидає кільце, якщо його власник — не продюсер нового джерела: хвіст
-  попереднього продюсера не праймить нове джерело.
-- Керування з боку продюсера: `set_paused` (пауза споживача, черга зберігається),
-  `request_flush` (згасити й скинути), `set_eos` (трек скінчився, а не продюсер відстає),
-  `generation()` (росте з кожним скиданням; запис старої генерації відкидається).
-- Рукостискання частоти: `ask_rate` / `out_rate` (0 — питання відкрите), `set_clock_locked`
-  (частота сесії вибрана), `clock_moved()` (продюсер, що вже грає, бачить пізню відповідь і
-  перебудовує конвертор).
-- `set_consumer(prime, downstream)`: подушка після скидання (100 мс) і кадри між кільцем і
-  пінами (TX DMA + блок + look-ahead лімітерів). За ними AirPlay рахує, коли буде чути записане,
-  а USB — ціль заповнення для feedback. `set_consumer_live` — чи кільце зараз чути.
-- Споживач після скидання чекає подушку 100 мс (`PRIME_S`); `eos` знімає очікування. Поки
-  підсилювач осідає, кільце не читається — крім AirPlay і USB, які крокують за заповненням
+- Capacity 24,000 frames (0.5 s at 48 kHz), PSRAM. `player` and `radio` allocate it at start (a
+  repeated `init` of the same size does nothing); once the ring exists, the file and radio sources
+  appear in `audio.sources`.
+- Owners (`Owner`): `OWNER_FILE` — `modules/player`; `OWNER_RADIO` — `modules/radio` (the DLNA
+  renderer plays through it, `docs/NETWORK.md`); `OWNER_AIRPLAY` —
+  `components/airplay2/port/audio_output_ring.cpp`; `OWNER_USB` — `components/usb_uac`. A write
+  not from the owner is discarded.
+- `claim()` empties the ring at once. `claim_after_fade()` first hands the other owner's queue
+  that is still audible to the consumer to fade out and drop, and waits up to `FLUSH_WAIT_NAPS` =
+  60 × ~5 ms (~300 ms); if the wait runs out, it takes the ring anyway.
+- `apply_source()` resets the ring if its owner is not the new source's producer: the previous
+  producer's tail does not prime the new source.
+- Control from the producer's side: `set_paused` (consumer pause, the queue is kept),
+  `request_flush` (fade out and drop), `set_eos` (the track has ended, rather than the producer
+  falling behind), `generation()` (grows with every reset; a write of an old generation is
+  discarded).
+- Rate handshake: `ask_rate` / `out_rate` (0 — the question is open), `set_clock_locked` (the
+  session's rate is chosen), `clock_moved()` (a producer that is already playing sees a late
+  answer and rebuilds its converter).
+- `set_consumer(prime, downstream)`: the cushion after a reset (100 ms) and the frames between the
+  ring and the pins (TX DMA + block + limiter look-ahead). From these AirPlay computes when what it
+  wrote will be heard, and USB its fill target for feedback. `set_consumer_live` — whether the
+  ring is heard right now.
+- After a reset the consumer waits for the 100 ms cushion (`PRIME_S`); `eos` lifts the wait. While
+  the amplifier settles, the ring is not read — except for AirPlay and USB, which pace by the fill
   (`paces_by_fill`).
-- Недобраний блок доповнюється тишею; `audio.underruns` росте, лише коли немає `eos` і не чекає
-  ретюн.
+- A short block is padded with silence; `audio.underruns` grows only when there is no `eos` and no
+  retune is pending.
 
-## Аудіозадача
+## The audio task
 
-- Задача `audio`: ядро 1, пріоритет 22, стек 8 КБ у внутрішній SRAM (стек у PSRAM падає, поки
-  кеш вимкнений записом flash). Блок — 240 кадрів (`DspChain::BLOCK`, 5 мс на 48 кГц).
-- Кожен блок: команди з черги (16 записів) і гучність з `LevelLatch` → відкладена зміна джерела
-  → блок джерела → лічильники джерела → `amp_enable` → огинаюча → DSP → вихідний гейт → спектр
-  → int32 → `write` у I2S0 (до 200 мс). Темп задає TX DMA; для AUX — читання RX.
-- Гучність і «Максимум» ідуть не чергою, а регістром останнього значення
-  (`components/audio_dsp/include/level_latch.h`): задача читає його щоблоку, жодне значення не
-  губиться. `audio.vol_eff` — рівень, який задача вже застосувала.
-- Статус — раз на 0,5 с через структуру під спінлоком; головний цикл публікує ключі й пише лог.
-  Виміри й лічильники задача сама не логує: запис у консоль блокує довше за блок. Її власні
-  рядки — лише на подіях у тиші (зміна джерела, ретюн, прийняття формату BT).
-- Задача підписана на task watchdog і на `modesp::liveness` (3 с).
+- Task `audio`: core 1, priority 22, 8 KB stack in internal SRAM (a stack in PSRAM crashes while
+  the cache is disabled by a flash write). A block is 240 frames (`DspChain::BLOCK`, 5 ms at
+  48 kHz).
+- Every block: commands from the queue (16 entries) and the volume from `LevelLatch` → deferred
+  source change → source block → source counters → `amp_enable` → envelope → DSP → output gate →
+  spectrum → int32 → `write` to I2S0 (up to 200 ms). The TX DMA sets the pace; for AUX, the RX
+  read.
+- Volume and "Maximum" go not through the queue but through a last-value register
+  (`components/audio_dsp/include/level_latch.h`): the task reads it every block, and no value is
+  lost. `audio.vol_eff` is the level the task has already applied.
+- Status every 0.5 s through a structure under a spinlock; the main loop publishes the keys and
+  writes the log. The task does not log measurements and counters itself: a console write blocks
+  for longer than a block. Its own lines are only for events in silence (source change, retune, BT
+  format adoption).
+- The task is subscribed to the task watchdog and to `modesp::liveness` (3 s).
 
-## Джерела
+## Sources
 
-| `audio.source` | `audio.state` | Що робить ядро |
+| `audio.source` | `audio.state` | What the core does |
 |---|---|---|
-| 0 | `off` | тиша, підсилювач вимкнений |
-| 1 | `tone` | тест-тон (розділ «Тест-тон») |
-| 2 | `aux` | зарезервоване: лише у збірці з `CONFIG_AUDIO_LINE_IN_FITTED=y` (типово `n`, `modules/audio/Kconfig`) — читає RX I2S0 (DIN GPIO29) на тому ж такті й виводить MCLK; без опції запит відхиляється |
-| 3 | `bt` | Bluetooth через супутник (розділ «Bluetooth через супутник») |
-| 4 | `file` | кільце, власник `OWNER_FILE` |
-| 5 | `radio` | кільце, власник `OWNER_RADIO` (радіо й DLNA) |
-| 6 | `airplay` | кільце, власник `OWNER_AIRPLAY`; лише коли модуль `airplay` у збірці |
-| 7 | `usb` | кільце, власник `OWNER_USB`; лише коли USB-пристрій запустився |
+| 0 | `off` | silence, amplifier off |
+| 1 | `tone` | test tone (section "Test tone") |
+| 2 | `aux` | reserved: only in a build with `CONFIG_AUDIO_LINE_IN_FITTED=y` (default `n`, `modules/audio/Kconfig`) — reads I2S0 RX (DIN GPIO29) on the same clock and outputs MCLK; without the option the request is refused |
+| 3 | `bt` | Bluetooth via the satellite (section "Bluetooth via the satellite") |
+| 4 | `file` | ring, owner `OWNER_FILE` |
+| 5 | `radio` | ring, owner `OWNER_RADIO` (radio and DLNA) |
+| 6 | `airplay` | ring, owner `OWNER_AIRPLAY`; only when the `airplay` module is in the build |
+| 7 | `usb` | ring, owner `OWNER_USB`; only when the USB device has started |
 
-- `audio.state` додатково: `no-port` (немає прив'язки `port_main`), `error` (порт не піднявся).
-- `audio.sources` — бітова маска того, що можна вибрати (біт = значення): `off` завжди; `aux` з
-  опцією вище; `bt`, якщо `port_bt` піднявся й виділилось кільце BT; `file`/`radio`, коли є кільце;
-  `airplay`, `usb` — за слабкими посиланнями `airplay_offered()` / `usb_audio_offered()`. Тон у
-  масці немає, але `audio.source = 1` працює завжди.
-- Збережене джерело, якого немає в масці, при старті стає `off`; джерело на кільці, власник якого
-  ще не ініціалізувався, чекає кільця.
-- Недоступне джерело відхиляється до початку переходу — те, що грає, не замовкає. Перемикання
-  йде через гейти: старе грає, поки обидва гейти не закриються, і лише в тиші `apply_source()`
-  перемикає маршрути й скидає ланцюг. Повторний вибір того самого джерела до кінця переходу
-  скасовує його.
-- Хто перемикає `audio.source` сам: радіо, DLNA, плеєр, AirPlay — коли їм дали що грати; USB —
-  коли комп'ютер почав грати, а панель ні (розділ «USB-аудіо»). Bluetooth сам джерело не бере.
+- `audio.state` also: `no-port` (no `port_main` binding), `error` (the port did not come up).
+- `audio.sources` is a bit mask of what can be selected (bit = value): `off` always; `aux` with the
+  option above; `bt` if `port_bt` came up and the BT ring was allocated; `file`/`radio` when the
+  ring exists; `airplay`, `usb` — by the weak symbols `airplay_offered()` / `usb_audio_offered()`.
+  The tone is not in the mask, but `audio.source = 1` always works.
+- A saved source that is not in the mask becomes `off` at start; a ring source whose owner has not
+  initialised yet waits for the ring.
+- An unavailable source is refused before the transition begins — what is playing does not go
+  quiet. Switching goes through the gates: the old source plays until both gates are closed, and
+  only in silence does `apply_source()` switch the routes and reset the chain. Selecting the same
+  source again before the transition ends cancels it.
+- Who switches `audio.source` on their own: radio, DLNA, the player, AirPlay — when they are given
+  something to play; USB — when the computer started playing and the panel did not (section "USB
+  audio"). Bluetooth does not take the source on its own.
 
-### Тест-тон
+### Test tone
 
-| Ключ | Значення |
+| Key | Value |
 |---|---|
-| `audio.tone_mode` | 0 — через DSP, −12 dB від стелі (`TONE_LEVEL`); 1 — повз DSP і гучність, точний рівень ЦАП; 2 — те саме сплесками 250 мс з кожної секунди, краї 5 мс |
-| `audio.tone_hz` | 20…20 000 Гц, типово 1000; фаза неперервна |
-| `audio.tone_db10` | рівень режимів 1–2, десяті dBFS повної шкали ЦАП, −600…0, типово −260 |
-| `audio.tone_ch` | 1 лівий, 2 правий, 3 обидва |
+| `audio.tone_mode` | 0 — through the DSP, −12 dB relative to the ceiling (`TONE_LEVEL`); 1 — bypassing the DSP and the volume, exact DAC level; 2 — the same in 250 ms bursts out of every second, 5 ms edges |
+| `audio.tone_hz` | 20…20,000 Hz, default 1000; continuous phase |
+| `audio.tone_db10` | level of modes 1–2, tenths of dBFS of the DAC's full scale, −600…0, default −260 |
+| `audio.tone_ch` | 1 left, 2 right, 3 both |
 
-- Режими 1–2 вимикаються самі через 60 с (джерело → `off`, режим → 0); тон через DSP — через
-  120 с без жодної зміни. Зміна режиму — через закритий гейт.
-- `audio.cal_vol_cap` (стеля гучності, %) і `audio.cal_port_off` (порт вимкнено) діють лише поки
-  грає тон; не зберігаються й скидаються, коли джерело перестає бути тоном.
+- Modes 1–2 switch off by themselves after 60 s (source → `off`, mode → 0); the tone through the
+  DSP after 120 s without any change. A mode change goes through a closed gate.
+- `audio.cal_vol_cap` (volume ceiling, %) and `audio.cal_port_off` (port off) apply only while the
+  tone plays; they are not saved and are reset when the source stops being the tone.
 
-## Краї звуку
+## Edges of sound
 
-- Два гейти з однаковою кривою smootherstep, відкриття 20 мс, закриття 100 мс на будь-якій
-  частоті (`components/audio_dsp/include/fade_gate.h`): огинаюча перед ланцюгом і вихідний гейт
-  перед ЦАП. Закриття довше, бо обрив за 20 мс на гучному басу чути.
-- Огинаюча закривається на паузу, flush, відкладений ретюн, новий формат BT, перемикання джерела,
-  осідання підсилювача. Ланцюг працює далі на тиші, вихідний гейт закривається над тим, що в ньому
-  ще дзвенить (сабсонік, полиці, резонансна смуга, кросовер бас-лімітера); ланцюг скидається лише
-  за закритим вихідним гейтом. Ретюн і прийняття формату BT теж чекають закритого вихідного гейта.
-- Частковий блок з кільця: те, що прийшло, згасає smoothstep-хвостом 2 мс (не довше блоку).
-  Порожній блок посеред звуку: останній семпл доводиться до тиші тим самим хвостом
-  (`fade_from_hold`).
-- `amp_enable` іде за джерелом, не за сигналом: вмикається, коли вибрано джерело ≠ `off`, у
-  тишу — гейти лишаються закритими 300 мс після старту задачі й 100 мс після ввімкнення або
-  ретюну (за `esp_timer`). Вимикається при переході в `off` лише після того, як за закритим
-  вихідним гейтом TX DMA відіграв тишу на всю чергу (3840 + 240 кадрів, 85 мс на 48 кГц).
-- Mute (`audio.mute`) — рампа вхідного підсилення 10 мс у ланцюгу; `amp_enable` не чіпає.
+- Two gates with the same smootherstep curve, opening 20 ms, closing 100 ms at any rate
+  (`components/audio_dsp/include/fade_gate.h`): the envelope before the chain and the output gate
+  before the DAC. Closing is longer because a 20 ms cut on loud bass is audible.
+- The envelope closes on pause, flush, a deferred retune, a new BT format, a source switch,
+  amplifier settling. The chain keeps running on silence, and the output gate closes over what is
+  still ringing in it (subsonic, shelves, resonant band, the bass limiter's crossover); the chain is
+  reset only behind a closed output gate. A retune and BT format adoption also wait for a closed
+  output gate.
+- A partial block from the ring: what arrived fades out with a 2 ms smoothstep tail (no longer
+  than the block). An empty block in the middle of sound: the last sample is brought down to
+  silence with the same tail (`fade_from_hold`).
+- `amp_enable` follows the source, not the signal: it turns on when a source ≠ `off` is selected,
+  into silence — the gates stay closed for 300 ms after the task starts and 100 ms after the
+  turn-on or a retune (by `esp_timer`). On a transition to `off` it turns off only after the TX DMA
+  has played silence through the whole queue behind a closed output gate (3840 + 240 frames, 85 ms
+  at 48 kHz).
+- Mute (`audio.mute`) is a 10 ms ramp of the input gain in the chain; it does not touch
+  `amp_enable`.
 
-## DSP-ланцюг
+## DSP chain
 
-`audio_core::DspChain` (`components/audio_dsp/src/dsp_chain.cpp`), float, блоками, без heap
-після старту. Порядок у `DspChain::process`:
+`audio_core::DspChain` (`components/audio_dsp/src/dsp_chain.cpp`), float, in blocks, no heap
+after start. The order in `DspChain::process`:
 
-1. вхідне підсилення: трим · гучність · запас під EQ;
-2. сабсонік і підйом біля порту;
-3. тонкомпенсація;
-4. «Бас» (зі зрізом розміщення) і «Високі»;
-5. PEQ, до 10 смуг;
-6. ширина / моно-бас (mid/side);
-7. баланс;
-8. бас-лімітер;
-9. брикволл.
+1. input gain: trim · volume · EQ headroom;
+2. subsonic and the lift at the port;
+3. loudness compensation;
+4. "Bass" and "Treble";
+5. PEQ, up to 10 bands;
+6. width / mono bass (mid/side);
+7. balance;
+8. bass limiter;
+9. brickwall.
 
-Усередині ланцюга **1,0 = стеля підсилювача**, а не повна шкала ЦАП (розділ «Стеля
-підсилювача»). Фільтри — трапецієвидні SVF (Simper), по секції на смугу на обидва канали
-(`dsp_kernels.cpp`, явні `fmaf`, `-ffp-contract=off`): біквад DF2 у float32 на низькій смузі й
-високій fs шумить. Дизайн у double; піки, полиці й режекція — matched (Vicanek: АЧХ збігається з
-аналоговим прототипом RBJ на DC, Найквісті й f0), ФНЧ/ФВЧ — білінійні, тож EQ однаковий на
-44,1…96 кГц. Секції йдуть по дві за прохід. Стани < 1e-15 обнуляються щоблоку.
+Inside the chain **1.0 = the amplifier ceiling**, not the DAC's full scale (section "Amplifier
+ceiling"). The filters are trapezoidal SVFs (Simper), one section per band for both channels
+(`dsp_kernels.cpp`, explicit `fmaf`, `-ffp-contract=off`): a DF2 biquad in float32 is noisy at a
+low band and a high fs. Design in double; peaks, shelves and notch are matched (Vicanek: the
+magnitude response matches the analogue RBJ prototype at DC, Nyquist and f0), LPF/HPF bilinear, so
+the EQ is the same at 44.1…96 kHz. Sections run two per pass. States < 1e-15 are zeroed every
+block.
 
-### Параметри
+### Parameters
 
-| Ключ | Діапазон, типово | Стадія |
+| Key | Range, default | Stage |
 |---|---|---|
-| `audio.volume` | 0…100 %, 30 | вхідне підсилення (закон нижче) |
-| `audio.vol_max` | 40…100 %, 100 | «Максимум»: грає `volume × vol_max / 100` того самого закону |
-| `audio.vol_start` | 0…100 %, 0 | після ввімкнення гучність не більша за це (0 — як була) |
-| `audio.mute` | bool | рампа 10 мс |
-| `audio.drive_db` | 0…6 дБ, 0 | наскільки 100 % заходить у лімітери понад чисту стелю |
-| `audio.hp_hz` | 0 вимк. / 20…80 Гц, 40 | сабсонік, Баттерворт 4-го порядку |
-| `audio.spk_type` | 0 не задано / 1 з фазоінвертором / 2 закриті | закриті — порт не діє, хоч би яке число збережене |
-| `audio.port_hz` | 0 вимк. / 30…80 Гц | частота порту колонок |
-| `audio.port_lift_db` | 0…6 дБ, 3 | пік на частоті порту, Q 1,4 |
-| `audio.port_src` | 0 не задано / 1 вручну / 3 виміряно | звідки частота порту |
-| `audio.loudness` | 0…100 %, 70 | сила тонкомпенсації, 0 — вимк. |
-| `audio.loud_ref` | 20…100 %, 100 | «Звичайна гучність»: де тонкомпенсація нічого не додає |
-| `audio.bass_db`, `audio.treble_db` | −6…+6 дБ, 0 | полиці 100 Гц і 10 кГц, Q 0,71 |
-| `audio.placement` | 0 вільно / 1 біля стіни / 2 у кутку, 0 | 0 / −3 / −6 дБ на полиці «Бас» |
-| `audio.eq_enabled` | bool, true | обхід PEQ (кросфейд) |
-| `audio.width` | 0…200 %, 100 | 0 моно, 100 як є, 200 подвійна сторона |
-| `audio.mono_bass_hz` | 0…300 Гц, 0 | ФВЧ Баттерворта 2-го порядку на S; нижче 20 Гц — вимк. |
-| `audio.balance_db10` | −60…+60 (десяті дБ), 0 | > 0 — тихіше лівий канал, < 0 — правий |
-| `audio.bass_xo_hz` | 0 вимк. / 60…250 Гц, 120 | кросовер бас-лімітера |
-| `audio.rms_cap_db10` | −120…0 (десяті дБ), 0 вимк. | стеля потужності басу, дБ під повношкальним синусом в обох каналах |
-| `audio.amp_clip_db10` | −240…0 (десяті dBFS), −98 | стеля підсилювача C |
+| `audio.volume` | 0…100 %, 30 | input gain (law below) |
+| `audio.vol_max` | 40…100 %, 100 | "Maximum": plays `volume × vol_max / 100` of the same law |
+| `audio.vol_start` | 0…100 %, 0 | after power-on the volume is no higher than this (0 — as it was) |
+| `audio.mute` | bool | 10 ms ramp |
+| `audio.drive_db` | 0…6 dB, 0 | how far 100 % drives into the limiters above the clean ceiling |
+| `audio.hp_hz` | 0 off / 20…80 Hz, 40 | subsonic, 4th-order Butterworth |
+| `audio.spk_type` | 0 not set / 1 ported / 2 sealed | sealed — the port has no effect, whatever number is saved |
+| `audio.port_hz` | 0 off / 30…80 Hz | the speakers' port frequency |
+| `audio.port_lift_db` | 0…6 dB, 3 | peak at the port frequency, Q 1.4 |
+| `audio.port_src` | 0 not set / 1 by hand / 3 measured | where the port frequency came from |
+| `audio.loudness` | 0…100 %, 70 | loudness compensation strength, 0 — off |
+| `audio.loud_ref` | 20…100 %, 100 | "Usual volume": where loudness compensation adds nothing |
+| `audio.bass_db`, `audio.treble_db` | −6…+6 dB, 0 | shelves at 100 Hz and 10 kHz, Q 0.71 |
+| `audio.eq_enabled` | bool, true | PEQ bypass (crossfade) |
+| `audio.width` | 0…200 %, 100 | 0 mono, 100 as is, 200 double side |
+| `audio.mono_bass_hz` | 0…300 Hz, 0 | 2nd-order Butterworth HPF on S; below 20 Hz — off |
+| `audio.balance_db10` | −60…+60 (tenths of dB), 0 | > 0 — the left channel quieter, < 0 — the right |
+| `audio.bass_xo_hz` | 0 off / 60…250 Hz, 120 | bass limiter crossover |
+| `audio.rms_cap_db10` | −120…0 (tenths of dB), 0 off | bass power ceiling, dB below a full-scale sine in both channels |
+| `audio.amp_clip_db10` | −240…0 (tenths of dBFS), −98 | amplifier ceiling C |
 
-Усі вони зберігаються (persist). Полиці на 0 дБ («Бас» разом зі зрізом розміщення, «Високі»),
-баланс 0, тонкомпенсація 0 (і на верху шкали), ширина 100 — побітовий «дріт».
+All of them are saved (persist). Shelves at 0 dB ("Bass", "Treble"), balance 0, loudness compensation 0 (and at the top of the scale), width 100 are a
+bit-exact "wire".
 
-### Гучність
+### Volume
 
-- Закон (`DspChain::volume_db`): від 50 % і вище −60·(1 − p/100) дБ, тобто 0,6 дБ на крок; нижче
-  кроки ростуть до ~1,4 дБ, 1 % = −80 дБ; 0 % — тиша. 100 % = `audio.drive_db`: повна шкала
-  джерела на 100 % — рівно стеля.
-- Рампа — два однополюсники каскадом, τ 5 мс кожен.
-- «Максимум» стискає шкалу, а не обрізає: 100 % з будь-якого клієнта — межа, крок дрібнішає
-  (0,51 дБ при 85 %). Збережена гучність не переписується.
-- Після ввімкнення (і після `POST /api/restore`, який перезапускає панель): якщо збережена
-  гучність більша за `audio.vol_start` (≠ 0), сама збережена гучність опускається до неї, тож усі
-  клієнти показують те, що грає.
-- **Запас B** (`audio.eq_headroom_db`) — найгучніша точка сумарної АЧХ (трим, PEQ, полиці
-  «Бас» з розміщенням і «Високі», ширина понад 1, сабсонік з підйомом порту) на
-  20 Гц…min(20 кГц, 0,49·fs). Гучність зупиняється на drive − B: верх шкали плаский, нижче EQ
-  on/off відрізняється лише смугами. З бас-лімітером B на кожній частоті рахує лише те, що він там
-  не забирає (частки LR4).
-- `audio.volume` пишуть: панель (енкодер — 2 % на клацання; `docs/UI.md`), веб і API, DLNA
-  RenderingControl, AirPlay (через опорну точку, `docs/NETWORK.md`), телефон через AVRCP і
-  комп'ютер через USB (розділи нижче).
+- The law (`DspChain::volume_db`): from 50 % up −60·(1 − p/100) dB, i.e. 0.6 dB per step; below
+  that the steps grow to ~1.4 dB, 1 % = −80 dB; 0 % is silence. 100 % = `audio.drive_db`: the
+  source's full scale at 100 % is exactly the ceiling.
+- The ramp is two one-pole filters in cascade, τ 5 ms each.
+- "Maximum" compresses the scale rather than cutting it off: 100 % from any client is the limit,
+  and the step gets finer (0.51 dB at 85 %). The saved volume is not rewritten.
+- After power-on (and after `POST /api/restore`, which restarts the panel): if the saved volume is
+  higher than `audio.vol_start` (≠ 0), the saved volume itself is lowered to it, so all clients
+  show what is playing.
+- **Headroom B** (`audio.eq_headroom_db`) is the loudest point of the total magnitude response
+  (trim, PEQ, the "Bass" and "Treble" shelves, width above 1, subsonic with the port
+  lift) over 20 Hz…min(20 kHz, 0.49·fs). The volume stops at drive − B: the top of the scale is
+  flat, and below it EQ on/off differs only by the bands. With the bass limiter, B at each
+  frequency counts only what the limiter does not take away there (LR4 fractions).
+- `audio.volume` is written by: the panel (encoder — 2 % per click; `docs/UI.md`), the web and the
+  API, DLNA RenderingControl, AirPlay (through a reference point, `docs/NETWORK.md`), the phone
+  over AVRCP and the computer over USB (sections below).
 
-### Сабсонік і порт
+### Subsonic and port
 
-- Поки задано порт (30…80 Гц, колонки не закриті), сабсонік стоїть на 0,8 від частоти порту,
-  незалежно від `audio.hp_hz`; на самій частоті — пік `audio.port_lift_db`. Там дифузор майже не
-  рухається (працює порт), тож підйом дешевий; нижче — захист. Пік рахується в B.
-- Сабсонік діє, коли його частота в 20…80 Гц; зміна — кросфейдом, як правка смуги.
-- Частоту порту міряють розділом «Калібрування колонок».
+- While a port is set (30…80 Hz, speakers not sealed), the subsonic sits at 0.8 of the port
+  frequency, regardless of `audio.hp_hz`; at the frequency itself, a peak of `audio.port_lift_db`.
+  There the cone barely moves (the port does the work), so the lift is cheap; below it, protection.
+  The peak counts toward B.
+- The subsonic acts when its frequency is within 20…80 Hz; a change is crossfaded, like a band
+  edit.
+- The port frequency is measured as described in section "Speaker calibration: port frequency".
 
-### Тонкомпенсація
+### Loudness compensation
 
-- Дві полиці RBJ, підігнані до ISO 226:2003 (`tools/eq/fit_loudness.py`): низька 148,6 Гц
-  Q 0,359, висока 10 кГц Q 0,71.
-- a = рівень(`loud_ref`) − рівень(гучність), рівень(p) = min(volume_db(p), −B), a ≤ 50 дБ.
-  Полиці дають 0,5605·a і 0,2253·a дБ × сила. Від контурів — до 1,1 дБ при a ≤ 30, 1,8 дБ при 50.
-- Полиці завжди піднімають менше, ніж забрала гучність, тож понад те, що грає 100 %, нічого не
-  виходить. Коефіцієнти ковзають за гучністю (τ 50 мс). Поточний підйом басу — `audio.loud_db`.
+- Two RBJ shelves fitted to ISO 226:2003 (`tools/eq/fit_loudness.py`): low 148.6 Hz Q 0.359,
+  high 10 kHz Q 0.71.
+- a = level(`loud_ref`) − level(volume), level(p) = min(volume_db(p), −B), a ≤ 50 dB.
+  The shelves give 0.5605·a and 0.2253·a dB × strength. Deviation from the contours: up to 1.1 dB
+  at a ≤ 30, 1.8 dB at 50.
+- The shelves always lift less than the volume took away, so nothing comes out above what 100 %
+  plays. The coefficients glide with the volume (τ 50 ms). The current bass lift is
+  `audio.loud_db`.
 
-### «Бас», «Високі», розміщення
+### "Bass" and "Treble"
 
-- Дві власні секції після тонкомпенсації (`DspChain::set_tone`): низька полиця 100 Гц і висока
-  10 кГц, Q 0,71, кожна в межах ±6 дБ. Жодної з 10 смуг PEQ не займають, грають і з вимкненим EQ;
-  зміна кросфейдиться, як правка смуги; рахуються в B.
-- `audio.placement` (Колонки › Розміщення) — де стоять колонки: біля стіни бас −3 дБ, у кутку
-  −6 дБ (`DspChain::PLACE_DB`). Зріз додається до «Бас» на тій самій низькій полиці, тож секції не
-  коштує, а «Бас» лишає свої ±6 дБ поверх нього; запасу не бере.
-- «Бас», «Високі» й розміщення йдуть аудіозадачі однією командою `TIMBRE`
-  (`AudioModule::timbre()`: «Високі» в бітах 0–7, «Бас» у 8–15, розміщення в 16–17).
-- Низька полиця на сумарних 0 дБ — побітовий дріт («Бас» +6 у кутку теж).
+- Two dedicated sections after loudness compensation (`DspChain::set_tone`): a low shelf at 100 Hz
+  and a high shelf at 10 kHz, Q 0.71, each within ±6 dB. They take none of the 10 PEQ bands and play
+  with the EQ off as well; a change is crossfaded like a band edit; they count toward B.
+- "Bass" and "Treble" go to the audio task as one `TIMBRE` command
+  (`AudioModule::timbre()`: "Treble" in bits 0–7, "Bass" in 8–15).
+- A shelf at 0 dB is a bit-exact wire.
 
-### PEQ і `eq.json`
+### PEQ and `eq.json`
 
-- До 10 смуг: `peak`, `lowshelf`, `highshelf`, `lowpass`, `highpass`, `notch`; поля `type`, `f`,
-  `gain`, `q`, `on`. Q полиць ≤ 1,0 (вище полиця перескакує своє підсилення).
-- Зміна смуги кросфейдиться 20 мс: старий дизайн дограє на власній копії стану; правка під час
-  фейду чекає, остання перемагає. Стан фільтрів скидається лише за закритим вихідним гейтом
-  (пауза, стоп, зміна джерела, ретюн).
-- Документ EQ — `audio_core::EqStore` (`components/audio_dsp/include/eq_store.h`): `eq.json` (що
-  грає) і `eq_custom.json` («Власний») у `/userdata` через `UserStore`, заводський `data/eq.json` —
-  запасний. Обидва файли читаються один раз при старті; схема `version` 2, файл новішої схеми
-  не читається (EQ рівний). Перед першим записом поверх файлу старішої збірки поруч лишається
-  копія `<name>.v2`; файл, який не читається, при першому записі переїжджає в `<name>.bad`.
-- Редактори — сторінка EQ панелі й веб (`GET`/`POST /api/eq`: `{"rev",bands}`, `{"rev",preset}`,
-  `{"keep":true}`; правка зі старої ревізії → 409). Власник документа — `AudioModule::own_eq()` на
-  головній задачі: передає смуги аудіозадачі через `EqBus` (seqlock, без читання файлів у
-  реальному часі) і публікує `audio.eq_rev`.
-- Запис файлів — не поки відкрита сторінка EQ панелі (`ui.screen` = `eq`) і не раніше 60 с після
-  останньої правки з вебу (або одразу на `{"keep":true}`): запис LittleFS зупиняє кеш обох ядер,
-  і в колонках клацає.
-- Пресети (`eq_presets.cpp`): ті самі 10 смуг — низька полиця 40 Гц, вісім піків 62,5…8000 Гц,
-  висока полиця 12 кГц. Пропонуються вісім: «Власний», `flat`, `pop`, `rock`, `jazz`, `classical`,
-  `electronic`, `hiphop`; решта таблиці лишається для наборів, збережених під ними.
-- Трим секції (`gain_db`, −24…+12 дБ) — частина вхідного підсилення й запасу B.
-- `audio.eq_reload` — перепроєктувати смуги з поточного документа.
-- `eq.json` поділений на дві секції виходу й режими (`mode`: `2.0` | `biamp` | `4.0` | `2.1`);
-  прошивка грає секцію 0 у режимі `2.0`. `audio.out_mode` — режим з файлу, `audio.out_caps` = 1
-  (стерео) — схеми, які прошивка грає.
+- Up to 10 bands: `peak`, `lowshelf`, `highshelf`, `lowpass`, `highpass`, `notch`; fields `type`,
+  `f`, `gain`, `q`, `on`. Shelf Q ≤ 1.0 (above that a shelf overshoots its own gain).
+- A band change is crossfaded over 20 ms: the old design plays out on its own copy of the state;
+  an edit during the fade waits, and the last one wins. Filter state is reset only behind a closed
+  output gate (pause, stop, source change, retune).
+- The EQ document is `audio_core::EqStore` (`components/audio_dsp/include/eq_store.h`): `eq.json`
+  (what plays) and `eq_custom.json` ("Custom") in `/userdata` through `UserStore`, with the factory
+  `data/eq.json` as the fallback. Both files are read once at start; schema `version` 2, a file of a
+  newer schema is not read (EQ flat). Before the first write over a file from an older build, a
+  copy `<name>.v2` is left next to it; a file that cannot be read moves to `<name>.bad` on the
+  first write.
+- The editors are the panel's EQ page and the web (`GET`/`POST /api/eq`: `{"rev",bands}`,
+  `{"rev",preset}`, `{"keep":true}`; an edit from a stale revision → 409). The document's owner is
+  `AudioModule::own_eq()` on the main task: it passes the bands to the audio task through `EqBus`
+  (seqlock, no file reads in real time) and publishes `audio.eq_rev`.
+- Files are not written while the panel's EQ page is open (`ui.screen` = `eq`), nor earlier than
+  60 s after the last edit from the web (or at once on `{"keep":true}`): a LittleFS write stops
+  the cache of both cores, and the speakers click.
+- Presets (`eq_presets.cpp`): the same 10 bands — a low shelf at 40 Hz, eight peaks 62.5…8000 Hz,
+  a high shelf at 12 kHz. Eight are offered: "Custom", `flat`, `pop`, `rock`, `jazz`,
+  `classical`, `electronic`, `hiphop`; the rest of the table stays for sets saved under them.
+- The section trim (`gain_db`, −24…+12 dB) is part of the input gain and of headroom B.
+- `audio.eq_reload` — redesign the bands from the current document.
+- `eq.json` is divided into two output sections and modes (`mode`: `2.0` | `biamp` | `4.0` |
+  `2.1`); the firmware plays section 0 in mode `2.0`. `audio.out_mode` is the mode from the file,
+  `audio.out_caps` = 1 (stereo) — the layouts the firmware plays.
 
-### Стерео і баланс
+### Stereo and balance
 
-- Ширина — масштаб S у mid/side; на 100 % стадія пропускається. Понад ~140 % підсилює протифазне.
-- Моно-бас — ФВЧ на S: усе нижче частоти стає моно.
-- Баланс лише послаблює один канал, запасу не бере; ковзає, як гучність.
+- Width is the scale of S in mid/side; at 100 % the stage is skipped. Above ~140 % it boosts the
+  out-of-phase content.
+- Mono bass is an HPF on S: everything below the frequency becomes mono.
+- Balance only attenuates one channel and takes no headroom; it glides like the volume.
 
-### Лімітери
+### Limiters
 
-- **Бас-лімітер** (`audio.bass_xo_hz`): розділення LR4. Коли бас разом з рештою перевищив би
-  −0,5 дБ від стелі, стискається лише бас — до −12 дБ, look-ahead ≈ 5 мс, утримання 50 мс,
-  відпуск 200 мс. Якщо пік дає переважно верхня смуга, бас не чіпається: перехід лінійний між
-  30 і 70 % частки верхів у піку, решту бере брикволл. Зміна кросовера — через mute 10 мс.
-  Лінія затримки в PSRAM (без неї стадія вимкнена). `audio.rms_cap_db10` — довга стеля потужності
-  басу для блока живлення, що просідає (усереднення ~50 мс).
-- **Брикволл**: look-ahead (M+1)·D кадрів, M = 9, D = 8 (≤ 50 кГц) або 16 (≤ 100 кГц) — 1,7–1,8 мс;
-  вузлова огинаюча з утриманням 40 мс і відпуском 250 мс; вихід за побудовою не перевищує стелю.
-- Затримки обох лімітерів входять у `PcmRing::downstream_frames()`.
+- **Bass limiter** (`audio.bass_xo_hz`): an LR4 split. When the bass together with the rest would
+  exceed −0.5 dB relative to the ceiling, only the bass is compressed — down to −12 dB, look-ahead
+  ≈ 5 ms, hold 50 ms, release 200 ms. If the peak comes mostly from the upper band, the bass is
+  left alone: the transition is linear between 30 and 70 % of the upper band's share of the peak,
+  and the brickwall takes the rest. A crossover change goes through a 10 ms mute. The delay line
+  is in PSRAM (without it the stage is disabled). `audio.rms_cap_db10` is a long bass power ceiling
+  for a power supply that sags (averaging ~50 ms).
+- **Brickwall**: look-ahead (M+1)·D frames, M = 9, D = 8 (≤ 50 kHz) or 16 (≤ 100 kHz) — 1.7–1.8 ms;
+  a knot envelope with 40 ms hold and 250 ms release; by construction the output does not exceed
+  the ceiling.
+- The delays of both limiters are included in `PcmRing::downstream_frames()`.
 
-### Захист
+### Protection
 
-- Блок, у якому з'явився NaN/Inf (на виході або в стані фільтра), замінюється тишею, ланцюг
-  скидається, `audio.dsp_faults` росте.
-- Перетворення float → int32 обрізає до ±1 і рахує обрізані семпли (`audio.out_clamps`, має бути
-  0); NaN стає тишею, а не повною шкалою.
+- A block in which a NaN/Inf has appeared (at the output or in a filter's state) is replaced with
+  silence, the chain is reset, and `audio.dsp_faults` grows.
+- The float → int32 conversion clips to ±1 and counts the clipped samples (`audio.out_clamps`,
+  should be 0); NaN becomes silence, not full scale.
 
-## Стеля підсилювача
+## Amplifier ceiling
 
-- C — найгучніше, що підсилювач відтворює чисто, у dBFS ЦАП (`audio.amp_clip_db10`, обмежено
-  −24…0 дБ). Поріг лімітера T = min(C − 0,5, −1) dBFS; вихідне перетворення множить на
-  10^(T/20), тож 1,0 ланцюга лягає на T. `audio.ceiling_dbfs` показує T.
-- Типово C = −9,8 dBFS: TPA3255 при PVDD 24 В, підсилення 21,5 дБ (SLASEA8A §7.5), PCM5102A
-  2,1 Vrms (SLAS859C) — так для схеми входу з одним і з обома входами від ЦАП. Лімітер тоді на
-  −10,3 dBFS.
-- `audio.amp_src`: 0 з даташиту, 1 вписано вручну, 2 знайдено на слух, 3 виміряно. При старті
-  стеля, що не дорівнює даташитній, але позначена «з даташиту», стає «вписано вручну»;
-  `audio.amp_cal` = (`amp_src` = 3).
-- У вебі стелі, `drive_db` і `rms_cap_db10` немає (`DROPPED` у `webui/src/lib/longtail.js`;
-  `amp_src` віджета не має); змінюються через API (`POST /api/settings`, Basic auth —
+- C is the loudest the amplifier reproduces cleanly, in DAC dBFS (`audio.amp_clip_db10`, limited
+  to −24…0 dB). The limiter threshold T = min(C − 0.5, −1) dBFS; the output conversion multiplies
+  by 10^(T/20), so the chain's 1.0 lands on T. `audio.ceiling_dbfs` shows T.
+- Default C = −9.8 dBFS: TPA3255 at PVDD 24 V, gain 21.5 dB (SLASEA8A §7.5), PCM5102A 2.1 Vrms
+  (SLAS859C) — this holds for the input circuit with one and with both inputs fed from the DAC. The
+  limiter is then at −10.3 dBFS.
+- `audio.amp_src`: 0 from the datasheet, 1 entered by hand, 2 found by ear, 3 measured. At start,
+  a ceiling marked as from the datasheet that is not the datasheet value is re-marked as entered by
+  hand; `audio.amp_cal` = (`amp_src` = 3).
+- The web has no ceiling, `drive_db` or `rms_cap_db10` (`DROPPED` in `webui/src/lib/longtail.js`;
+  `amp_src` has no widget); they are changed through the API (`POST /api/settings`, Basic auth —
   `docs/NETWORK.md`).
 
-Вимір C (мультиметр AC V, бажано телефон зі спектроаналізатором). Тон режимів 1–2 гучний на
-кроках 3–4 і вимикається сам через 60 с — тоді надіслати ще раз.
+Measuring C (a multimeter on AC V, preferably a phone with a spectrum analyser). The tone of modes
+1–2 is loud at steps 3–4 and switches off by itself after 60 s — then send it again.
 
 ```
 curl -u <user>:<password> -X POST http://<panel>/api/settings \
      -d '{"audio.source":1,"audio.tone_mode":1,"audio.tone_hz":60,"audio.tone_db10":-260,"audio.tone_ch":1}'
 ```
 
-0. PVDD у спокої — мультиметр DC V на клеми живлення підсилювача.
-1. Тон −26 dBFS, 60 Гц, лівий канал (запит вище). AC V між двома клемами лівої колонки (BTL —
-   жодну на землю): V.
-2. AC V від кожної клеми до землі підсилювача: обидві ≈ V/2 → Vmax = 0,95·PVDD; одна ≈ V, друга ≈ 0
-   (гойдається один напівміст) → Vmax = 0,95·PVDD/2.
-   C = −26 + 20·log10(Vmax / (1,414·V)). Повторити для правого (`tone_ch` 2), взяти менше.
-   Приклад: PVDD 24 В, один напівміст, V = 1,25 В → C = −9,8 dBFS.
-3. Перевірка на слух: `tone_mode` 2, 100 Гц, обидва канали, рівень `10·(C − 1)` і `10·(C + 1)`. На
-   C + 1 звук різкий (3-тя гармоніка 300 Гц підскакує) або світиться CLIP модуля; на C − 1 чисто.
-   Різко й на C − 1 → C − 0,5 і повторити; чисто й на C + 1 → C + 0,5 (не вище розрахунку + 1,5 дБ).
-4. Блок живлення: `tone_mode` 1, 60 Гц, обидва, рівень `10·(C − 0,5)`, ~3 с, DC V на PVDD.
-   Просідання > 2 В → `audio.rms_cap_db10` = −30 (ще > 2 В на важкому басу на 100 % — −40).
-   Менше → до C додати 20·log10(PVDD під навантаженням / PVDD у спокої) (число від'ємне).
-5. Записати `audio.amp_clip_db10` = round(10·C), `audio.amp_src` = 3; `tone_mode` 0, джерело як
-   було.
+0. PVDD at idle — the multimeter on DC V across the amplifier's power terminals.
+1. Tone −26 dBFS, 60 Hz, left channel (the request above). AC V between the two terminals of the
+   left speaker (BTL — neither to ground): V.
+2. AC V from each terminal to the amplifier's ground: both ≈ V/2 → Vmax = 0.95·PVDD; one ≈ V, the
+   other ≈ 0 (one half-bridge swings) → Vmax = 0.95·PVDD/2.
+   C = −26 + 20·log10(Vmax / (1.414·V)). Repeat for the right (`tone_ch` 2), take the smaller.
+   Example: PVDD 24 V, one half-bridge, V = 1.25 V → C = −9.8 dBFS.
+3. Listening check: `tone_mode` 2, 100 Hz, both channels, level `10·(C − 1)` and `10·(C + 1)`. At
+   C + 1 the sound is harsh (the 3rd harmonic at 300 Hz jumps up) or the module's CLIP lights; at
+   C − 1 it is clean. Harsh at C − 1 as well → C − 0.5 and repeat; clean at C + 1 as well → C + 0.5
+   (no higher than the calculation + 1.5 dB).
+4. Power supply: `tone_mode` 1, 60 Hz, both, level `10·(C − 0.5)`, ~3 s, DC V on PVDD.
+   A sag > 2 V → `audio.rms_cap_db10` = −30 (still > 2 V on heavy bass at 100 % — −40).
+   Less → add 20·log10(PVDD under load / PVDD at idle) to C (the number is negative).
+5. Write `audio.amp_clip_db10` = round(10·C), `audio.amp_src` = 3; `tone_mode` 0, the source as
+   it was.
 
-Без мультиметра — лише крок 3: `tone_db10` від −160 кроком +5 (0,5 дБ) до першої різкості;
-C = цей рівень у дБ − 0,5 (±1 дБ), `audio.amp_src` = 2.
+Without a multimeter, step 3 only: `tone_db10` from −160 in steps of +5 (0.5 dB) up to the first
+harshness; C = that level in dB − 0.5 (±1 dB), `audio.amp_src` = 2.
 
-## Калібрування колонок: частота порту
+## Speaker calibration: port frequency
 
-Для фазоінверторів. Веб: сторінка калібрування порту (адреса `system/service/calibration/port`,
-`webui/src/pages/service/CalibrationPage.svelte`) і майстер «Колонки»
-(`webui/src/pages/speakers/Wizard.svelte`). Знайдене записує лише людина («Застосувати» /
-«Прийняти» / «Записати»): `audio.port_hz` (30…80), `audio.port_src` і `audio.spk_type` = 1.
+For ported speakers. Web: the port calibration page (address `system/service/calibration/port`,
+`webui/src/pages/service/CalibrationPage.svelte`) and the "Speakers" wizard
+(`webui/src/pages/speakers/Wizard.svelte`). Only a person saves what was found ("Apply" /
+"Accept" / "Save"): `audio.port_hz` (30…80), `audio.port_src` and `audio.spk_type` = 1.
 
-**Мікрофоном панелі** (`audio.port_meas` = true, ~45 с; задача `port_meter`, ядро 0):
+**With the panel's microphone** (`audio.port_meas` = true, ~45 s; task `port_meter`, core 0):
 
-1. Мікрофон — біля верхнього краю панелі. Цей край — за 0,5–1 см від центру великого динаміка
-   однієї колонки, не торкаючись; решітку краще зняти; у кімнаті тиша. `audio.port_meas_ch` —
-   яка колонка (1 ліва, 2 права).
-2. Панель ~4 с слухає тишу (джерело `off`), потім тон повз DSP на одному каналі: рівень
-   підбирається на 90 Гц у межах −60…−30 dBFS, далі розгортка цілими герцами 20…100 Гц через
-   ~1/24 октави (без 50 і 60 Гц — мережевий фон), вікно Ганна 0,4 с на точку.
-3. Провал ближнього поля = частота порту (`audio_core::find_port`). Після виміру тон, його рівень і
-   джерело повертаються як були (якщо хтось вибрав інше джерело — лишається його).
-4. `audio.port_meas_status` — повідомлення каталогу вебу (`@cal.m_*`), `audio.port_meas_hz` —
-   знайдене:
-   - «Знайдено: N Гц» — провал чіткий (≥ 12 дБ вгору, ≥ 6 дБ вниз, ≥ 15 дБ над шумом), веб
-     пропонує «Застосувати»;
-   - «Знайдено N Гц — поза 30…80» — не застосовується;
-   - «Сумнівно, ~N Гц: перевірте пальцем» — провал мілкий або близько до шуму; частоту показано,
-     не застосовується;
-   - «Провалу нема: закрита чи далеко» — колонка закрита або мікрофон далеко; «Мікрофон не чує
-     тону» — панель не біля обраної колонки.
-   Крива виміру — в лозі, рядки `port meter, dBFS tone/noise …`.
+1. The microphone is at the panel's top edge. That edge is 0.5–1 cm from the centre of one
+   speaker's large driver, not touching; better with the grille off; the room quiet.
+   `audio.port_meas_ch` — which speaker (1 left, 2 right).
+2. The panel listens to the silence for ~4 s (source `off`), then plays a tone bypassing the DSP
+   on one channel: the level is chosen at 90 Hz within −60…−30 dBFS, then a sweep in whole hertz
+   over 20…100 Hz at ~1/24 octave (without 50 and 60 Hz — mains hum), a 0.4 s Hann window per
+   point.
+3. The near-field dip = the port frequency (`audio_core::find_port`). After the measurement the
+   tone, its level and the source return to what they were (if someone selected another source,
+   theirs stays).
+4. `audio.port_meas_status` is a message from the web's catalog (`@cal.m_*`), `audio.port_meas_hz`
+   what was found:
+   - "Found: N Hz" — the dip is clear (≥ 12 dB above, ≥ 6 dB below, ≥ 15 dB over the noise), the
+     web offers "Apply";
+   - "Found N Hz — outside 30…80" — not applied;
+   - "Doubtful, ~N Hz: check with a finger" — the dip is shallow or close to the noise; the
+     frequency is shown, not applied;
+   - "No dip: a closed speaker, or too far" — the speaker is sealed or the microphone is too far;
+     "The microphone cannot hear the tone" — the panel is not at the selected speaker.
+   The measured curve is in the log, lines `port meter, dBFS tone/noise …`.
 
-**Вручну**: тон через DSP з `audio.cal_port_off` і `audio.cal_vol_cap` = 20 (порт вимкнено, гучність
-≤ 20 % лише поки грає тон). Частота від 30 до 80 Гц кроком 2–5 Гц; де дифузор великого динаміка
-майже стоїть, а з порту дме найсильніше, — частота порту. Тон без змін вимикається сам через
-120 с.
+**By hand**: a tone through the DSP with `audio.cal_port_off` and `audio.cal_vol_cap` = 20 (port
+off, volume ≤ 20 % only while the tone plays). Frequency from 30 to 80 Hz in steps of 2–5 Hz;
+where the large driver's cone nearly stands still and the port blows hardest is the port
+frequency. A tone without changes switches off by itself after 120 s.
 
-`audio.port_lift_db` після запису: типово 3 дБ; гуде — 2, мало басу — 4–5. Поки задано порт,
-`audio.hp_hz` не діє.
+`audio.port_lift_db` after saving: 3 dB by default; boomy — 2, too little bass — 4–5. While a port
+is set, `audio.hp_hz` has no effect.
 
-**Перевірка пальцем — остаточна**: тон з телефона через Bluetooth, DSP нейтральний (порт 0,
-тонкомпенсація 0, EQ вимк.), палець на ковпачку великого динаміка, 55…75 Гц — де вібрація
-найслабша. Мікрофон може помилитися на кілька герц: резонанс кімнати на частоті порту заповнює
-провал і зсуває його вгору, порт ззаду тягне його донизу.
+**The finger check is final**: a tone from the phone over Bluetooth, the DSP neutral (port 0,
+loudness compensation 0, EQ off), a finger on the large driver's dust cap, 55…75 Hz — where the
+vibration is weakest. The microphone can be off by a few hertz: a room resonance at the port
+frequency fills the dip and shifts it up, a rear port pulls it down.
 
-## Bluetooth через супутник
+## Bluetooth via the satellite
 
-A2DP приймає окрема плата ESP32 зі своєю прошивкою
-([ModESP_BT_Satellite](https://github.com/Zapadenec1982/ModESP_BT_Satellite)). Звук іде
-I2S-лінією GPIO33/30/31, усе інше — UART-лінком; байтовий контракт — `docs/LINK_PROTOCOL.md`.
+A2DP is received by a separate ESP32 board with its own firmware
+([ModESP_BT_Satellite](https://github.com/Zapadenec1982/ModESP_BT_Satellite)). The sound goes over
+the I2S line GPIO33/30/31, everything else over the UART link; the byte contract is
+`docs/LINK_PROTOCOL.md`.
 
-| Частина | Що робить |
+| Part | What it does |
 |---|---|
-| `modules/bt` | лінк із супутником: прив'язка `uart_sat` (роль `sat_link`, драйвер `uart_link`; J5, TX GPIO26, RX GPIO27, 460 800 бод), ключі `bt.*`, `GET`/`POST /api/bt` |
-| `components/sat_link` | кадри COBS + CRC-16, розбір і побудова повідомлень (`sat_link.h`), машина переходу формату (`format_sync.h`), публікація формату аудіозадачі (`stream_control.h`); без ESP-IDF, тестується на хості |
-| `modules/audio` | приймає оголошений формат, тактує лінк або читає slave-порт, кільце BT |
+| `modules/bt` | the link with the satellite: binding `uart_sat` (role `sat_link`, driver `uart_link`; J5, TX GPIO26, RX GPIO27, 460,800 baud), keys `bt.*`, `GET`/`POST /api/bt` |
+| `components/sat_link` | COBS + CRC-16 frames, parsing and building messages (`sat_link.h`), the format transition machine (`format_sync.h`), publishing the format to the audio task (`stream_control.h`); no ESP-IDF, tested on the host |
+| `modules/audio` | adopts the announced format, clocks the link or reads the slave port, the BT ring |
 
-### Лінк
+### Link
 
-- Байти з UART знімає задача `sat_uart` (ядро 0, пріоритет 8) і кладе цілі кадри в кільце 6 КБ;
-  обробка — на головній задачі.
-- HELLO раз на секунду, доки супутник не відповів своїм; далі PING раз на 2 с; лінк зниклий після
-  6 с без жодного кадру. `bt.link`, `bt.sat` (збірка супутника), `bt.rtt_ms`; лічильники
-  `bt.uart_ovf`, `bt.rx_drops`, `bt.seq_gaps`.
-- Наші можливості в HELLO: `RELOCK_I2S`, `WIDE_SLOTS`, `FORMAT_READY`, `96KHZ`, `I2S_MASTER` завжди;
-  `WANT_COVER` і потокові обкладинки, коли готовий їхній обробник; `PAIR_CONFIRM`, поки є екран,
-  щоб підтвердити спарювання. Можливості супутника чистяться під його версію
-  (`sat::device_caps`). Інший `proto_major` — лінк відхилено.
+- The bytes are taken off the UART by task `sat_uart` (core 0, priority 8), which puts whole
+  frames into a 6 KB ring; processing is on the main task.
+- HELLO once a second until the satellite answers with its own; then PING every 2 s; the link is
+  lost after 6 s without any frame. `bt.link`, `bt.sat` (the satellite's build), `bt.rtt_ms`;
+  counters `bt.uart_ovf`, `bt.rx_drops`, `bt.seq_gaps`.
+- Our capabilities in HELLO: `RELOCK_I2S`, `WIDE_SLOTS`, `FORMAT_READY`, `96KHZ`, `I2S_MASTER`
+  always; `WANT_COVER` and streamed covers when their handler is ready; `PAIR_CONFIRM` while there
+  is a screen to confirm pairing on. The satellite's capabilities are trimmed to its version
+  (`sat::device_caps`). A different `proto_major` — the link is refused.
 
-### Хто тактує лінк
+### Who clocks the link
 
-| Супутник | Такт | Шлях на панелі |
+| Satellite | Clock | Path on the panel |
 |---|---|---|
-| ≥ 1.9, HELLO з `DEV_CAP_I2S_SLAVE` | панель | I2S0 виводить свої BCLK на GPIO33 (drive 2) і WS на GPIO30 (drive 3), DATA з GPIO31 іде в RX I2S0; слоти 32 біти, вихід на частоті потоку з MCLK плати; I2S1 запаркований і зупинений; `bt.link_master` = true |
-| < 1.9 | супутник | I2S1 slave RX на GPIO33/30/31; формат зі `STREAM_FMT`/`STREAM_PREPARE`, слот 16 або 32 |
+| ≥ 1.9, HELLO with `DEV_CAP_I2S_SLAVE` | panel | I2S0 outputs its BCLK on GPIO33 (drive 2) and WS on GPIO30 (drive 3), DATA from GPIO31 goes into I2S0 RX; 32-bit slots, the output at the stream's rate with the board's MCLK; I2S1 parked and stopped; `bt.link_master` = true |
+| < 1.9 | satellite | I2S1 slave RX on GPIO33/30/31; format from `STREAM_FMT`/`STREAM_PREPARE`, slot 16 or 32 |
 
-- Панель веде GPIO33/30 лише поки Bluetooth — вибране джерело, формат прийнято в режимі
-  «панель тактує» і останній HELLO супутника несе `DEV_CAP_I2S_SLAVE`. Зміна джерела, зникнення
-  лінку чи HELLO без біта повертають обидва піни у входи (`release_link`, спершу вимикаються
-  виходи).
-- У режимі «панель тактує» вхід і вихід на одному такті: ресемплювати й трімувати нічого;
-  дрейф між телефоном і панеллю поглинає супутник (`docs/LINK_PROTOCOL.md`, «Хто тактує I2S»).
-- Slave-порт (супутник < 1.9): тримається на XTAL; формат, який XTAL не тактує (32-бітні слоти на
-  44,1/48 кГц потребують джерела такту понад 45–49 МГц, а кварц — 40 МГц; 96 кГц — будь-які
-  слоти), переводить його на APLL, а майстра — на найвищу кратність MCLK із 1280…512·fs, за якої
-  APLL (2·MCLK) лишається під 125 МГц: 1280·fs на 44,1/48 кГц, 640·fs на 96
-  (`audio_core::i2s_plan_for_slave`, `components/audio_dsp/include/i2s_clock.h`). Поки slave
-  тримає APLL, такт виходу прив'язаний до родини потоку.
-- Залишаючи BT, slave-порт паркується на XTAL на тій самій ширині слота (48 кГц для 16 біт,
-  32 кГц для 32): зміна ширини перевиділяє DMA-дескриптори, а цієї пам'яті після Wi-Fi може вже
-  не бути.
+- The panel drives GPIO33/30 only while Bluetooth is the selected source, the format was adopted
+  in panel-clocked mode and the satellite's last HELLO carries `DEV_CAP_I2S_SLAVE`. A source
+  change, loss of the link or a HELLO without the bit returns both pins to inputs (`release_link`,
+  the outputs are disabled first).
+- In panel-clocked mode the input and the output are on one clock: nothing to resample or trim;
+  the drift between the phone and the panel is absorbed by the satellite (`docs/LINK_PROTOCOL.md`,
+  "Who clocks I2S").
+- Slave port (satellite < 1.9): held on XTAL; a format XTAL cannot clock (32-bit slots at
+  44.1/48 kHz need a clock source above 45–49 MHz, and the crystal is 40 MHz; 96 kHz — any slots)
+  moves it to APLL, and the master to the highest MCLK multiple out of 1280…512·fs at which APLL
+  (2·MCLK) stays under 125 MHz: 1280·fs at 44.1/48 kHz, 640·fs at 96
+  (`audio_core::i2s_plan_for_slave`, `components/audio_dsp/include/i2s_clock.h`). While the slave
+  holds APLL, the output clock is tied to the stream's family.
+- On leaving BT the slave port is parked on XTAL at the same slot width (48 kHz for 16 bits,
+  32 kHz for 32): a width change reallocates the DMA descriptors, and after Wi-Fi that memory may
+  no longer be there.
 
-### Формат
+### Format
 
-- Супутник ≥ 1.3 оголошує формат `STREAM_PREPARE` і чекає `STREAM_READY`; старіший —
-  `STREAM_FMT`. Модуль `bt` публікує запит у `sat::stream_control()` і в `bt.rate_hz`, `bt.bits`.
-- Аудіозадача з джерелом BT бачить нову ревізію (або зміну того, хто тактує): закриває огинаючу
-  над звуком старого формату, чекає закритого вихідного гейта й паузи читача, приймає формат
-  (`adopt_bt_format_master` або `adopt_bt_format`) і повідомляє результат. Модуль `bt` відповідає
-  `STREAM_READY` (готовий / відмова) і повторює відповідь кожні 100 мс, доки за останню секунду
-  приходили `STREAM_PREPARE`.
-- Поки BT не вибране джерело, формат не приймається і `STREAM_READY` не йде — супутник тримає
-  тишу. Вихід з BT скасовує готовність; повторний вибір приймає формат наново.
-- Режим «панель тактує» приймає лише 32-бітні слоти. Формат, який плата не може тактувати, —
-  тиша і один рядок у лозі. Доки формату немає, — тиша (`BT: no STREAM_FMT yet`): вгадана ширина
-  звучить шумом.
-- Частоти — справа супутника: 44,1 і 48 кГц; 96 кГц лише LHDC V5 з нашим `HOST_CAP_96KHZ`. Кодек —
-  `bt.codec` (SBC, AAC, aptX, aptX HD, LHDC V5).
+- A satellite ≥ 1.3 announces the format with `STREAM_PREPARE` and waits for `STREAM_READY`; an
+  older one with `STREAM_FMT`. The `bt` module publishes the request in `sat::stream_control()` and
+  in `bt.rate_hz`, `bt.bits`.
+- The audio task with the BT source sees a new revision (or a change of who clocks): it closes the
+  envelope over the sound of the old format, waits for a closed output gate and the reader's pause,
+  adopts the format (`adopt_bt_format_master` or `adopt_bt_format`) and reports the result. The
+  `bt` module answers `STREAM_READY` (ready / refusal) and repeats the answer every 100 ms as long
+  as `STREAM_PREPARE` has arrived within the last second.
+- While BT is not the selected source, the format is not adopted and `STREAM_READY` is not sent —
+  the satellite holds silence. Leaving BT cancels the readiness; selecting it again adopts the
+  format anew.
+- Panel-clocked mode accepts only 32-bit slots. A format the board cannot clock — silence and one
+  line in the log. Until there is a format — silence (`BT: no STREAM_FMT yet`): a guessed width
+  sounds as noise.
+- The rates are the satellite's business: 44.1 and 48 kHz; 96 kHz only with LHDC V5 and our
+  `HOST_CAP_96KHZ`. Codec — `bt.codec` (SBC, AAC, aptX, aptX HD, LHDC V5).
 
-### Відтворення
+### Playback
 
-- Задача-читач `audio_bt` (ядро 1, пріоритет 23) читає по 240 кадрів (тайм-аут 10 мс) з RX I2S0 у
-  режимі «панель тактує» або з I2S1, переводить у float і пише в кільце PSRAM на 1 с при 48 кГц
-  (48 000 кадрів; на 96 кГц — 0,5 с). Кадри без місця відкидаються (`dropped` у лозі).
-- Після прийняття формату й після кожного спорожнення — пре-буфер до 120 мс (`BT_TARGET_MS`) у
-  кадрах поточної частоти, у тиші. Черга понад 500 мс (не більше 90 % кільця) — хвіст один раз
-  переставляється на ціль.
-- **Збірка за замовчуванням, `MODESP_AUDIO_BT_DIRECT_CONTINUOUS=ON`**
-  (`modules/audio/CMakeLists.txt`): семпли з кільця йдуть у DSP без змін — без ASRC, без сервотакту,
-  `audio.bt_clock_follow` не діє. Частота потоку ≠ частота виходу → тиша до наступного
-  рукостискання формату. Спорожнення → огинаюча закривається, пре-буфер, далі звук; ліміту часу
-  немає. Із супутником < 1.9 (два кварци) це дає пере-буферизацію раз на кілька хвилин.
-- **`-D MODESP_AUDIO_BT_DIRECT_CONTINUOUS=OFF`** — шлях для супутника < 1.9. Шлях вибирається
-  один раз, на пре-буфері в тиші, і не міняється посеред звуку:
-  - **сервотакт**, якщо `audio.bt_clock_follow` (типово true), частоти рівні й порт може
-    трімуватись: APLL виходу підправляється пропорційно до помилки черги, крок раз на 250 мс,
-    не більше ±100 ppm, гістерезис 2 ppm; семпли побітово ті, що прийшли. Дві недостачі або 8 с
-    на межі трім ≤ −95 ppm при спадній черзі → з наступного пре-буфера ASRC;
-  - **ASRC** інакше: `components/audio_resampler`, 48 відводів × 48 фільтрів, Blackman-Harris,
-    ФНЧ 0,98 Найквіста джерела; співвідношення = частота виходу / оголошена частота,
-    підправляється заповненням кільця: ±500 ppm у межах ±40 мс від цілі, плавно до ±2 % при
-    відхиленні ≥ 100 мс. `audio.asrc_ppm`, `audio.in_rate`.
-- Діагностичні збірки — розділ «Діагностика».
+- The reader task `audio_bt` (core 1, priority 23) reads 240 frames at a time (10 ms timeout) from
+  I2S0 RX in panel-clocked mode or from I2S1, converts them to float and writes them into a PSRAM
+  ring of 1 s at 48 kHz (48,000 frames; at 96 kHz, 0.5 s). Frames with no room are discarded
+  (`dropped` in the log).
+- After format adoption and whenever the ring runs empty — a pre-buffer of up to 120 ms
+  (`BT_TARGET_MS`) in frames of the current rate, in silence. A queue above 500 ms (no more than
+  90 % of the ring) — the tail is moved to the target once.
+- **The default build, `MODESP_AUDIO_BT_DIRECT_CONTINUOUS=ON`** (`modules/audio/CMakeLists.txt`):
+  the samples from the ring go into the DSP unchanged — no ASRC, no clock servo,
+  `audio.bt_clock_follow` has no effect. Stream rate ≠ output rate → silence until the next format
+  handshake. Running empty → the envelope closes, pre-buffer, then sound; there is no time limit.
+  With a satellite < 1.9 (two crystals) this gives a re-buffering once every few minutes.
+- **`-D MODESP_AUDIO_BT_DIRECT_CONTINUOUS=OFF`** — the path for a satellite < 1.9. The path is
+  chosen once, on the pre-buffer in silence, and does not change in the middle of sound:
+  - **clock servo**, if `audio.bt_clock_follow` (default true), the rates are equal and the port
+    can trim: the output APLL is adjusted in proportion to the queue error, a step every 250 ms,
+    no more than ±100 ppm, hysteresis 2 ppm; the samples are bit for bit the ones that arrived.
+    Two underruns, or 8 s at the trim limit ≤ −95 ppm with a falling queue → ASRC from the next
+    pre-buffer;
+  - **ASRC** otherwise: `components/audio_resampler`, 48 taps × 48 filters, Blackman-Harris, LPF
+    at 0.98 of the source's Nyquist; ratio = output rate / announced rate, adjusted by the ring's
+    fill: ±500 ppm within ±40 ms of the target, smoothly up to ±2 % at a deviation ≥ 100 ms.
+    `audio.asrc_ppm`, `audio.in_rate`.
+- Diagnostic builds — section "Diagnostics".
 
-### Керування з панелі й телефона
+### Control from the panel and the phone
 
-- Гучність: супутник — ціль AVRCP absolute volume і сам не послаблює. `VOLUME_STATE` з
-  `source` = 1 (рух на телефоні) стає `audio.volume` (0…127 → 0…100 %), лише коли BT — вибране
-  джерело і минуло 8 с від підключення телефона; рівень, що приходить з підключенням, отримує у
-  відповідь гучність кімнати (`modules/bt/include/bt_volume_gate.h`). Зміна `audio.volume` на
-  панелі йде на телефон (`CMD_VOLUME`), поки лінк піднятий.
-- Транспорт: `bt.cmd` 1 грати, 2 пауза, 3 стоп, 4 наступний, 5 попередній, 6 перемкнути (за
+- Volume: the satellite is an AVRCP absolute volume target and does not attenuate by itself.
+  `VOLUME_STATE` with `source` = 1 (a move on the phone) becomes `audio.volume` (0…127 →
+  0…100 %) only when BT is the selected source and 8 s have passed since the phone connected; a
+  level that arrives with the connection gets the room's volume in reply
+  (`modules/bt/include/bt_volume_gate.h`). A change of `audio.volume` on the panel goes to the
+  phone (`CMD_VOLUME`) while the link is up.
+- Transport: `bt.cmd` 1 play, 2 pause, 3 stop, 4 next, 5 previous, 6 toggle (by
   `bt.play_state`).
-- Поки вибране інше джерело, а телефон стрімить, модуль шле PAUSE (не частіше ніж раз на 3 с).
-  Повернення на BT відновлює лише паузу, яку поставив модуль, і лише якщо телефон тоді грав.
-  Телефон каже «грає», а потоку 5 с немає → один PLAY, щоб супутник відновив призупинений потік
-  (`bt_stall_kick.h`); пауза, яку попросила людина, не скасовується.
-- Метадані: `bt.state`, `bt.peer`, `bt.title`, `bt.artist`, `bt.album`, `bt.pos_s`, `bt.dur_s`,
-  `bt.play_state`; обкладинка — `modules/bt/src/bt_cover.cpp` (`docs/LINK_PROTOCOL.md`,
-  «Обкладинка»). Від'єднання телефона очищає трек і формат.
-- Налаштування й спарювання (супутник з `DEV_CAP_BT_SETTINGS`): `GET`/`POST /api/bt`, `bt.cfg_rev`,
-  `bt.pair_*`. Перше ім'я супутника стає іменем панелі, якщо його ще не задано; далі супутнику
-  з іншим ім'ям передається ім'я панелі (`modules/bt/include/device_name.h`, `docs/NETWORK.md`).
+- While another source is selected and the phone is streaming, the module sends PAUSE (no more
+  often than once every 3 s). Returning to BT lifts only a pause the module set, and only if the
+  phone was playing then. The phone reports playing, but there has been no stream for 5 s → one
+  PLAY, so that the satellite resumes a suspended stream (`bt_stall_kick.h`); a pause a person
+  asked for is not cancelled.
+- Metadata: `bt.state`, `bt.peer`, `bt.title`, `bt.artist`, `bt.album`, `bt.pos_s`, `bt.dur_s`,
+  `bt.play_state`; the cover — `modules/bt/src/bt_cover.cpp` (`docs/LINK_PROTOCOL.md`,
+  "Cover art"). Disconnecting the phone clears the track and the format.
+- Settings and pairing (a satellite with `DEV_CAP_BT_SETTINGS`): `GET`/`POST /api/bt`,
+  `bt.cfg_rev`, `bt.pair_*`. The satellite's first name becomes the panel's name if that is not set
+  yet; after that a satellite with a different name is given the panel's name
+  (`modules/bt/include/device_name.h`, `docs/NETWORK.md`).
 
-## USB-аудіо
+## USB audio
 
-Модуль `modules/usb_audio`, компонент `components/usb_uac` (TinyUSB): панель — пристрій USB
-Audio Class 2 на HS-порту. Обмеження порту за залізом — `docs/CONCEPT.md`, «USB».
+Module `modules/usb_audio`, component `components/usb_uac` (TinyUSB): the panel is a USB Audio
+Class 2 device on the HS port. The port's hardware limits: `docs/CONCEPT.md`, "USB".
 
-- 44,1 / 48 / 88,2 / 96 кГц, 16 або 24 біти, асинхронно з feedback-ендпоїнтом: темп задає такт
-  панелі, ресемплювання немає. Ім'я пристрою — ім'я панелі, серійний номер — MAC.
-- Задача-продюсер (ядро 1, пріоритет 23) раз на 1 мс забирає FIFO. Поки джерело `usb`: кожен
-  новий потік → flush того, що в кільці, → нова сесія (`request_new_session`) і `ask_rate` → запис
-  як `OWNER_USB`; частоту, яку такт не взяв, — тиша до наступного потоку. Поки USB не
-  джерело — потік вичитується, міряється й відкидається.
-- Feedback тримає заповнення (кільце + FIFO) на подушці споживача + 20 мс: поправка
-  (ціль − заповнення) / fs, середнє заповнення τ 64 мс, межа ±0,5 %.
-- Комп'ютер почав грати (пік понад −60 dBFS протягом останніх 300 мс), а вибране джерело не грає →
-  `audio.source` = 7. Mute хоста → нулі.
-- Гучність хоста (−80…0 дБ, розкладено рівно на 0…100) іде в `audio.volume` через опорну точку
-  (`modules/usb_audio/include/usb_volume.h`): на старті потоку кімната лишає свій рівень, 3 с
-  після старту і поки USB не джерело рівень лише ставить опору; далі кусково-лінійно (верх
-  повзунка — верх панелі, низ — тиша); рух ручки чи вебу стає новою опорою.
-- Переривання контролера й обидві задачі — на ядрі 1 (`usb_audio.core`, 0 або 1, після
-  перезапуску): переривання приходить кожен мікрокадр, і запізнення понад 125 мкс губить пакет.
-  TinyUSB-задача — пріоритет 20, лише керуючі запити.
-- Ключі: `usb_audio.state` (off | waiting | ready | playing), `usb_audio.rate`, `usb_audio.bits`,
-  `usb_audio.diag` (фаза, кадри, заповнення, feedback, пакети, втрати, рівень, тон, розриви),
-  `usb_audio.losses` (останні втрати пакетів).
+- 44.1 / 48 / 88.2 / 96 kHz, 16 or 24 bits, asynchronous with a feedback endpoint: the panel's
+  clock sets the pace, there is no resampling. Device name — the panel's name, serial number — the
+  MAC.
+- The producer task (core 1, priority 23) drains the FIFO every 1 ms. While the source is `usb`:
+  every new stream → flush of what is in the ring → a new session (`request_new_session`) and
+  `ask_rate` → writing as `OWNER_USB`; a rate the clock did not take — silence until the next
+  stream. While USB is not the source, the stream is read out, measured and discarded.
+- Feedback holds the fill (ring + FIFO) at the consumer's cushion + 20 ms: correction
+  (target − fill) / fs, mean fill τ 64 ms, limit ±0.5 %.
+- The computer started playing (peak above −60 dBFS within the last 300 ms) and the selected
+  source is not playing → `audio.source` = 7. Host mute → zeros.
+- The host volume (−80…0 dB, spread evenly over 0…100) goes into `audio.volume` through a reference
+  point (`modules/usb_audio/include/usb_volume.h`): at the start of a stream the room keeps its
+  level; for 3 s after the start and while USB is not the source the level only sets the
+  reference; after that piecewise-linear (the top of the slider is the top of the panel, the bottom
+  is silence); a move of the knob or the web becomes the new reference.
+- The controller's interrupt and both tasks are on core 1 (`usb_audio.core`, 0 or 1, after a
+  restart): the interrupt comes every microframe, and a delay over 125 µs loses a packet. The
+  TinyUSB task — priority 20, control requests only.
+- Keys: `usb_audio.state` (off | waiting | ready | playing), `usb_audio.rate`, `usb_audio.bits`,
+  `usb_audio.diag` (phase, frames, fill, feedback, packets, losses, level, tone, gaps),
+  `usb_audio.losses` (the latest packet losses).
 
-## Спектр
+## Spectrum
 
-- `audio_core::SpectrumAnalyzer`: 28 смуг 40 Гц…16 кГц, FFT 1024 точки моно-суми з вікном Ганна,
-  крок 512; на 88,2/96 кГц моно-сума усереднюється попарно, тож FFT працює на еквіваленті
-  44,1/48 кГц. Сигнал береться після ланцюга, зріз гучності додається назад; зниження лімітером —
-  ні.
-- Працює, лише коли джерело ≠ `off` і панель показує екран з рядком спектра (`ui.screen` = `now`,
-  `radio` або `standby`); інакше публікує один кадр на підлозі й мовчить.
+- `audio_core::SpectrumAnalyzer`: 28 bands 40 Hz…16 kHz, a 1024-point FFT of the mono sum with a
+  Hann window, hop 512; at 88.2/96 kHz the mono sum is averaged in pairs, so the FFT works on the
+  equivalent of 44.1/48 kHz. The signal is taken after the chain, and the volume cut is added back;
+  the limiter's reduction is not.
+- It runs only when the source ≠ `off` and the panel shows a screen with the spectrum strip
+  (`ui.screen` = `now`, `radio` or `standby`); otherwise it publishes one frame at the floor and
+  stays quiet.
 
-## Діагностика
+## Diagnostics
 
-| Ключ | Норма | Якщо ні |
+| Key | Normal | If not |
 |---|---|---|
-| `audio.underruns` | не росте під час звуку | продюсер не встигає або вхід BT спорожнів |
-| `audio.lim_gr` | 0 на звичайній гучності; кілька дБ на 100 % з гучним мастером | постійно > 3 дБ — завищений drive або C |
-| `audio.bass_gr` | 0…6 дБ на гучному басу на 100 % | постійно > 10 дБ — підйом басу EQ завеликий для PVDD |
-| `audio.out_clamps` | 0 | помилка ланцюга |
-| `audio.dsp_faults` | 0 | NaN/Inf у ланцюгу |
-| `audio.dsp_pct` | ≤ 35 % (поріг попередження вебу) | DSP забирає забагато ядра |
-| `audio.dsp_max_pct` | ≤ 80 % (поріг вебу) | понад 100 % — найгірший блок не вклався у свій час |
+| `audio.underruns` | does not grow during sound | the producer cannot keep up, or the BT input ran empty |
+| `audio.lim_gr` | 0 at normal volume; a few dB at 100 % with a loud master | constantly > 3 dB — drive or C set too high |
+| `audio.bass_gr` | 0…6 dB on loud bass at 100 % | constantly > 10 dB — the EQ's bass boost is too much for PVDD |
+| `audio.out_clamps` | 0 | an error in the chain |
+| `audio.dsp_faults` | 0 | NaN/Inf in the chain |
+| `audio.dsp_pct` | ≤ 35 % (the web's warning threshold) | DSP takes too much of the core |
+| `audio.dsp_max_pct` | ≤ 80 % (the web's threshold) | above 100 % — the worst block did not fit its time |
 
-- Пороги вебу — `webui/src/lib/service.js`. `audio.dsp_pct` — DSP-цикли (з командами) у % одного
-  ядра за 0,5 с; `audio.dsp_max_pct` — найгірший блок у % часу блоку. `audio.lim_gr` і
-  `audio.bass_gr` — найглибше зниження брикволлом і бас-лімітером за ті самі 0,5 с.
-- Інші статуси (раз на 0,5 с): `audio.in_l`/`in_r` — пік джерела до обробки;
-  `audio.level_l`/`level_r` — пік після ланцюга; `audio.cpu_pct` — час обробки блоку / реальний
-  час; `audio.eq_headroom_db`, `audio.loud_db`, `audio.vol_eff`; для BT — `audio.in_rate`
-  (виміряна частота входу), `audio.asrc_ppm`.
-- Лог (теги `Audio`, `I2sStd`, `Bt` лишаються на INFO у збірці з тихим логом,
+- The web's thresholds: `webui/src/lib/service.js`. `audio.dsp_pct` — DSP cycles (with commands)
+  in % of one core over 0.5 s; `audio.dsp_max_pct` — the worst block in % of the block's time.
+  `audio.lim_gr` and `audio.bass_gr` — the deepest reduction by the brickwall and by the bass
+  limiter over the same 0.5 s.
+- Other statuses (every 0.5 s): `audio.in_l`/`in_r` — the source's peak before processing;
+  `audio.level_l`/`level_r` — the peak after the chain; `audio.cpu_pct` — block processing time /
+  real time; `audio.eq_headroom_db`, `audio.loud_db`, `audio.vol_eff`; for BT — `audio.in_rate`
+  (the measured input rate), `audio.asrc_ppm`.
+- The log (tags `Audio`, `I2sStd`, `Bt` stay at INFO in the quiet-log build,
   `components/modesp_services/src/log_policy.cpp`):
-  - старт: `Initialized: main … heap DMA N`, `amplifier ceiling … -> limiter at …`, `bass (boot): …`;
+  - start: `Initialized: main … heap DMA N`, `amplifier ceiling … -> limiter at …`, `bass (boot): …`;
   - `amp ON/OFF`, `output retuned to N Hz`, `N Hz plays at M: the output stops at 96000`;
-  - збої: `TX DMA ran dry`, `audio task late`, `underruns`, `i2s refused N blocks in full`,
+  - faults: `TX DMA ran dry`, `audio task late`, `underruns`, `i2s refused N blocks in full`,
     `output: N sample(s) clamped`, `DSP: N block(s) replaced by silence`, `limiter −x dB`,
     `bass limiter −x dB`;
-  - навантаження: `DSP load over 30 s: … at N Hz` (раз на 30 с звуку);
-  - кільце: `PCM start #…` (перша секунда після відкриття, вхід і вихід), `PCM edge #…`
-    (найбільший стрибок на краях гейтів);
-  - Bluetooth: `BT path: …` (вибраний шлях), `link clock: …`, `clocking the link: BCLK out on GPIO33,
-    WS out on GPIO30, data in on GPIO31`, раз на 5 с `BT signal: …` (рівні, частоти, черга в % і мс,
-    short/dropped/primes/resyncs), `BT I2S totals`, `BT RX DMA`, `BT window`.
-- Діагностичні збірки (`modules/audio/CMakeLists.txt`; усі, крім першої, вимагають
-  `-D MODESP_AUDIO_BT_DIRECT_CONTINUOUS=OFF`, несумісні комбінації — помилка CMake):
+  - load: `DSP load over 30 s: … at N Hz` (once per 30 s of sound);
+  - ring: `PCM start #…` (the first second after opening, input and output), `PCM edge #…`
+    (the largest jump at the gates' edges);
+  - Bluetooth: `BT path: …` (the chosen path), `link clock: …`, `clocking the link: BCLK out on GPIO33,
+    WS out on GPIO30, data in on GPIO31`, every 5 s `BT signal: …` (levels, rates, queue in % and
+    ms, short/dropped/primes/resyncs), `BT I2S totals`, `BT RX DMA`, `BT window`.
+- Diagnostic builds (`modules/audio/CMakeLists.txt`; all but the first require
+  `-D MODESP_AUDIO_BT_DIRECT_CONTINUOUS=OFF`, incompatible combinations are a CMake error):
 
-  | Опція | Що робить |
+  | Option | What it does |
   |---|---|
-  | `MODESP_AUDIO_DIAGNOSTIC_FIXED_TRIM` | вимикає живий трім такту виходу (у збірці за замовчуванням уже вимкнений) |
-  | `MODESP_AUDIO_DIAGNOSTIC_BT_DIRECT` | BT без ASRC на рівних частотах, трім фіксований, не довше 60 с |
-  | `MODESP_AUDIO_DIAGNOSTIC_BT_FIXED_RATIO` | BT через ASRC зі співвідношенням 1, трім фіксований, не довше 60 с |
-  | `MODESP_AUDIO_DIAGNOSTIC_CONSTANT` | на ЦАП лише слово 256, музика вимкнена; політика такту й формату звичайна |
+  | `MODESP_AUDIO_DIAGNOSTIC_FIXED_TRIM` | disables the live trim of the output clock (in the default build it is already off) |
+  | `MODESP_AUDIO_DIAGNOSTIC_BT_DIRECT` | BT without ASRC at equal rates, fixed trim, no longer than 60 s |
+  | `MODESP_AUDIO_DIAGNOSTIC_BT_FIXED_RATIO` | BT through ASRC with ratio 1, fixed trim, no longer than 60 s |
+  | `MODESP_AUDIO_DIAGNOSTIC_CONSTANT` | only the word 256 to the DAC, music off; clock and format policy as usual |
 
-  Режими BT_DIRECT і BT_FIXED_RATIO замовкають на першій втраті (недостача, переставлений хвіст,
-  відкинуті кадри, переповнення RX/TX DMA, короткий блок ASRC, трім) або через 60 с і пишуть
-  причину в `BT path`; знову озброюються переходом OFF/BT чи новим форматом. Перевірка на хості:
-  `python tools/tests/test_bt_diagnostic.py` (звичайний, обидва діагностичні й безперервний режими).
-- Перевірка тракту: `audio.source` = 1, `audio.volume` ≈ 30 → синус 1 кГц на виході PCM5102A;
-  осцилограф на JP1: BCLK = 64·fs (3,072 МГц на 48 кГц), WS = fs; MCLK (GPIO49) з тест-тоном
-  тримається низько — так і має бути. Bluetooth: `bt.link` = true, `bt.link_master` = true із
-  супутником ≥ 1.9, у лозі `BT path: we clock the link at N Hz / 32-bit` і рядки `BT signal` з
-  ненульовим рівнем на вході.
-- Бортові ES8311 і NS4150 для відтворення не використовуються. АЦП ES8311 — вхід мікрофона для
-  виміру порту й діагностичного запису (`docs/MIC_CAPTURE.md`); відкриваючи мікрофон,
-  `mic_input` тримає PA_CTRL (GPIO11) низько.
+  The BT_DIRECT and BT_FIXED_RATIO modes go quiet on the first loss (underrun, a moved tail,
+  discarded frames, RX/TX DMA overflow, a short ASRC block, trim) or after 60 s and write the reason
+  into `BT path`; they re-arm on an OFF/BT transition or a new format. Host check:
+  `python tools/tests/test_bt_diagnostic.py` (the normal, both diagnostic and the continuous modes).
+- Path check: `audio.source` = 1, `audio.volume` ≈ 30 → a 1 kHz sine at the PCM5102A output; an
+  oscilloscope on JP1: BCLK = 64·fs (3.072 MHz at 48 kHz), WS = fs; MCLK (GPIO49) is held low with
+  the test tone — as it should be. Bluetooth: `bt.link` = true, `bt.link_master` = true with a
+  satellite ≥ 1.9, in the log `BT path: we clock the link at N Hz / 32-bit` and `BT signal` lines
+  with a non-zero input level.
+- The on-board ES8311 and NS4150 are not used for playback. The ES8311's ADC is the microphone
+  input for the port measurement and diagnostic recording (`docs/MIC_CAPTURE.md`); when it opens
+  the microphone, `mic_input` holds PA_CTRL (GPIO11) low.

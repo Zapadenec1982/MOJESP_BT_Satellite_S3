@@ -3,7 +3,7 @@
   "board": "p4_player",
   "display_name": "P4 Player (Guition JC4880P443C)",
   "version": "0.4",
-  "description": "ESP32-P4 + ESP32-C6 (SDIO) panel: 4.3in 480x800 MIPI-DSI ST7701S, GT911 touch, 32 MB PSRAM, 16 MB flash. Pins only from docs/CONCEPT.md «Розпіновка» and «Референсні проєкти» (panel BSP).",
+  "description": "ESP32-P4 + ESP32-C6 (SDIO) panel: 4.3in 480x800 MIPI-DSI ST7701S, GT911 touch, 32 MB PSRAM, 16 MB flash. Pins only from docs/CONCEPT.md, \"Pinout\" and \"Reference projects\" (panel BSP).",
 
   "_stages": "Stage 2: display, touch, encoder, amp enable line. Stage 3: I2S-A duplex (DAC+ADC) + I2S-B slave (BT). The BT-module I2C expander (MCP23017) is not on the bench yet.",
 

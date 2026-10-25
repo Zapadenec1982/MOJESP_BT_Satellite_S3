@@ -7,7 +7,7 @@
  * should not know what a power rail, a bus width or a mount config is, and the next board
  * that keeps its files somewhere else should need a second driver, not a second module.
  *
- * Two facts shape it, both from docs/CONCEPT.md «microSD»:
+ * Two facts shape it, both from docs/CONCEPT.md, "microSD":
  *
  *   - The pin assignment came from a reference design, not from a schematic, so a failure is
  *     reported WITH the pins that were tried.

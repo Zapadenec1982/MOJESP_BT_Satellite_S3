@@ -107,7 +107,7 @@ struct I2CBusConfig {
 ///
 /// Pins are configuration, not constants, for a specific reason: the ESP32-P4 has ONE SDMMC
 /// controller with two slots, ESP-Hosted already owns one of them for the C6, and the card
-/// slot's wiring on this panel (docs/CONCEPT.md «microSD») was recorded as "verify against the
+/// slot's wiring on this panel (docs/CONCEPT.md, "microSD") was recorded as "verify against the
 /// schematic before initialising". Putting it in board.json means correcting it later is an
 /// edit to a data file rather than to firmware, and means a wrong guess fails loudly at mount
 /// instead of being baked in.
@@ -170,7 +170,7 @@ struct I2CDisplayConfig {
 /// MIPI-DSI panel (ESP32-P4). Config-only, like I2CDisplayConfig: HAL stores the
 /// geometry/timing/pins from board.json, the lcd driver (drivers/dsi_st7701) owns the
 /// DSI bus, DPI panel, PHY LDO, reset line and backlight PWM. Timings are board facts —
-/// only from the panel datasheet / vendor BSP (docs/CONCEPT.md «Референсні проєкти»),
+/// only from the panel datasheet / vendor BSP (docs/CONCEPT.md, "Reference projects"),
 /// never guessed.
 ///
 /// NO DEFAULTS for the timings, and that is the point. They used to hold the JC4880P443C's

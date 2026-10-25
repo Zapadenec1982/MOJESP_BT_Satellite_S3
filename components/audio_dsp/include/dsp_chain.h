@@ -27,7 +27,7 @@ static constexpr int   MAX_BANDS   = 10;
 /// and the resampler cost 800 ms of CPU per second of audio — measured, and more than the
 /// MP3 decoder by a factor of thirty-five. Every ESP32 radio and player worth copying does
 /// the obvious thing instead: the output clock follows the source
-/// (CONCEPT «Вихідний такт іде за джерелом»). So this moves.
+/// (docs/CONCEPT.md, "The output clock follows the source"). So this moves.
 ///
 /// Written by the audio task when it retunes I2S, read by everything that turns a frequency
 /// into a coefficient. A plain float: it changes between blocks, never during one.
@@ -176,10 +176,6 @@ public:
     // speakers, and how far they go.
     static constexpr float TONE_LO_HZ = 100.0f, TONE_HI_HZ = 10000.0f, TONE_Q = 0.71f;
     static constexpr float TONE_MAX_DB = 6.0f;
-    /// Where the speakers stand (Колонки › Розміщення, audio.placement): free, by a wall, in a
-    /// corner. A wall sends the bass back into the room, a corner more of it; this much comes off
-    /// Бас's own shelf (set_tone), so it costs no section and Бас keeps its ±TONE_MAX_DB over it.
-    static constexpr float PLACE_DB[3] = {0.0f, -3.0f, -6.0f};
     static constexpr float BAL_MAX_DB = 6.0f;       ///< set_balance_db()
 
     DspChain() { set_sample_rate(FS_HZ_DEFAULT); }
@@ -240,9 +236,8 @@ public:
     /// high shelf at TONE_HI_HZ, each within ±TONE_MAX_DB, right after the loudness. They are
     /// two sections of their own — none of the ten EQ bands is ever taken — and they play
     /// whether the EQ is on or not. They count in B, a change crossfades as an EQ edit does,
-    /// and at 0 dB a shelf is a wire, bit-exact. `place_db`, 0 down to PLACE_DB's last, is the
-    /// room's cut (audio.placement), added to Бас on the same low shelf; NaN or above 0 is 0.
-    void set_tone(float bass_db, float treble_db, float place_db = 0.0f);
+    /// and at 0 dB a shelf is a wire, bit-exact.
+    void set_tone(float bass_db, float treble_db);
     /// The balance (S3): `db` > 0 turns the LEFT channel down by that much, so the image moves
     /// right; < 0 the right channel; within ±BAL_MAX_DB. Only ever down, so it costs no
     /// headroom. After the stereo stage, before the bass limiter, gliding as the volume does;

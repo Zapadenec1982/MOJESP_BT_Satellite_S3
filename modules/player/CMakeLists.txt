@@ -2,7 +2,7 @@
 # audio core as a source. Decoding is esp_audio_codec's "simple decoder": one interface for
 # MP3, FLAC, WAV and M4A, so the container never reaches this code.
 #
-# The output clock follows the session's first track (docs/AUDIO.md «Частота виходу і сесії»);
+# The output clock follows the session's first track (docs/AUDIO.md, "Output rate and sessions");
 # a later track at another rate goes through the fixed-ratio converter on the resampler written
 # for Bluetooth, which is simpler here than the asynchronous case it was written for.
 idf_component_register(

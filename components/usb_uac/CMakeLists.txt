@@ -1,4 +1,5 @@
-# usb_uac — the panel as a USB Audio Class 2 device on the P4's high-speed port (CONCEPT «USB»).
+# usb_uac — the panel as a USB Audio Class 2 device on the P4's high-speed port
+# (docs/CONCEPT.md, "USB").
 # TinyUSB is used directly, as espressif/usb_device_uac does: this component owns the PHY, the
 # descriptors and tusb_config.h. TinyUSB's own sources must be compiled against that config
 # header, so its directory goes onto the tinyusb component's include path below.

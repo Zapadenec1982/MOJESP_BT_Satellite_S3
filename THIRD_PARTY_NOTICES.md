@@ -1,3 +1,5 @@
+**English** · [Українська](THIRD_PARTY_NOTICES.uk.md)
+
 # Third-party code in ModESP Streamer
 
 What this repository carries, and what goes into the firmware image (`modesp_p4_player.bin`)

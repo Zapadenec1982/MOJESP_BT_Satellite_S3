@@ -168,6 +168,10 @@
     "nav.player": {
       "pl": 105.4
     },
+    "nav.web": {
+      "de": 134.3,
+      "pl": 131.2
+    },
     "now.make_visible": {
       "de": 213.0
     },
@@ -215,20 +219,6 @@
     "spk.center": {
       "en": 58.4,
       "pl": 61.9
-    },
-    "spk.place_corner": {
-      "en": 94.4,
-      "de": 97.2
-    },
-    "spk.place_free": {
-      "en": 121.4,
-      "de": 104.3,
-      "pl": 121.2
-    },
-    "spk.place_wall": {
-      "en": 98.9,
-      "de": 113.2,
-      "pl": 106.8
     },
     "spk.port_manual": {
       "de": 205.8,

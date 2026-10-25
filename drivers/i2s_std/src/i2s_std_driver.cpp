@@ -92,7 +92,7 @@ void I2sStdDriver::configure(const char* role, const modesp::I2SBusResource* bus
 // suggests and was established on the bench (18.09.2026) rather than derived.
 //
 // The floor is the DAC's, not the P4's. PCM5102A takes no MCLK here — it locks its
-// internal PLL to BCLK (CONCEPT «ЦАП — PCM5102A») — and at 22.05 kHz with 32-bit slots
+// internal PLL to BCLK (docs/CONCEPT.md, "DAC — PCM5102A") — and at 22.05 kHz with 32-bit slots
 // BCLK is only 1.41 MHz. I2S accepted that rate and reported success; the DAC stayed
 // silent. So the floor is where the DAC is known to lock, and moving it down needs a bench
 // test, not an argument.

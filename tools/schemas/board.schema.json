@@ -770,7 +770,7 @@
       "$ref": "#/$defs/remote_device_array"
     },
     "sdmmc_slots": {
-      "$comment": "player-fork: microSD/TF slot on the SDMMC peripheral (CONCEPT «microSD»). Pins are config because the panel's wiring still needs confirming against the schematic, and because ESP-Hosted owns the other slot.",
+      "$comment": "player-fork: microSD/TF slot on the SDMMC peripheral (docs/CONCEPT.md, \"microSD\"). Pins are config because the panel's wiring still needs confirming against the schematic, and because ESP-Hosted owns the other slot.",
       "type": "array",
       "items": {
         "type": "object",

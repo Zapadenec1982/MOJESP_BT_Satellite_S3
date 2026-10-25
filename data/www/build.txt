@@ -1,4 +1,4 @@
-3a5ce2670c8f1404  bundle.js.gz
+21279d739c1a42f6  bundle.js.gz
 2112f24250f361d8  chunk-AccessPage.js.gz
 1c76d2c05635bb6f  chunk-BackupPage.js.gz
 ca7301a049005948  chunk-BtPage.js.gz
@@ -9,7 +9,7 @@ fdea81bc0e8b74bd  chunk-Chip.js.gz
 cb46de8174068120  chunk-ComponentsPage.js.gz
 6a9faadc43dee8c3  chunk-DisplayPage.js.gz
 ac1d963d7c06a5f6  chunk-DlnaPage.js.gz
-83702b3966dbd57f  chunk-DspPage.js.gz
+006c0d66709e1593  chunk-DspPage.js.gz
 1555380c52740f61  chunk-FirmwarePage.js.gz
 325a600dbc3cb272  chunk-HardwarePage.js.gz
 73ee32b1ec1d1b4d  chunk-LibraryPage.js.gz
@@ -20,7 +20,7 @@ f228db864b0040b8  chunk-ServicePage.js.gz
 a022151176c658c8  chunk-SoundControls.js.gz
 5ca5a7b03a6e6d20  chunk-SoundPage.js.gz
 5e0eb3e598a39a66  chunk-SoundPick.js.gz
-61127c34901dcb66  chunk-SpeakersPage.js.gz
+d9463feb96866363  chunk-SpeakersPage.js.gz
 d6f8a8e7b6898e13  chunk-StatTile.js.gz
 a0573ffedd0800cf  chunk-StationsPage.js.gz
 74911752bedded41  chunk-Tabs.js.gz
@@ -30,10 +30,10 @@ c4e3d7f4f92885ef  chunk-TuningPage.js.gz
 47fbf8e68558bb6b  chunk-WifiPage.js.gz
 117bea043cb327a9  chunk-XoverPage.js.gz
 08b622fe02cfafb8  chunk-live.js.gz
-3ecf53a507e302f2  chunk-longtail.js.gz
+819606fee2edeef9  chunk-longtail.js.gz
 6d39980f66caa88b  chunk-media.js.gz
 2d3d51945c4b98cc  chunk-tone.js.gz
-ba06836410fe5631  bundle.css.gz
-308c3bb0881b2c6b  lang/en.json.gz
-76ff51bf7505a846  lang/de.json.gz
-28793719cdb9bc79  lang/pl.json.gz
+bcf74fe1f148b28c  bundle.css.gz
+6192f6a2ea8e6dc0  lang/en.json.gz
+9f3b31a512fc32f3  lang/de.json.gz
+9a3aaaf91e33f779  lang/pl.json.gz

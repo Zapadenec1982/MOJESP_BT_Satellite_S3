@@ -54,8 +54,8 @@ bool open(i2c_master_bus_handle_t bus, unsigned gain_db) {
     if (!bus) return false;
     const int addr = find_es8311(bus);
     if (addr < 0) { ESP_LOGE(TAG, "no ES8311 at 0x18/0x19"); return false; }
-    // CONCEPT «Бортові піни»: the onboard NS4150 stays off. The external amplifier (GPIO34)
-    // is the audio module's; never touched here.
+    // docs/CONCEPT.md, "On-board pins": the onboard NS4150 stays off. The external amplifier
+    // (GPIO34) is the audio module's; never touched here.
     if (gpio_set_level(GPIO_NUM_11, 0) != ESP_OK || gpio_set_direction(GPIO_NUM_11, GPIO_MODE_OUTPUT) != ESP_OK)
         return false;
     i2s_chan_config_t ch = I2S_CHANNEL_DEFAULT_CONFIG(I2S_NUM_2, I2S_ROLE_MASTER);

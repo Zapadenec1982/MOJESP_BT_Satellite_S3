@@ -153,7 +153,7 @@ console.log(JSON.stringify(out));
         assert len(panel[key]) == len(web[key]) and not diff, f"{key}: panel vs web differ at {diff[:5]}"
 
 
-# ── calibration (docs/AUDIO.md «Тест-тон», «Калібрування колонок: частота порту») ──
+# ── calibration (docs/AUDIO.md, "Test tone", "Speaker calibration: port frequency") ──
 
 def test_the_tone_keys_match_the_firmware():
     """The test tone as lib/calib.js names it: the manifest's defaults and the firmware's timeout.

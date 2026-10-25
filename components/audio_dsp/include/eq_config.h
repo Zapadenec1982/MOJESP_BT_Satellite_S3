@@ -9,7 +9,7 @@
  * The whole file is modelled, not just the section in use. eq_save() regenerates it from
  * this struct, so anything the model does not carry would be silently lost on the first
  * edit — that is why sections, crossover and mode are all here even though only section 0
- * and mode "2.0" do anything today (docs/CONCEPT.md «Виходи»).
+ * and mode "2.0" do anything today (docs/CONCEPT.md, "Outputs").
  */
 
 #pragma once
@@ -21,7 +21,7 @@
 
 namespace audio_core {
 
-static constexpr int MAX_SECTIONS = 2;   ///< two DACs; see CONCEPT «Виходи»
+static constexpr int MAX_SECTIONS = 2;   ///< two DACs; see docs/CONCEPT.md, "Outputs"
 
 /// The shape of eq.json this build understands. Written by eq_serialize(), checked by
 /// eq_parse(): a file from the future is REFUSED rather than read with today's rules

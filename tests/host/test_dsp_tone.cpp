@@ -180,55 +180,6 @@ TEST_CASE("Бас and Високі count in B, EQ on or off, and sit on top of t
     }
 }
 
-TEST_CASE("where the speakers stand: the room's cut on Бас's shelf, Бас keeping its ±6 over it") {
-    for (double fs : {48000.0, 96000.0}) {
-        CAPTURE(fs);
-        // by a wall, in a corner: the low shelf the cut asks for, alone or with Бас on it
-        for (int place : {1, 2}) {
-            for (float bass : {0.0f, -6.0f, 4.0f}) {
-                CAPTURE(place);
-                CAPTURE(bass);
-                const float place_db = DspChain::PLACE_DB[place];
-                const auto want = shelves(bass + place_db, 0.0f);
-                for (double hz : {30.0, 100.0, 1000.0}) {
-                    CAPTURE(hz);
-                    auto ref = chain(fs, false), room = chain(fs, false);
-                    room->set_tone(bass, 0.0f, place_db);
-                    const double got = db(sine_rms(*room, fs, hz) / sine_rms(*ref, fs, hz));
-                    CHECK(std::fabs(got - designed_db(want, fs, hz)) < 0.05);
-                }
-            }
-        }
-        // a cut costs no headroom; Бас +6 in a corner is a wire, bit-exact
-        auto c = chain(fs, false);
-        c->set_tone(-6.0f, 0.0f, DspChain::PLACE_DB[2]);
-        CHECK(c->headroom_db() < 0.01f);
-        auto a = chain(fs, false), b = chain(fs, false);
-        b->set_tone(6.0f, 0.0f, DspChain::PLACE_DB[2]);
-        uint32_t seed = 11;
-        float x[DspChain::BLOCK * 2], y[DspChain::BLOCK * 2];
-        bool same = true;
-        for (int k = 0; k < 50; k++) {
-            for (float& v : x) v = (float)((int32_t)lcg(seed)) / 4.3e9f;
-            memcpy(y, x, sizeof(x));
-            a->process(x, DspChain::BLOCK);
-            b->process(y, DspChain::BLOCK);
-            same &= memcmp(x, y, sizeof(x)) == 0;
-        }
-        CHECK(same);
-    }
-    // anything above 0 or not a number is free-standing; below the corner is the corner
-    const double fs = 48000.0;
-    auto free_ = chain(fs, false), up = chain(fs, false), nan_ = chain(fs, false), deep = chain(fs, false);
-    up->set_tone(0.0f, 0.0f, 3.0f);
-    nan_->set_tone(0.0f, 0.0f, NAN);
-    deep->set_tone(0.0f, 0.0f, -20.0f);
-    CHECK(std::fabs(db(sine_rms(*up, fs, 30.0) / sine_rms(*free_, fs, 30.0))) < 1e-6);
-    CHECK(std::fabs(db(sine_rms(*nan_, fs, 30.0) / sine_rms(*free_, fs, 30.0))) < 1e-6);
-    CHECK(std::fabs(db(sine_rms(*deep, fs, 30.0) / sine_rms(*free_, fs, 30.0)) -
-                    designed_db(shelves(DspChain::PLACE_DB[2], 0.0f), fs, 30.0)) < 0.05);
-}
-
 TEST_CASE("balance: only the other channel goes down, and the louder one is left bit-exact") {
     const double fs = 48000.0;
     for (float bal : {6.0f, -3.5f}) {

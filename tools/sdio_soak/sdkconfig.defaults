@@ -45,7 +45,7 @@ CONFIG_SPIRAM_SPEED_200M=y
 CONFIG_SPIRAM_USE_MALLOC=y
 CONFIG_SPIRAM_TRY_ALLOCATE_WIFI_LWIP=y
 
-# ── TLS. The player's 4 KB budget (docs/CONCEPT.md «Мережа») does NOT survive a real station:
+# ── TLS. The player's 4 KB budget (docs/CONCEPT.md, "Network") does NOT survive a real station:
 #    icecast.radiofrance.fr ignores max_fragment_length and sends 16 KB records → with
 #    IN_CONTENT_LEN=4096 every read dies with -0x7200 after ~1 s (bench 2026-09-15). The
 #    soak run therefore uses the mbedTLS default 16 KB input buffer (+12 KB DMA-SRAM per

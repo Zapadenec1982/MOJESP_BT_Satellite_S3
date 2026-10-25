@@ -17,7 +17,7 @@ CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions_p4_16mb.csv"
 # Bootloader (0x2000..) with app rollback is > 0x6000 bytes on P4 → move the table to 0x10000
 CONFIG_PARTITION_TABLE_OFFSET=0x10000
 
-# ── Flash chip: Boya BY25Q, no auto-suspend (docs/CONCEPT.md «Обмеження плати») — dedicated driver ──
+# ── Flash chip: Boya BY25Q, no auto-suspend (docs/CONCEPT.md, "Board constraints") — dedicated driver ──
 CONFIG_SPI_FLASH_SUPPORT_BOYA_CHIP=y
 
 # ── PSRAM: 32 MB HEX/OPI at 200 MHz ──
@@ -51,7 +51,7 @@ CONFIG_MBEDTLS_EXTERNAL_MEM_ALLOC=y
 # TLS input window 16 KB (stage 7, item 7.6). This is a memory decision and it was blocked
 # on the two above it.
 #
-# The evidence is in docs/SOAK_TEST.md «TLS: вхідний буфер 16 КБ»: with the 4096 of
+# The evidence is in docs/SOAK_TEST.md, "TLS: 16 KB input buffer": with the 4096 of
 # sdkconfig.defaults, the reference station (icecast.radiofrance.fr) breaks every second with
 # "esp-tls-mbedtls: read error :-0x7200" — the server ignores max_fragment_length and sends
 # 16 KB records, and a record that does not fit the input buffer cannot be decrypted at all.
@@ -69,7 +69,7 @@ CONFIG_ESP_COREDUMP_ENABLE_TO_FLASH=y
 CONFIG_ESP_COREDUMP_DATA_FORMAT_ELF=y
 CONFIG_ESP_COREDUMP_CHECKSUM_CRC32=y
 
-# ── Wi-Fi: ESP-Hosted 3.0.7 (esp_wifi_remote 1.6.4) → ESP32-C6 over SDIO, docs/CONCEPT.md «Мережа» ──
+# ── Wi-Fi: ESP-Hosted 3.0.7 (esp_wifi_remote 1.6.4) → ESP32-C6 over SDIO, docs/CONCEPT.md, "Network" ──
 # Symbol names are the 3.0.x ones (verified in esp-hosted-mcu v3.0.7 Kconfig.host.sdio / host/Kconfig.ext).
 CONFIG_SLAVE_IDF_TARGET_ESP32C6=y
 CONFIG_ESP_HOSTED_CP_TARGET_ESP32C6=y
@@ -228,8 +228,8 @@ CONFIG_FREERTOS_HZ=1000
 #
 # with none lost at rest in every case. The heap line says why: the large profile took
 # 126 KB of internal RAM (240 KB free before it, 114 KB after) and left 15 KB of
-# DMA-capable memory once the UI and the audio core were up. CONCEPT «Мережа» records the
-# confirmed failure threshold for this transport at 6.7 KB free DMA — the buffers the
+# DMA-capable memory once the UI and the audio core were up. docs/CONCEPT.md, "Network" records
+# the confirmed failure threshold for this transport at 6.7 KB free DMA — the buffers the
 # tuning adds are taken from the memory the co-processor's own receive pool needs, so the
 # faster it is told to go the more it drops. On a board that also runs a 480x800 display
 # and an audio core, that trade does not exist.
@@ -256,10 +256,10 @@ CONFIG_FREERTOS_HZ=1000
 #   burst 10 (14400)           0 % lost, no drops, DMA min 13.7 KB, longest gap  94 ms
 #
 # so 8 x MSS: it costs the co-processor's pool nothing measurable, where 10 already begins to
-# (the failure threshold is 6.7 KB free DMA, CONCEPT «Мережа»). The mailbox holds a window's
-# segments and two more. On the panel, the same US host then carried the stream at 51 KB/s
-# while filling and held it at 40 KB/s with the buffer at 96-97 %, internal heap 119.7 KB and
-# DMA 84.3 KB during the stream (82.6 KB with the stock window), no mempool OOM.
+# (the failure threshold is 6.7 KB free DMA, docs/CONCEPT.md, "Network"). The mailbox holds a
+# window's segments and two more. On the panel, the same US host then carried the stream at
+# 51 KB/s while filling and held it at 40 KB/s with the buffer at 96-97 %, internal heap
+# 119.7 KB and DMA 84.3 KB during the stream (82.6 KB with the stock window), no mempool OOM.
 CONFIG_LWIP_TCP_WND_DEFAULT=11520
 CONFIG_LWIP_TCP_RECVMBOX_SIZE=10
 #

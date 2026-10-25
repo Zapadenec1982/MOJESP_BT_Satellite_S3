@@ -4,7 +4,7 @@ import { apiPost } from './api.js';
 import { CHAIN, TONE_DEFAULTS } from './calib.js';
 
 /*
- * The test tone, as calibration drives it (docs/AUDIO.md «Тест-тон», modules/audio).
+ * The test tone, as calibration drives it (docs/AUDIO.md, "Test tone", modules/audio).
  *
  * audio.source = 1 plays it. audio.tone_mode 0 sends it through the DSP and the volume; 1 and 2
  * go past both at an exact DAC level (steady, or 250/750 ms bursts), and the device turns those

@@ -3,7 +3,7 @@
   "board": "p4_player",
   "display_name": "P4 Player (Guition JC4880P443C)",
   "version": "0.4",
-  "description": "ESP32-P4 + ESP32-C6 (SDIO) panel: 4.3in 480x800 MIPI-DSI ST7701S, GT911 touch, 32 MB PSRAM, 16 MB flash. Pins only from docs/CONCEPT.md «Розпіновка» and «Референсні проєкти» (panel BSP).",
+  "description": "ESP32-P4 + ESP32-C6 (SDIO) panel: 4.3in 480x800 MIPI-DSI ST7701S, GT911 touch, 32 MB PSRAM, 16 MB flash. Pins only from docs/CONCEPT.md, \"Pinout\" and \"Reference projects\" (panel BSP).",
 
 
   "i2c_buses": [
@@ -61,7 +61,7 @@
       "sample_rate_hz": 48000, "slot_bits": 32, "mclk_multiple": 256
     },
     {
-      "id": "i2s_b", "label": "I2S-B in from the BT satellite (JP1). Below link 1.9 the satellite is master and the three P4 pins are inputs; from 1.9 I2S0 drives BCLK/WS (GPIO33/30). No MCLK. Rate follows STREAM_FMT; the WIDTH is opened at its maximum deliberately - IDF reallocates the DMA descriptors on a width change and that allocation fails once Wi-Fi has taken its share. See park_bt_off_pll(). CONCEPT «JP1»",
+      "id": "i2s_b", "label": "I2S-B in from the BT satellite (JP1). Below link 1.9 the satellite is master and the three P4 pins are inputs; from 1.9 I2S0 drives BCLK/WS (GPIO33/30). No MCLK. Rate follows STREAM_FMT; the WIDTH is opened at its maximum deliberately - IDF reallocates the DMA descriptors on a width change and that allocation fails once Wi-Fi has taken its share. See park_bt_off_pll(). docs/CONCEPT.md, \"JP1\"",
       "port": 1, "role": "slave",
       "bclk": 33, "ws": 30, "din": 31,
       "sample_rate_hz": 32000, "slot_bits": 32

@@ -4,8 +4,8 @@
  *        (modules/airplay/include/airplay_volume.h), for USB.
  *
  * A copy rather than a shared header: modules do not depend on one another
- * (CONCEPT «Контракт SharedState: джерела»), and these thirty lines are the whole of it. The
- * rules are the same so the panel answers a laptop the way it answers a phone:
+ * (docs/CONCEPT.md, "SharedState contract: sources"), and these thirty lines are the whole of
+ * it. The rules are the same so the panel answers a laptop the way it answers a phone:
  *  - the room keeps its level when the computer starts — a slider left at 100 % is not a request;
  *  - for HOLD_MS after that, or while USB is not the source, a level only sets the reference;
  *  - after it, the slider maps piecewise linearly through (reference → the room's level), so the

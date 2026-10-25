@@ -21,7 +21,7 @@ export const SHOWN = [
   'audio.eq_enabled', 'audio.loudness', 'audio.loud_db', 'audio.bass_db', 'audio.treble_db',
   'audio.vol_max', 'audio.vol_start',
   // Налаштування › Колонки (S6)
-  'audio.balance_db10', 'audio.placement',
+  'audio.balance_db10',
   // System
   'ui.backlight', 'ui.standby_bl', 'radio.covers',
   'airplay.enabled', 'airplay.name', 'airplay.mode', 'airplay.mode_status', 'airplay.mode_error',

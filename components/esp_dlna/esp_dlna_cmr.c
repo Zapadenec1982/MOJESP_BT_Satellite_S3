@@ -30,7 +30,8 @@ static const char *TAG = "DLNA_CMR";
 
 /* p4-player: the list upstream ships opens with `http-get:*:*:*` — "send me anything" — and
    then names WMA, AC3, Vorbis, Speex and MP4. This build registers a fixed set of decoders
-   (CONCEPT «Прибиті залежності»), so that list is a promise it cannot keep, and a broken one in the worst way: a control
+   (docs/CONCEPT.md, "Pinned dependencies"), so that list is a promise it cannot keep, and a
+   broken one in the worst way: a control
    point that believes it sends AAC, the stream opens, the decoder refuses, and the device sits
    there silent with every log line looking healthy.
    A renderer's sink list is also how Music Assistant decides what to transcode — tell it the

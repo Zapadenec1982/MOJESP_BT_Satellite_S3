@@ -3,7 +3,7 @@
  * @brief AirPlay 2 as a source: the receiver's lifecycle, its events in SharedState, and the
  *        source contract.
  *
- * Three rules from docs/CONCEPT.md «Контракт SharedState: джерела» decide everything here:
+ * Three rules from docs/CONCEPT.md, "SharedState contract: sources" decide everything here:
  *  - whoever produces the sound switches audio.source to itself — a phone that starts
  *    playing makes AirPlay the source;
  *  - a producer whose source is no longer selected is not heard — the receiver's ring output
@@ -63,8 +63,9 @@ constexpr const char* NVS_TRY = "starting";
 /// for up to 2 s (mdns_query_guard.cpp) from tasks that outrank main: it retries next turn.
 constexpr uint32_t MDNS_TURN_WAIT_MS = 20;
 /// hap_init() generates and stores the pairing keys on the first boot — a flash write, and
-/// a flash write on a PSRAM stack is a crash here (CONCEPT «Обмеження плати»). So the one-shot
-/// task that starts the receiver gets an internal stack, and gives it back when it is done.
+/// a flash write on a PSRAM stack is a crash here (docs/CONCEPT.md, "Board constraints"). So
+/// the one-shot task that starts the receiver gets an internal stack, and gives it back when
+/// it is done.
 constexpr uint32_t START_STACK = 8 * 1024;
 
 enum Start : int { NOT_YET = 0, STARTING = 1, UP = 2, FAILED = 3 };
@@ -445,9 +446,9 @@ void AirplayModule::stop_listening() {
 
 void AirplayModule::follow_source(int32_t source) {
     // The phone started playing: the producer switches the source to itself
-    // (CONCEPT «Хто перемикає джерело»). Only on the start, not on every PLAYING — a pick of
-    // another source on the panel sticks until the phone is paused and played again, which is
-    // the phone's owner asking.
+    // (docs/CONCEPT.md, "Who switches the source"). Only on the start, not on every PLAYING —
+    // a pick of another source on the panel sticks until the phone is paused and played again,
+    // which is the phone's owner asking.
     const bool started = sh.play_edge.exchange(false);
     if (started) vol_.play_start();   // a sender restates its level as it starts
     // Turned off, AirPlay takes nothing — not even from a sender that starts before the

@@ -1,4 +1,4 @@
-## USB Audio Class 2 device on the P4's high-speed OTG port (docs/CONCEPT.md «USB»).
+## USB Audio Class 2 device on the P4's high-speed OTG port (docs/CONCEPT.md, "USB").
 ## TinyUSB itself, without esp_tinyusb: this component owns the PHY, the descriptors and the
 ## config header, the way espressif/usb_device_uac does it.
 dependencies:

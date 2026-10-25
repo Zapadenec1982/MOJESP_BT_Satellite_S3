@@ -126,6 +126,10 @@ struct Shell {
     lv_obj_t* row_ico[N_MENU] = {};
     lv_obj_t* row_lbl[N_MENU] = {};
     bool      drawer_open = false;
+    lv_obj_t* web      = nullptr;        ///< the web's address and QR code at the menu's foot
+    lv_obj_t* web_qr   = nullptr;
+    lv_obj_t* web_addr = nullptr;
+    char      web_txt[16] = "";
     // the volume pop-up
     lv_obj_t*   vol = nullptr;
     m3w::Slider vol_sl;
@@ -209,9 +213,28 @@ void edge_cb(lv_event_t*) { set_drawer(true); }
 
 // ── drawer ─────────────────────────────────────────────────────────────────────────────────
 
+/// The web at the menu's foot: the panel's address and a QR code of the web's front page, from
+/// any page (the customer, 25.10.2026: «переносимо QR у меню ≡» — it stood on Колонки alone);
+/// nothing while the panel has no address.
+void paint_web() {
+    if (!g.web || !g.ctx) return;
+    const char* ip = g.ctx->s.wifi_ip;
+    if (strncmp(ip, g.web_txt, sizeof(g.web_txt)) == 0) return;      // built hidden, with no address
+    uih::set_text(g.web_addr, g.web_txt, sizeof(g.web_txt), ip);
+#if LV_USE_QRCODE
+    if (ip[0]) {
+        char url[32];
+        const int n = snprintf(url, sizeof(url), "http://%s/", ip);
+        lv_qrcode_update(g.web_qr, url, (uint32_t)n);
+    }
+#endif
+    uih::show(g.web, ip[0] != '\0');
+}
+
 void paint_drawer() {
     const auto& t = m3::theme();
     const int dest = destination();
+    paint_web();
     for (int i = 0; i < N_MENU; i++) {
         const bool on = (i == dest);
         const uint32_t fg = on ? t.c.on_secondary_container : t.c.on_surface_var;
@@ -278,6 +301,28 @@ void build_drawer(lv_obj_t* scr) {
         g.row_lbl[i] = m3w::text(row, t.t.headline, t.c.on_surface_var, tr(PAGES[i].title));
         lv_obj_align(g.row_lbl[i], LV_ALIGN_LEFT_MID, 64, 0);
     }
+
+    // the web, at the foot: the QR code dark on a white square (its margin the quiet zone), and
+    // beside it «Вебінтерфейс» over the address (paint_web)
+    constexpr int32_t QR = 116;
+    static_assert(D_ROW_Y0 + N_MENU * D_PITCH + 16 <= uig::SCR_H - 24 - QR, "the QR code under the rows");
+    g.web = m3w::box(g.drawer, DX + 24, uig::SCR_H - 24 - QR, uig::DRAWER_W - 48, QR);
+    int32_t tx = 0;
+#if LV_USE_QRCODE
+    lv_obj_t* sq = m3w::surface(g.web, 0, 0, QR, QR, 0xFFFFFF, m3::shape::XS);
+    g.web_qr = lv_qrcode_create(sq);
+    lv_qrcode_set_size(g.web_qr, QR - 16);
+    lv_qrcode_set_dark_color(g.web_qr, lv_color_black());
+    lv_qrcode_set_light_color(g.web_qr, lv_color_white());
+    lv_obj_center(g.web_qr);
+    tx = QR + 16;
+#endif
+    const int32_t lh_cap = lv_font_get_line_height(t.t.label_m);
+    lv_obj_t* cap = m3w::text(g.web, t.t.label_m, t.c.on_surface_var, tr(S::nav_web));
+    lv_obj_set_pos(cap, tx, QR / 2 - lh_cap - 2);
+    g.web_addr = m3w::text(g.web, t.t.body_l, t.c.on_surface, "");
+    lv_obj_set_pos(g.web_addr, tx, QR / 2 + 2);
+    uih::show(g.web, false);
 
     uih::show(g.scrim, false);
     uih::show(g.drawer, false);

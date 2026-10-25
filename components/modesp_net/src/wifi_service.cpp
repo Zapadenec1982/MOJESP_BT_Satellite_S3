@@ -596,7 +596,7 @@ bool WiFiService::start_sta() {
 
 #if defined(CONFIG_MODESP_NET_SET_DEFAULT_NETIF)
     // Wi-Fi on a co-processor (ESP-Hosted / esp_wifi_remote): make the STA netif the
-    // default route so unbound UDP sockets (SNTP) leave through it — docs/NETWORK.md «WiFiService».
+    // default route so unbound UDP sockets (SNTP) leave through it — docs/NETWORK.md, "WiFiService".
     esp_netif_set_default_netif(sta_netif_);
 #endif
 

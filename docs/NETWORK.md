@@ -1,768 +1,788 @@
-# Мережа
+**English** · [Українська](NETWORK.uk.md)
 
-Wi-Fi через ESP32-C6, HTTP-сервер з REST API і WebSocket, ім'я пристрою і mDNS, інтернет-радіо,
-DLNA-рендерер і браузер медіасерверів, приймач AirPlay, MQTT.
+# Network
 
-Суміжне: значення `audio.source` і контракт SharedState — [CONCEPT.md](CONCEPT.md), §7; обмеження
-плати й DMA-пам'ять — [CONCEPT.md](CONCEPT.md), §8, §8а і §10; кільце PCM, частоти, конвертер частоти —
-[AUDIO.md](AUDIO.md); сторінки панелі й вебу — [UI.md](UI.md); оновлення прошивки C6 —
-[C6_UPDATE.md](C6_UPDATE.md).
+Wi-Fi through the ESP32-C6, the HTTP server with REST API and WebSocket, device name and mDNS,
+internet radio, the DLNA renderer and media server browser, the AirPlay receiver, MQTT.
 
-| Частина | Код |
+Related: the values of `audio.source` and the SharedState contract — [CONCEPT.md](CONCEPT.md), §7;
+board constraints and DMA memory — [CONCEPT.md](CONCEPT.md), §8, §8a and §10; the PCM ring, rates,
+the rate converter — [AUDIO.md](AUDIO.md); panel and web pages — [UI.md](UI.md); C6 firmware
+update — [C6_UPDATE.md](C6_UPDATE.md).
+
+| Part | Code |
 |---|---|
 | Wi-Fi, HTTP, WebSocket, mDNS | `components/modesp_net` |
-| ESP-Hosted, копії кадрів у PSRAM | `espressif/esp_hosted`, `espressif/esp_wifi_remote`, `components/hosted_mem` |
-| DNS для SNTP | `components/lwip_dns_compat` |
-| Радіо: потік, список, каталог, обкладинки | `modules/radio`, `components/stations`, `components/radio_catalog`, `components/audio_pipe` |
-| DLNA-рендерер | `modules/dlna`, `components/esp_dlna`, `espressif/esp_media_protocols` |
-| Браузер медіасерверів | `components/dlna_client` |
+| ESP-Hosted, frame copies in PSRAM | `espressif/esp_hosted`, `espressif/esp_wifi_remote`, `components/hosted_mem` |
+| DNS for SNTP | `components/lwip_dns_compat` |
+| Radio: stream, list, catalog, covers | `modules/radio`, `components/stations`, `components/radio_catalog`, `components/audio_pipe` |
+| DLNA renderer | `modules/dlna`, `components/esp_dlna`, `espressif/esp_media_protocols` |
+| Media server browser | `components/dlna_client` |
 | AirPlay | `modules/airplay`, `components/airplay2` |
 | MQTT | `components/modesp_mqtt` |
-| Ім'я пристрою | `modules/bt/src/device_name.cpp` |
-| Файли користувача з вебу | `main/userdata_http.cpp` |
+| Device name | `modules/bt/src/device_name.cpp` |
+| User files from the web | `main/userdata_http.cpp` |
 
-Мережу вмикає `CONFIG_MODESP_NET_ENABLE` (типово `y`); без неї `modesp_net` збирається без
-вихідних файлів, а main.cpp не підключає Wi-Fi, HTTP і WebSocket.
+Networking is enabled by `CONFIG_MODESP_NET_ENABLE` (default `y`); without it `modesp_net` builds
+with no source files, and main.cpp does not bring up Wi-Fi, HTTP or WebSocket.
 
-## Wi-Fi через ESP32-C6
+## Wi-Fi through the ESP32-C6
 
-### Лінк
+### Link
 
-У ESP32-P4 немає радіо. Wi-Fi — на ESP32-C6, з'єднаному по SDIO; на P4 `esp_wifi_remote` поверх
-`esp_hosted` дає звичайний API `esp_wifi_*`.
+The ESP32-P4 has no radio. Wi-Fi is on the ESP32-C6, connected over SDIO; on the P4,
+`esp_wifi_remote` on top of `esp_hosted` provides the ordinary `esp_wifi_*` API.
 
-| Параметр | Значення (`boards/p4_player/sdkconfig.board`) |
+| Parameter | Value (`boards/p4_player/sdkconfig.board`) |
 |---|---|
-| Шина | SDIO slot 1, 4 біти, 40 МГц, RX streaming mode |
-| Піни P4 | CLK 18, CMD 19, D0–D3 14–17 |
-| Скидання C6 | GPIO54 → CHIP_PU, активний LOW (`CONFIG_ESP_HOSTED_SDIO_RESET_ACTIVE_LOW`) |
-| Задачі ESP-Hosted | пріоритет 21 (`CONFIG_ESP_HOSTED_HOST_DEFLT_TASK_PRIORITY`): вище lwIP (18) і подій (20), нижче аудіозадачі (22) |
-| Версії | `esp_hosted` 3.0.7, `esp_wifi_remote` 1.6.4, обидві `==` |
+| Bus | SDIO slot 1, 4 bits, 40 MHz, RX streaming mode |
+| P4 pins | CLK 18, CMD 19, D0–D3 14–17 |
+| C6 reset | GPIO54 → CHIP_PU, active LOW (`CONFIG_ESP_HOSTED_SDIO_RESET_ACTIVE_LOW`) |
+| ESP-Hosted tasks | priority 21 (`CONFIG_ESP_HOSTED_HOST_DEFLT_TASK_PRIORITY`): above lwIP (18) and events (20), below the audio tasks (22) |
+| Versions | `esp_hosted` 3.0.7, `esp_wifi_remote` 1.6.4, both `==` |
 
-Прошивка C6 збирається з того самого релізу ESP-Hosted, що й хост-бібліотека; образ лежить у
-розділі `slave_fw` (0x630000, 2 МБ), на C6 його передає `tools/c6_updater`. Розбіжність версій лог
-показує як `eh_init_evt: major version mismatch — OTA coprocessor from host` (ERROR) або
-`minor version mismatch` (WARN). Процедура і відновлення через UART C6 —
-[C6_UPDATE.md](C6_UPDATE.md). Версія записана в кількох місцях, які змінюються разом:
+The C6 firmware is built from the same ESP-Hosted release as the host library; the image sits in
+the `slave_fw` partition (0x630000, 2 MB), and `tools/c6_updater` transfers it to the C6. The log
+shows a version mismatch as `eh_init_evt: major version mismatch — OTA coprocessor from host`
+(ERROR) or `minor version mismatch` (WARN). The procedure and recovery over the C6's UART —
+[C6_UPDATE.md](C6_UPDATE.md). The version is recorded in several places that change together:
 
 - `components/modesp_net/idf_component.yml`, `tools/c6_updater/main/idf_component.yml`,
-  `tools/sdio_soak/main/idf_component.yml` — обидва пакети;
-- підпис `C6 3.0.7` у рядку «Сервіс» налаштувань панелі — константа в
-  `modules/ui_lvgl/src/screen_set.cpp`, а не версія, прочитана з C6;
-- типове значення `--hosted` у `tools/c6_image.py`;
-- `components/hosted_mem/CMakeLists.txt` звіряє прототип `eh_host_port_dma_alloc()` у вихідниках
-  ESP-Hosted і зупиняє збірку, коли той змінився.
+  `tools/sdio_soak/main/idf_component.yml` — both packages;
+- the `C6 3.0.7` caption in the "Service" row of the panel's settings — a constant in
+  `modules/ui_lvgl/src/screen_set.cpp`, not a version read from the C6;
+- the default of `--hosted` in `tools/c6_image.py`;
+- `components/hosted_mem/CMakeLists.txt` checks the prototype of `eh_host_port_dma_alloc()` in the
+  ESP-Hosted sources and stops the build when it has changed.
 
-### Пам'ять
+### Memory
 
-Внутрішня DMA-здатна SRAM — найдефіцитніший ресурс: її ділять приймальний пул ESP-Hosted,
-дескриптори I2S і все, що просить DMA ([CONCEPT.md](CONCEPT.md), §8).
+Internal DMA-capable SRAM is the scarcest resource: it is shared by the ESP-Hosted receive pool,
+the I2S descriptors and everything that asks for DMA ([CONCEPT.md](CONCEPT.md), §8).
 
-- `components/hosted_mem` (`CONFIG_HOSTED_MEM_FRAMES_IN_PSRAM`, типово `y`) обгортає
-  `eh_host_port_dma_alloc()` (`-Wl,--wrap`): копії кадрів, що перетинають SDIO, ESP-Hosted бере з
-  PSRAM. Без неї кадр, для якого не знайшлося внутрішньої DMA-пам'яті, губиться без повідомлення
-  (на прийомі) або як `ESP_ERR_NO_MEM` для lwIP (на передачі). Лічильники —
+- `components/hosted_mem` (`CONFIG_HOSTED_MEM_FRAMES_IN_PSRAM`, default `y`) wraps
+  `eh_host_port_dma_alloc()` (`-Wl,--wrap`): ESP-Hosted allocates the copies of frames that cross
+  SDIO in PSRAM. Without it, a frame for which no internal DMA memory was found is lost silently
+  (on receive) or as `ESP_ERR_NO_MEM` to lwIP (on transmit). Counters —
   `hosted_mem_get_stats()`.
-- `CONFIG_EH_HOST_PORT_DMA_PREFER_SPIRAM`: транспортні буфери ESP-Hosted — у PSRAM.
-- `CONFIG_SPIRAM_TRY_ALLOCATE_WIFI_LWIP`, `CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL=1024`: буфери lwIP і
-  звичайні виділення понад 1 КБ (кодеки, HTTP) — у PSRAM.
-- `CONFIG_MBEDTLS_EXTERNAL_MEM_ALLOC`: арена mbedTLS — у PSRAM. Вхідний буфер TLS 16 КБ
-  (`MBEDTLS_SSL_IN_CONTENT_LEN`): сервери станцій шлють записи по 16 КБ і ігнорують
-  `max_fragment_length`, а запис, що не вміщується в буфер, не розшифровується. Вихідний — 4 КБ.
-- Стеки задач радіо, DLNA, браузера медіасерверів і обкладинок — у PSRAM. Внутрішній стек мають
-  задачі, що пишуть у flash (`ap_start`: ключі HAP у NVS), і задача SSDP: задача зі стеком у PSRAM
-  не може виконуватися, поки кеш flash вимкнений.
+- `CONFIG_EH_HOST_PORT_DMA_PREFER_SPIRAM`: the ESP-Hosted transport buffers are in PSRAM.
+- `CONFIG_SPIRAM_TRY_ALLOCATE_WIFI_LWIP`, `CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL=1024`: lwIP buffers
+  and ordinary allocations over 1 KB (codecs, HTTP) are in PSRAM.
+- `CONFIG_MBEDTLS_EXTERNAL_MEM_ALLOC`: the mbedTLS arena is in PSRAM. TLS input buffer 16 KB
+  (`MBEDTLS_SSL_IN_CONTENT_LEN`): station servers send 16 KB records and ignore
+  `max_fragment_length`, and a record that does not fit in the buffer cannot be decrypted. Output
+  buffer — 4 KB.
+- The task stacks of the radio, DLNA, the media server browser and covers are in PSRAM. An internal
+  stack belongs to the tasks that write to flash (`ap_start`: HAP keys in NVS) and to the SSDP
+  task: a task with its stack in PSRAM cannot run while the flash cache is disabled.
 
 ### lwIP
 
-| Параметр | Значення | Причина |
+| Parameter | Value | Reason |
 |---|---|---|
-| `LWIP_TCP_WND_DEFAULT` | 11 520 (8 × MSS) | з'єднання несе щонайбільше одне вікно за RTT, і менше вікно не тягне 320 кбіт/с від сервера за ~200 мс; вікно від 10 × MSS уже забирає DMA-пам'ять, потрібну приймальному пулу |
-| `LWIP_TCP_RECVMBOX_SIZE` | 10 | сегменти одного вікна і два понад |
-| `LWIP_UDP_RECVMBOX_SIZE`, `LWIP_SO_RCVBUF` | 64, `y` | потоки AirPlay: realtime ALAC — 125 пакетів/с |
-| `LWIP_MAX_SOCKETS` | 36 | HTTP (10 сесій + 3 власні сокети httpd), SSDP, MQTT, радіо з підготовкою наступного треку, обкладинки, каталог, браузер DLNA, NOTIFY, OTA, сесія AirPlay (до 10 сокетів) |
-| `LWIP_MAX_ACTIVE_TCP` | 32 | жорстка межа ESP-lwIP: `socket()` для TCP-клієнта відмовляє, коли вичерпано |
-| `LWIP_DNS_MAX_HOST_IP` | 4 | радіо переходить на іншу адресу хоста станції |
-| `LWIP_TCPIP_TASK_AFFINITY_CPU0` | `y` | ядро 1 — аудіозадачі |
+| `LWIP_TCP_WND_DEFAULT` | 11 520 (8 × MSS) | a connection carries at most one window per RTT, and a smaller window cannot pull 320 kbit/s from a server ~200 ms away; a window of 10 × MSS or more already takes DMA memory the receive pool needs |
+| `LWIP_TCP_RECVMBOX_SIZE` | 10 | the segments of one window and two more |
+| `LWIP_UDP_RECVMBOX_SIZE`, `LWIP_SO_RCVBUF` | 64, `y` | AirPlay streams: realtime ALAC — 125 packets/s |
+| `LWIP_MAX_SOCKETS` | 36 | HTTP (10 sessions + httpd's 3 own sockets), SSDP, MQTT, radio with next-track preparation, covers, catalog, DLNA browser, NOTIFY, OTA, AirPlay session (up to 10 sockets) |
+| `LWIP_MAX_ACTIVE_TCP` | 32 | a hard limit of ESP-lwIP: `socket()` for a TCP client fails when it is exhausted |
+| `LWIP_DNS_MAX_HOST_IP` | 4 | radio moves to another address of the station's host |
+| `LWIP_TCPIP_TASK_AFFINITY_CPU0` | `y` | core 1 is for the audio tasks |
 
-`components/lwip_dns_compat`: з кількома адресами на ім'я lwIP при влученні в кеш копіює їх усі
-в буфер того, хто питає, а SNTP-клієнт lwIP дає місце для однієї. Обгортка
-`dns_gethostbyname()` (`-Wl,--wrap`) резолвить у масив і віддає першу адресу.
+`components/lwip_dns_compat`: with several addresses per name, lwIP on a cache hit copies them all
+into the caller's buffer, while lwIP's SNTP client provides room for one. A wrapper of
+`dns_gethostbyname()` (`-Wl,--wrap`) resolves into an array and hands back the first address.
 
 ### WiFiService
 
-`components/modesp_net/src/wifi_service.cpp`. Є `ssid` у NVS-просторі `wifi` — режим STA, немає —
-точка доступу.
+`components/modesp_net/src/wifi_service.cpp`. With `ssid` in the `wifi` NVS namespace — STA mode;
+without it — access point.
 
 **STA.**
 
-- Поріг безпеки — WPA2-PSK, коли є пароль; без пароля — відкрита мережа (з порогом WPA2 відкриту
-  мережу не приєднати). Панель і веб приєднують `open`, `WPA2`, `WPA/WPA2`, `WPA3`, `WPA2/WPA3`.
-- Країна UA: канали 1–13, до 20 дБм, після `esp_wifi_start()`.
-- `esp_netif_set_default_netif()` на STA (`CONFIG_MODESP_NET_SET_DEFAULT_NETIF`, типово для P4):
-  без цього незв'язані UDP-сокети (SNTP) не виходять через інтерфейс ESP-Hosted.
-- Розрив: три повторні спроби через 2, 4 і 8 с; ще 16 с без адреси — точка доступу.
-- Сумарно 10 хв без з'єднання — `esp_restart()`; година стабільного з'єднання скидає лічильник.
+- Security threshold — WPA2-PSK when there is a password; without a password — open network (with a
+  WPA2 threshold an open network cannot be joined). The panel and the web join `open`, `WPA2`,
+  `WPA/WPA2`, `WPA3`, `WPA2/WPA3`.
+- Country UA: channels 1–13, up to 20 dBm, after `esp_wifi_start()`.
+- `esp_netif_set_default_netif()` on STA (`CONFIG_MODESP_NET_SET_DEFAULT_NETIF`, default for P4):
+  without it, unbound UDP sockets (SNTP) do not go out through the ESP-Hosted interface.
+- Disconnect: three retries after 2, 4 and 8 s; another 16 s without an address — access point.
+- 10 min without a connection in total — `esp_restart()`; an hour of stable connection resets the
+  counter.
 
-**Точка доступу.** SSID `ModESP-XXXX` (два останні байти базової MAC) або `wifi/ap_ssid`; пароль
-`wifi/ap_pass` ≥ 8 символів → WPA2, інакше відкрита; канал `wifi/ap_chan` (1–13, типово 1); до
-2 клієнтів; адреса 192.168.4.1. Зі збереженою мережею AP пробує STA (APSTA, 15 с на спробу): перша
-спроба через 30 с, далі інтервал подвоюється до 5 хв; спроба пропускається при вільній купі
-< 50 КБ. Вдала спроба переводить у чистий STA.
+**Access point.** SSID `ModESP-XXXX` (the last two bytes of the base MAC) or `wifi/ap_ssid`;
+password `wifi/ap_pass` ≥ 8 characters → WPA2, otherwise open; channel `wifi/ap_chan` (1–13,
+default 1); up to 2 clients; address 192.168.4.1. With a saved network, the AP tries STA (APSTA,
+15 s per attempt): the first attempt after 30 s, then the interval doubles up to 5 min; an attempt
+is skipped when free heap is < 50 KB. A successful attempt switches to pure STA.
 
-**Приєднання** з панелі й вебу — `WiFiService::try_connect()`: стара пара лишається в пам'яті,
-нова пишеться в NVS лише після отримання адреси. Відмова мережі (`AUTH_FAIL`, `AUTH_EXPIRE`,
-тайм-аут рукостискання, немає AP із сумісною безпекою чи в порозі) завершує спробу одразу; 25 с без
-адреси або три невдалі повтори — повертається стара пара, а коли її не було — точка доступу.
+**Joining** from the panel and the web — `WiFiService::try_connect()`: the old pair stays in
+memory, the new one is written to NVS only after an address is obtained. A refusal by the network
+(`AUTH_FAIL`, `AUTH_EXPIRE`, handshake timeout, no AP with compatible security or within the
+threshold) ends the attempt at once; 25 s without an address or three failed retries — the old pair
+comes back, and when there was none — the access point.
 
-**Сканування.** Активне, 120–500 мс на канал, без прихованих мереж, до 20 результатів (записи в
-PSRAM); потрібно ≥ 50 000 Б вільної купи; у режимі AP на час сканування — APSTA. Сканування
-блокує того, хто його викликав: `GET /api/wifi/scan` — задачу HTTP-сервера.
+**Scanning.** Active, 120–500 ms per channel, no hidden networks, up to 20 results (records in
+PSRAM); needs ≥ 50 000 B of free heap; in AP mode — APSTA for the duration of the scan. Scanning
+blocks its caller: for `GET /api/wifi/scan`, the HTTP server task.
 
-**RSSI не читається.** `esp_wifi_sta_get_ap_info()` тут — синхронний RPC до C6 з тайм-аутом 5 с,
-а головний цикл годує 5-секундний watchdog; до того ж ESP-Hosted 3.0.7 повертає в ньому rssi 0.
-`wifi.rssi` не пишеться; рівень сигналу мереж дає сканування.
+**RSSI is not read.** `esp_wifi_sta_get_ap_info()` here is a synchronous RPC to the C6 with a 5 s
+timeout, while the main loop feeds a 5-second watchdog; besides, ESP-Hosted 3.0.7 returns rssi 0
+in it. `wifi.rssi` is not written; the networks' signal levels come from scanning.
 
-**Modem sleep:** `WIFI_PS_NONE`, поки радіо грає станцію чи URL (від налаштування до стопу або
-зупинки задачі радіо), `WIFI_PS_MIN_MODEM` — поза цим (`modules/radio`, `set_modem_sleep()`): зі
-сплячим модемом лінк C6 губить пакети під потоком.
+**Modem sleep:** `WIFI_PS_NONE` while the radio plays a station or a URL (from tuning to stop or to
+the radio task stopping), `WIFI_PS_MIN_MODEM` otherwise (`modules/radio`, `set_modem_sleep()`):
+with the modem asleep, the C6 link loses packets under a stream.
 
-| Ключ | Значення |
+| Key | Value |
 |---|---|
-| `wifi.connected` | є адреса в STA |
+| `wifi.connected` | there is an address in STA |
 | `wifi.mode` | `sta` / `ap` |
-| `wifi.ssid` | мережа STA або SSID точки доступу |
-| `wifi.ip` | адреса; у режимі AP — 192.168.4.1 |
-| `wifi.reason` | код причини останнього розриву (`wifi_err_reason_t`) |
-| `wifi.try`, `wifi.try_ssid` | спроба приєднання: `connecting` / `ok` / `fail`, порожньо — немає |
-| `system.mdns_hostname` | ім'я mDNS |
+| `wifi.ssid` | the STA network or the access point SSID |
+| `wifi.ip` | address; in AP mode — 192.168.4.1 |
+| `wifi.reason` | reason code of the last disconnect (`wifi_err_reason_t`) |
+| `wifi.try`, `wifi.try_ssid` | join attempt: `connecting` / `ok` / `fail`, empty — none |
+| `system.mdns_hostname` | mDNS name |
 
-NVS-простір `wifi`: `ssid`, `pass`, `ap_ssid`, `ap_pass`, `ap_chan`.
+NVS namespace `wifi`: `ssid`, `pass`, `ap_ssid`, `ap_pass`, `ap_chan`.
 
-### Час
+### Time
 
-SNTP, `pool.ntp.org`, режим poll. NVS `time/ntp_enabled` (типово true), `time/timezone` (POSIX TZ,
-типово `EET-2EEST,M3.5.0/3,M10.5.0/4`). Ручний час і пояс — `POST /api/time`. `system.time` і
-`system.date` до синхронізації показують `--:--:--` і `--.--.----`.
+SNTP, `pool.ntp.org`, poll mode. NVS `time/ntp_enabled` (default true), `time/timezone` (POSIX TZ,
+default `EET-2EEST,M3.5.0/3,M10.5.0/4`). Manual time and zone — `POST /api/time`. Until
+synchronization `system.time` and `system.date` show `--:--:--` and `--.--.----`.
 
-## Ім'я пристрою і mDNS
+## Device name and mDNS
 
-**Ім'я пристрою** одне для Bluetooth, AirPlay, DLNA, USB-аудіо й заголовка шухляди панелі
-(`modules/bt/include/device_name.h`):
+**The device name** is shared by Bluetooth, AirPlay, DLNA, USB audio and the header of the panel's
+drawer (`modules/bt/include/device_name.h`):
 
-- NVS `devname/name`, 1–32 байти — межа супутника (`BT_CONFIG_SET`,
-  [LINK_PROTOCOL.md](LINK_PROTOCOL.md)); поки імені немає — `P4 Player` (`device_name::FALLBACK`,
-  те саме, що `system.device_name` у `project.json`).
-- Задає поле «Ім'я» на сторінці Bluetooth панелі чи вебу (`POST /api/bt`, `{"name":…}`): ім'я йде
-  на супутник і зберігається в NVS. Потрібен супутник, що віддає налаштування
-  (`DEV_CAP_BT_SETTINGS`); без нього `POST /api/bt` відповідає `409`.
-- Перше ім'я, яке повідомив супутник, зберігається, коли свого ще немає; супутникові з іншим
-  ім'ям панель передає своє.
-- Bluetooth бере нове ім'я одразу; AirPlay, DLNA і USB-аудіо читають його під час старту — після
-  перезапуску.
-- DLNA оголошує його як friendlyName (`dlna.name`), AirPlay — як ім'я в списку (`airplay.name`) і
-  RAOP-сервіс `<MAC>@<ім'я>`.
+- NVS `devname/name`, 1–32 bytes — the satellite's limit (`BT_CONFIG_SET`,
+  [LINK_PROTOCOL.md](LINK_PROTOCOL.md)); while there is no name — `P4 Player` (`device_name::FALLBACK`,
+  the same as `system.device_name` in `project.json`).
+- Set by the "Name" field on the Bluetooth page of the panel or the web (`POST /api/bt`,
+  `{"name":…}`): the name goes to the satellite and is saved in NVS. Needs a satellite that exposes
+  its settings (`DEV_CAP_BT_SETTINGS`); without one `POST /api/bt` answers `409`.
+- The first name the satellite reports is saved when the panel has none of its own yet; to a
+  satellite with a different name the panel passes its own.
+- Bluetooth takes a new name at once; AirPlay, DLNA and USB audio read it at startup — after a
+  restart.
+- DLNA announces it as friendlyName (`dlna.name`), AirPlay as the name in the list (`airplay.name`)
+  and the RAOP service `<MAC>@<name>`.
 
-**mDNS** (`espressif/mdns`): hostname `modesp-xxxx` (два останні байти MAC, hex малими літерами) —
-не ім'я пристрою; instance `ModESP Controller`; сервіс `_http._tcp`, порт 80, TXT `path=/`.
-Стартує після отримання адреси в STA і в режимі AP; при переході AP → STA перезапускається, і
-AirPlay оголошує свої сервіси заново. Ініціалізацію й звільнення mDNS і реєстрацію сервісів
-серіалізує `MdnsGuard` (`components/modesp_net/src/mdns_guard.cpp`): задача подій Wi-Fi
-перебудовує mDNS паралельно з головним циклом.
+**mDNS** (`espressif/mdns`): hostname `modesp-xxxx` (the last two bytes of the MAC, lowercase hex) —
+not the device name; instance `ModESP Controller`; service `_http._tcp`, port 80, TXT `path=/`.
+Starts after an address is obtained in STA, and in AP mode; on an AP → STA transition it restarts,
+and AirPlay announces its services again. mDNS initialization and teardown and service
+registration are serialized by `MdnsGuard` (`components/modesp_net/src/mdns_guard.cpp`): the Wi-Fi
+event task rebuilds mDNS in parallel with the main loop.
 
-## HTTP-сервер
+## HTTP server
 
-`HttpService` (`components/modesp_net/src/http_service.cpp`) над `esp_http_server`.
+`HttpService` (`components/modesp_net/src/http_service.cpp`) over `esp_http_server`.
 
-| Параметр | Значення |
+| Parameter | Value |
 |---|---|
-| Порт | 80 |
-| Сесії | `CONFIG_MODESP_HTTPD_MAX_OPEN_SOCKETS` = 10 (`sdkconfig.board`), WebSocket і HTTP разом; плюс 3 власні сокети httpd мають вміститися в `LWIP_MAX_SOCKETS` — інакше збірка зупиняється (`static_assert`) |
-| Обробники | `max_uri_handlers` = 88 |
-| Задача | одна, стек 8 КБ; обробники виконуються по черзі |
-| Тайм-аути | прийом 30 с, передача 10 с |
-| Усі сесії зайняті | `lru_purge_enable`: нова сесія закриває ту, яку найдовше не чути |
+| Port | 80 |
+| Sessions | `CONFIG_MODESP_HTTPD_MAX_OPEN_SOCKETS` = 10 (`sdkconfig.board`), WebSocket and HTTP together; with httpd's 3 own sockets they must fit in `LWIP_MAX_SOCKETS` — otherwise the build stops (`static_assert`) |
+| Handlers | `max_uri_handlers` = 88 |
+| Task | one, 8 KB stack; handlers run one at a time |
+| Timeouts | receive 30 s, send 10 s |
+| All sessions busy | `lru_purge_enable`: a new session closes the one not heard from the longest |
 
-10 сесій — це три WebSocket-клієнти, до шести з'єднань браузера на хост і одне для контрол-поінта
-чи curl: WebSocket, що лише слухає, чути раз на 5 с (PONG), тож коли сесій не вистачає,
-завантаження сторінки закриває живий WebSocket.
+10 sessions are three WebSocket clients, up to six browser connections per host and one for a
+control point or curl: a WebSocket that only listens is heard once every 5 s (PONG), so when
+sessions run short, a page load closes a live WebSocket.
 
-Одна задача на весь сервер: повільний обробник (сканування Wi-Fi, OTA, великий POST) тримає і
-HTTP, і розсилку WebSocket. Буфери обробників понад кілька кілобайтів — у PSRAM або статичні, не
-на 8-КБ стеку.
+One task for the whole server: a slow handler (Wi-Fi scan, OTA, a large POST) holds up both HTTP
+and the WebSocket broadcast. Handler buffers over a few kilobytes are in PSRAM or static, not on the
+8 KB stack.
 
-### Статичні файли
+### Static files
 
-Wildcard `/*` віддає `/data/www/` з розділу `data` — веб-збірка лежить у `data.bin`, не в образі
-програми. `<шлях>.gz` має перевагу (`Content-Encoding: gzip`, `Cache-Control: no-store`), інакше
-файл як є (`no-cache`); невідомий шлях — `index.html` (маршрути SPA). URI довший за 51 символ —
-404, `..` у шляху — 400. `/radio.html` переадресовує на `/#/stations/top`.
+The wildcard `/*` serves `/data/www/` from the `data` partition — the web bundle sits in
+`data.bin`, not in the app image. `<path>.gz` takes precedence (`Content-Encoding: gzip`,
+`Cache-Control: no-store`), otherwise the file as is (`no-cache`); an unknown path — `index.html`
+(SPA routes). A URI longer than 51 characters — 404, `..` in the path — 400. `/radio.html`
+redirects to `/#/stations/top`.
 
-### Порядок маршрутів
+### Route order
 
-httpd повертає перший шаблон, що збігся, і тим самим matcher-ом (`httpd_uri_match_wildcard`)
-перевіряє дублікати під час реєстрації: поки `/*` зареєстрований, кожна нова GET-реєстрація
-відхиляється як `already registered`. Тому порядок такий:
+httpd returns the first pattern that matches, and checks for duplicates at registration with the
+same matcher (`httpd_uri_match_wildcard`): while `/*` is registered, every new GET registration is
+rejected as `already registered`. Hence the order:
 
-1. `HttpService::on_init()` — маршрути `/api/*` фреймворку;
-2. main.cpp — `/ws`, `/api/mqtt`, потім `modesp::http_routes::run_all()`: маршрути модулів, які
-   ті записали через `http_routes::add()` в `on_init()` (до 8 реєстраторів,
+1. `HttpService::on_init()` — the framework's `/api/*` routes;
+2. main.cpp — `/ws`, `/api/mqtt`, then `modesp::http_routes::run_all()`: the routes of the modules,
+   which they recorded through `http_routes::add()` in `on_init()` (up to 8 registrars,
    `modesp/net/http_routes.h`);
-3. останнім — `/*`.
+3. last — `/*`.
 
-Підсистема, що реєструється пізніше (рендерер DLNA після появи мережі), знімає wildcard
-(`http_routes::wildcard(false)`) і ставить назад. Не вмістився `/*` у таблицю обробників — жодна
-сторінка не відкривається, API відповідає; лог `HTTP: Static file handler NOT registered`.
+A subsystem that registers later (the DLNA renderer once the network is up) removes the wildcard
+(`http_routes::wildcard(false)`) and puts it back. If `/*` did not fit in the handler table, no
+page opens, but the API answers; log `HTTP: Static file handler NOT registered`.
 
-### Автентифікація
+### Authentication
 
-HTTP Basic, realm `ModESP`. NVS-простір `auth`: `user`, `pass`, `enabled`; типово `admin` /
-`modesp`, увімкнено. Після 5 невдалих спроб поспіль 30 с кожен запит із перевіркою отримує `429`
-(лічильник один на пристрій). Маршрути модулів перевіряють той самий логін через
-`http_routes::authorized()`; без налаштованої перевірки вони відповідають `403`.
+HTTP Basic, realm `ModESP`. NVS namespace `auth`: `user`, `pass`, `enabled`; default `admin` /
+`modesp`, enabled. After 5 failed attempts in a row, every checked request gets `429` for 30 s
+(one counter per device). Module routes check the same login through
+`http_routes::authorized()`; with no check configured they answer `403`.
 
-| Без логіну | З логіном |
+| Without login | With login |
 |---|---|
-| статичні файли; `/ws`; `GET /api/ui`, `GET /api/auth`, `GET /api/wifi/ap`, `GET /api/ota`, `GET /api/time`; маршрути UPnP | решта `/api/*` |
+| static files; `/ws`; `GET /api/ui`, `GET /api/auth`, `GET /api/wifi/ap`, `GET /api/ota`, `GET /api/time`; UPnP routes | the rest of `/api/*` |
 
-- `/ws` віддає весь стан без логіну. UPnP-маршрути без логіну, бо контрол-поінти не надсилають
-  Basic auth.
-- Збірки для розробки: `CONFIG_UI_SCREENSHOT_OPEN` (типово `n`) знімає логін з `/api/screenshot`,
-  `/api/ui/frames`, `/api/i18n/overflow`; `CONFIG_UI_SCROLL_BENCH` (типово `n`) додає
-  `/api/ui/scrollbench` без логіну. Обидва пишуть про себе WARN на кожному старті.
-- CORS: заголовка `Access-Control-Allow-Origin` немає — сторінка з іншого origin відповіді не
-  прочитає; `OPTIONS` на маршрути фреймворку відповідає порожньо.
-- Веб тримає облікові дані в `sessionStorage` вкладки і питає їх на `401`.
+- `/ws` gives out the whole state without login. The UPnP routes need no login because control
+  points do not send Basic auth.
+- Development builds: `CONFIG_UI_SCREENSHOT_OPEN` (default `n`) removes the login from
+  `/api/screenshot`, `/api/ui/frames`, `/api/i18n/overflow`; `CONFIG_UI_SCROLL_BENCH` (default `n`)
+  adds `/api/ui/scrollbench` without login. Both log a WARN about themselves at every boot.
+- CORS: there is no `Access-Control-Allow-Origin` header — a page from another origin cannot read
+  the response; `OPTIONS` on the framework routes answers empty.
+- The web keeps the credentials in the tab's `sessionStorage` and asks for them on `401`.
 
 `POST /api/auth`: `{"username","enabled","current_pass","new_pass","reset"}`. `new_pass` (4–63
-байти) і `reset` (повернення до `admin` / `modesp`, увімкнено) вимагають `current_pass`, інакше
-`403 {"error":"wrong_password"}`; `username` — 1–31 байт без `:`. Усе перевіряється до запису.
+bytes) and `reset` (back to `admin` / `modesp`, enabled) require `current_pass`, otherwise
+`403 {"error":"wrong_password"}`; `username` — 1–31 bytes without `:`. Everything is validated
+before writing.
 
 ### REST API
 
-Маршрути фреймворку (`http_service.cpp`):
+Framework routes (`http_service.cpp`):
 
-| Маршрут | Що |
+| Route | What |
 |---|---|
-| `GET /api/state` | увесь SharedState одним JSON-об'єктом (буфер 80 КБ у PSRAM; не вмістився — 500) |
-| `POST /api/settings` | `{ключ: значення,…}`: лише відомі writable-ключі з `generated/state_meta.h`; число поза діапазоном маніфесту обрізається з WARN у лозі; command-ключ (`"command": true`) іде в чергу модуля-власника, не в сховище. Тіло ≤ 511 Б, до 15 пар |
+| `GET /api/state` | the whole SharedState as one JSON object (80 KB buffer in PSRAM; does not fit — 500) |
+| `POST /api/settings` | `{key: value,…}`: only known writable keys from `generated/state_meta.h`; a number outside the manifest's range is clamped with a WARN in the log; a command key (`"command": true`) goes to the owning module's queue, not to the store. Body ≤ 511 B, up to 15 pairs |
 | `GET /api/ui` | `ui.json` |
-| `GET /api/board`, `GET`/`POST /api/bindings`, `GET`/`POST /api/devices`, `GET /api/modules` | конфігурація плати й модулів ModESP |
-| `POST /api/wifi` | `{"ssid","password"}` — лише зберегти (діє після перезапуску); з `"join":true` — `try_connect()` (SSID 1–32 байти, пароль ≤ 64; `409 {"error":"busy"}` під час іншої спроби); `{"forget":true}` — забути мережу, точка доступу. Тіло ≤ 255 Б |
+| `GET /api/board`, `GET`/`POST /api/bindings`, `GET`/`POST /api/devices`, `GET /api/modules` | ModESP board and module configuration |
+| `POST /api/wifi` | `{"ssid","password"}` — save only (takes effect after a restart); with `"join":true` — `try_connect()` (SSID 1–32 bytes, password ≤ 64; `409 {"error":"busy"}` during another attempt); `{"forget":true}` — forget the network, access point. Body ≤ 255 B |
 | `GET /api/wifi/scan` | `{"ok","networks":[{"ssid","rssi","auth"}]}` |
-| `GET`/`POST /api/wifi/ap` | `{"ssid","channel","password_set"}` / `{"ssid","password","channel"}`: пароль порожній або ≥ 8; діє після перезапуску |
+| `GET`/`POST /api/wifi/ap` | `{"ssid","channel","password_set"}` / `{"ssid","password","channel"}`: password empty or ≥ 8; takes effect after a restart |
 | `GET`/`POST /api/time` | `{"time","date","ntp_enabled","timezone","synced","unix"}` / `{"mode":"ntp"\|"manual","time":<unix>,"timezone"}` |
-| `GET`/`POST /api/auth` | `{"enabled","username"}` / див. «Автентифікація» |
-| `GET`/`POST /api/loglevel` | рівні логів: `{"tag","level"}`, `level` — `none`, `error`, `warn` або `info`, не вище стелі збірки (INFO); не зберігається |
-| `GET /api/log`, `GET /api/log/summary` | історія журналу ModESP; у `project.json` немає модуля-джерела, тож відповідь — 500 |
-| `GET /api/backup`, `POST /api/restore` | persist-ключі (числа й bool), `{"modesp_backup":1,"keys":{…}}`, ≤ 2 КБ; відновлення перезапускає панель |
-| `POST /api/restart` | запис налаштувань, зупинка модулів у головному циклі (≤ 2 с), перезапуск |
-| `POST /api/factory-reset` | стирає NVS (Wi-Fi, логін, налаштування, ключі AirPlay) і перезапускає; розділ `userdata` не чіпає |
-| `GET`/`POST /api/ota` | див. «OTA» |
-| `GET /api/onewire/scan`, `GET /api/drivers/scan`, `GET /api/ble/scan` | сканери шин ModESP |
+| `GET`/`POST /api/auth` | `{"enabled","username"}` / see "Authentication" |
+| `GET`/`POST /api/loglevel` | log levels: `{"tag","level"}`, `level` — `none`, `error`, `warn` or `info`, not above the build's ceiling (INFO); not persisted |
+| `GET /api/log`, `GET /api/log/summary` | ModESP journal history; `project.json` has no source module, so the response is 500 |
+| `GET /api/backup`, `POST /api/restore` | persist keys (numbers and bool), `{"modesp_backup":1,"keys":{…}}`, ≤ 2 KB; restoring restarts the panel |
+| `POST /api/restart` | saving settings, stopping the modules in the main loop (≤ 2 s), restart |
+| `POST /api/factory-reset` | erases NVS (Wi-Fi, login, settings, AirPlay keys) and restarts; does not touch the `userdata` partition |
+| `GET`/`POST /api/ota` | see "OTA" |
+| `GET /api/onewire/scan`, `GET /api/drivers/scan`, `GET /api/ble/scan` | ModESP bus scanners |
 
-Маршрути модулів (`http_routes`):
+Module routes (`http_routes`):
 
-| Маршрут | Що |
+| Route | What |
 |---|---|
-| `GET`/`POST /api/stations` | список станцій — «Список станцій» |
-| `GET /api/dlna/browser` | знімок браузера медіасерверів — «Браузер медіасерверів» |
-| `GET`/`POST /api/userdata` | файли користувача (список станцій, EQ і «Власний», `devices.json`, `last_track`) одним JSON; POST кладе їх поруч як `<ім'я>.restore`, `UserStore` ставить на місце на наступному старті (веб одразу перезапускає панель). Тіло ≤ 192 КБ; файли перевіряються всі до запису |
-| `GET`/`POST /api/eq` | еквалайзер — [AUDIO.md](AUDIO.md), «PEQ і `eq.json`» |
-| `GET`/`POST /api/bt` | Bluetooth супутника, ім'я пристрою — [AUDIO.md](AUDIO.md), «Керування з панелі й телефона» |
-| `GET /api/screenshot`, `/api/cover`, `/api/library`, `/api/i18n/overflow`, `/api/ui/frames` | маршрути панелі — [UI.md](UI.md), «HTTP-маршрути модуля» |
-| `GET`/`POST /api/mqtt` | MQTT — «MQTT» |
-| UPnP | `/rootDesc.xml`, `/<Service>.xml` і маршрути під `/<Service>/` — «DLNA» |
+| `GET`/`POST /api/stations` | station list — "Station list" |
+| `GET /api/dlna/browser` | media server browser snapshot — "Media server browser" |
+| `GET`/`POST /api/userdata` | user files (station list, EQ and "Custom", `devices.json`, `last_track`) as one JSON; POST puts them alongside as `<name>.restore`, and `UserStore` moves them into place at the next boot (the web restarts the panel right away). Body ≤ 192 KB; all files are validated before writing |
+| `GET`/`POST /api/eq` | equalizer — [AUDIO.md](AUDIO.md), "PEQ and `eq.json`" |
+| `GET`/`POST /api/bt` | satellite Bluetooth, device name — [AUDIO.md](AUDIO.md), "Control from the panel and the phone" |
+| `GET /api/screenshot`, `/api/cover`, `/api/library`, `/api/i18n/overflow`, `/api/ui/frames` | panel routes — [UI.md](UI.md), "Module HTTP routes" |
+| `GET`/`POST /api/mqtt` | MQTT — "MQTT" |
+| UPnP | `/rootDesc.xml`, `/<Service>.xml` and routes under `/<Service>/` — "DLNA" |
 
 ### OTA
 
-`POST /api/ota`, тіло — сирий `.bin` програми.
+`POST /api/ota`, body — the raw app `.bin`.
 
-- Розмір від 256 Б до розміру наступного OTA-слота (4 МБ); перший байт `0xE9`; `project_name` з
-  `esp_app_desc_t` такий самий, як у робочого образу, інакше
+- Size from 256 B to the size of the next OTA slot (4 MB); first byte `0xE9`; `project_name` in
+  `esp_app_desc_t` matches the running image's, otherwise
   `400 {"error":"board_mismatch","running","incoming"}`.
-- Три тайм-аути прийому поспіль (~90 с) — `408`: клієнт, що зник без FIN, інакше тримав би єдину
-  задачу httpd.
-- Пише в наступний слот (`ota_0` / `ota_1`), робить його завантажувальним, зупиняє модулі,
-  перезапускає.
-- Новий образ має за 60 с отримати Wi-Fi і HTTP-сервер, `audio.state` ≠ `error` і працюючий
-  `ui_lvgl`; тоді `esp_ota_mark_app_valid_cancel_rollback()`, інакше перезапуск, і завантажувач
-  повертає попередній образ (`CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE`).
-- OTA оновлює лише програму: веб-збірка, `board.json` і `bindings.json` — у розділі `data`.
-- `GET /api/ota` (без логіну): `{"partition","version","idf","date","time","board"}`.
+- Three receive timeouts in a row (~90 s) — `408`: a client that vanished without FIN would
+  otherwise hold the only httpd task.
+- Writes to the next slot (`ota_0` / `ota_1`), makes it bootable, stops the modules,
+  restarts.
+- Within 60 s the new image must get Wi-Fi and the HTTP server, `audio.state` ≠ `error` and a
+  running `ui_lvgl`; then `esp_ota_mark_app_valid_cancel_rollback()`, otherwise a restart, and the
+  bootloader returns to the previous image (`CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE`).
+- OTA updates only the app: the web bundle, `board.json` and `bindings.json` are in the `data`
+  partition.
+- `GET /api/ota` (without login): `{"partition","version","idf","date","time","board"}`.
 
 ### WebSocket `/ws`
 
-`WsService` (`components/modesp_net/src/ws_service.cpp`, правила слотів — `ws_slots.h`, тест
+`WsService` (`components/modesp_net/src/ws_service.cpp`, slot rules — `ws_slots.h`, test
 `tests/host/test_ws_slots.cpp`).
 
-- Повідомлення сервера — текстовий JSON-об'єкт `{ключ: значення,…}` у форматі `/api/state`. Після
-  рукостискання клієнт отримує весь стан (потрібно ≥ 32 000 Б вільної купи), далі раз на 1,5 с —
-  лише змінені ключі, якщо такі є.
-- Ключі, які модулі пишуть без позначки зміни (діагностика: CPU, купа, лімітер, лічильники
-  супутника), у дельти не потрапляють; сторінка вебу з діагностикою, поки видима, опитує
-  `/api/state` раз на 2 с (`webui/src/lib/live.js`).
-- До 3 клієнтів. PING кожні 5 с; клієнт, якого не чути 15 с (будь-який кадр, PONG теж), або той,
-  що пропустив повідомлення, закривається. Четвертий клієнт займає слот того, хто вже підлягає
-  закриттю, або отримує CLOSE 1013 `busy`.
-- Текстові кадри клієнта (до 127 Б) читаються й відкидаються; команди йдуть через
+- A server message is a text JSON object `{key: value,…}` in the `/api/state` format. After the
+  handshake the client receives the whole state (needs ≥ 32 000 B of free heap), then every 1.5 s —
+  only the changed keys, if there are any.
+- Keys that modules write without a change flag (diagnostics: CPU, heap, limiter, satellite
+  counters) do not get into the deltas; the web page with diagnostics, while visible, polls
+  `/api/state` every 2 s (`webui/src/lib/live.js`).
+- Up to 3 clients. PING every 5 s; a client not heard from for 15 s (any frame, PONG too), or one
+  that missed a message, is closed. A fourth client takes the slot of one already due to be
+  closed, or receives CLOSE 1013 `busy`.
+- Client text frames (up to 127 B) are read and discarded; commands go through
   `POST /api/settings`.
-- Надсилання йде через `httpd_queue_work` у задачі httpd: `httpd_ws_send_frame_async()` з іншої
-  задачі змагається з її `recv()`.
-- Клієнта реєструє `ws_post_handshake_cb`: IDF 5.5.5 не викликає обробник `/ws` для рукостискання,
-  тому `CONFIG_HTTPD_WS_POST_HANDSHAKE_CB_SUPPORT=y` (`sdkconfig.defaults`) обов'язковий — без
-  нього `#error`.
+- Sending goes through `httpd_queue_work` in the httpd task: `httpd_ws_send_frame_async()` from
+  another task races with its `recv()`.
+- The client is registered by `ws_post_handshake_cb`: IDF 5.5.5 does not call the `/ws` handler for
+  the handshake, so `CONFIG_HTTPD_WS_POST_HANDSHAKE_CB_SUPPORT=y` (`sdkconfig.defaults`) is
+  mandatory — without it, `#error`.
 
-## Інтернет-радіо
+## Internet radio
 
-`modules/radio`. Модуль працює, лише поки `audio.source` = 5: буфери, банк фільтрів і задачі
-створюються, коли радіо стає джерелом, і звільняються, коли перестає. Каталог працює за будь-якого
-джерела, і рядок каталогу (з панелі чи вебу) сам ставить `audio.source` = 5; DLNA ставить його
-перед `radio.play_url`. Решта входів обробляється лише при джерелі 5: `radio.cmd`, що прийшли при
-іншому джерелі, відкидаються, а `radio.station` і `radio.play_url` чекають, доки джерелом стане 5.
-Той самий рушій грає станції й URL ззовні; `radio.mode` розрізняє `station` і `push`
-([CONCEPT.md](CONCEPT.md), §7).
+`modules/radio`. The module works only while `audio.source` = 5: buffers, the filter bank and the
+tasks are created when radio becomes the source and freed when it stops being one. The catalog works
+with any source, and a catalog row (from the panel or the web) sets `audio.source` = 5 itself; DLNA
+sets it before `radio.play_url`. The other inputs are handled only with source 5: `radio.cmd`
+commands that arrive with another source are discarded, while `radio.station` and `radio.play_url`
+wait until the source becomes 5. The same engine plays stations and external URLs; `radio.mode` distinguishes
+`station` and `push` ([CONCEPT.md](CONCEPT.md), §7).
 
-### Потік
+### Stream
 
-- Власний HTTP-клієнт над `esp_transport` (TCP або TLS з пакетом сертифікатів): ICY-метадані
-  вплетені в аудіо кожні `icy-metaint` байтів, і стек Espressif їх не виймає.
-- Запит: `GET`, `Icy-MetaData: 1`, `User-Agent: modesp-player/1.0`; голова відповіді ≤ 4080 Б;
-  до 4 переадресацій (`Location`); `Range` — для перемотки й відновлення треку.
-- Читаються `Content-Type`, `Content-Length`, `Content-Range`, `icy-metaint` (≤ 64 КБ), `icy-br`,
+- A custom HTTP client over `esp_transport` (TCP or TLS with the certificate bundle): ICY metadata is
+  interleaved with the audio every `icy-metaint` bytes, and Espressif's stack does not extract it.
+- Request: `GET`, `Icy-MetaData: 1`, `User-Agent: modesp-player/1.0`; response head ≤ 4080 B;
+  up to 4 redirects (`Location`); `Range` — for seeking and resuming a track.
+- Read: `Content-Type`, `Content-Length`, `Content-Range`, `icy-metaint` (≤ 64 KB), `icy-br`,
   `icy-name`. `StreamTitle='…'` → `radio.now_playing`.
-- Плейлист (`.m3u`, `.m3u8`, `.pls` або Content-Type `mpegurl` / `scpls`): береться перший
-  http-URL. HLS не підтримується.
-- Декодер — за Content-Type: `mpeg`/`mp3` → MP3, `aac`/`aacp` → AAC, `flac` → FLAC (перевіряється
-  раніше за `ogg`, бо буває `audio/ogg; codecs=flac`), `ogg`/`opus` → Ogg, `wav`/`wave` → WAV,
-  `mp4`/`m4a` → M4A; без придатного типу — за розширенням URL (`.aac`, `.wav`, `.flac`,
-  `.m4a`/`.mp4`); інакше MP3.
-- Декодери в збірці (`sdkconfig.board`): MP3, AAC з HE-AAC (SBR, PS: `aac_plus_enable`), FLAC, WAV,
-  M4A. Ogg (Vorbis, Opus) вимкнений — такі потоки не грають.
-- Буфер стиснутого потоку — 128 КБ у PSRAM (~8 с при 128 кбіт/с), відтворення починається з 32 КБ;
-  `radio.buffer` — його заповнення, %. PCM-кільце — 0,5 с на 48 кГц ([AUDIO.md](AUDIO.md), «Кільце
-  PCM і його власники»).
-- Тайм-аути: з'єднання (DNS, TCP, рукостискання TLS) — 8 с, одне читання — 1 с; 8 тайм-аутів
-  поспіль — потік утрачено.
-- Частота: потік просить у кільця власну частоту і, якщо вихід став на іншій, конвертує
-  ([AUDIO.md](AUDIO.md), «Частота виходу і сесії»). Початок і кінець потоку — згасання 480 кадрів.
-- Задачі `radio` (декодер, 12 КБ) і `radio_net` (читач сокета, 6 КБ): стеки в PSRAM, ядро 0,
-  пріоритет головного циклу з розподілом часу між ними.
-- `esp_audio_codec` 2.5.0 пакує моно-AAC-кадр на місці у вихідному буфері й сягає до 12 КБ від
-  його початку, тому буфер PCM декодера ≥ 12 КБ (`static_assert`).
+- Playlist (`.m3u`, `.m3u8`, `.pls` or Content-Type `mpegurl` / `scpls`): the first http URL is
+  taken. HLS is not supported.
+- Decoder — by Content-Type: `mpeg`/`mp3` → MP3, `aac`/`aacp` → AAC, `flac` → FLAC (checked before
+  `ogg`, because there is `audio/ogg; codecs=flac`), `ogg`/`opus` → Ogg, `wav`/`wave` → WAV,
+  `mp4`/`m4a` → M4A; without a usable type — by the URL extension (`.aac`, `.wav`, `.flac`,
+  `.m4a`/`.mp4`); otherwise MP3.
+- Decoders in the build (`sdkconfig.board`): MP3, AAC with HE-AAC (SBR, PS: `aac_plus_enable`), FLAC,
+  WAV, M4A. Ogg (Vorbis, Opus) is disabled — such streams do not play.
+- The compressed stream buffer is 128 KB in PSRAM (~8 s at 128 kbit/s), playback starts at 32 KB;
+  `radio.buffer` is its fill, %. PCM ring — 0.5 s at 48 kHz ([AUDIO.md](AUDIO.md), "The PCM ring
+  and its owners").
+- Timeouts: connection (DNS, TCP, TLS handshake) — 8 s, one read — 1 s; 8 timeouts in a row —
+  the stream is lost.
+- Rate: the stream asks the ring for its own rate and, if the output settled on another, converts
+  ([AUDIO.md](AUDIO.md), "Output rate and sessions"). Stream start and end — a 480-frame fade.
+- Tasks `radio` (decoder, 12 KB) and `radio_net` (socket reader, 6 KB): stacks in PSRAM, core 0,
+  the main loop's priority with time slicing between them.
+- `esp_audio_codec` 2.5.0 packs a mono AAC frame in place in the output buffer and reaches up to
+  12 KB from its start, so the decoder's PCM buffer is ≥ 12 KB (`static_assert`).
 
-**Станція** перепідключається без обмеження спроб: паузи 0,5, 1, 2, 4, 8, далі 15 с. Без мережі
-(`wifi.connected` = false) чекає, не рахуючи спроб; станція, вибрана до появи мережі, стартує, щойно
-мережа з'явиться.
+**A station** reconnects with no limit on attempts: pauses of 0.5, 1, 2, 4, 8, then 15 s. Without a
+network (`wifi.connected` = false) it waits without counting attempts; a station selected before
+the network appeared starts as soon as the network appears.
 
-**Повільний сервер** (`modules/radio/include/stream_watch.h`, тест `tests/host/test_stream_watch.cpp`):
-два 5-секундні звіти поспіль, коли мережа дає < 95 % потреби потоку, а буфер < 10 % — перепідключення
-до іншої адреси того самого хоста (з'єднання за IP, ім'я — у `Host` і SNI), не частіше ніж раз на
-35 с. Лише станції.
+**Slow server** (`modules/radio/include/stream_watch.h`, test `tests/host/test_stream_watch.cpp`):
+two 5-second reports in a row in which the network delivers < 95 % of what the stream needs and the
+buffer is < 10 % — reconnection to another address of the same host (connection by IP, the name in
+`Host` and SNI), no more often than once per 35 s. Stations only.
 
-**TLS.** Станція може грати по HTTPS; каталог і обкладинки треків ходять лише по HTTP, логотип по
-HTTPS — лише коли сама станція грає по HTTP: TLS-сесія одна, і поки грає станція, її тримає
-станція.
+**TLS.** A station can play over HTTPS; the catalog and track covers go over HTTP only, the logo over
+HTTPS only when the station itself plays over HTTP: there is one TLS session, and while a station
+plays, the station holds it.
 
-### Список станцій
+### Station list
 
-`components/stations` (тест `tests/host/test_stations.cpp`): до 64 станцій (назва ≤ 63 Б, URL
-≤ 223 Б, `uuid` Radio Browser), 6 пресетів. Файл — `/userdata/stations.json` через `UserStore`, на
-панелі без розділу `userdata` — `/data/stations.json`; без файлу або з порожнім — вбудований набір.
+`components/stations` (test `tests/host/test_stations.cpp`): up to 64 stations (name ≤ 63 B, URL
+≤ 223 B, Radio Browser `uuid`), 6 presets. The file is `/userdata/stations.json` through
+`UserStore`, on a panel without the `userdata` partition — `/data/stations.json`; with no file or an
+empty one — the built-in set.
 
 ```json
 {"stations":[{"name":"…","url":"…","uuid":"…"}],"presets":[0,3,-1,-1,-1,-1]}
 ```
 
-Нечитабельні записи відкидаються, решта лишається; файл ≤ 24 КБ.
+Unreadable entries are discarded, the rest remain; file ≤ 24 KB.
 
 - `GET /api/stations` → `{"rev":N,"list":{"stations":[…],"presets":[…]}}`.
-- `POST /api/stations` ← `{"rev":N,"stations":[…],"presets":[…]}`, `rev` — першим полем. `202` —
-  прийнято, застосовує головний цикл; `409 {"error":"changed","rev":M}` — список змінився з того
-  покоління; `400 {"error":"rev_first"|"no_stations"}` (порожній список не приймається: на
-  наступному старті він читався б як відсутній); `413`; `503 {"error":"busy"|"no_memory"}`.
-- Станція, що грає, грає далі й після видалення зі списку.
-- `radio.list_rev` — покоління списку; змінюється з кожною правкою з панелі, каталогу чи вебу.
-- Пресет, записаний з екрана, зберігає у файл `radio.save` = 1.
+- `POST /api/stations` ← `{"rev":N,"stations":[…],"presets":[…]}`, `rev` as the first field. `202` —
+  accepted, the main loop applies it; `409 {"error":"changed","rev":M}` — the list has changed since
+  that generation; `400 {"error":"rev_first"|"no_stations"}` (an empty list is not accepted: at the
+  next boot it would read as missing); `413`; `503 {"error":"busy"|"no_memory"}`.
+- A playing station keeps playing even after it is deleted from the list.
+- `radio.list_rev` — the list generation; changes with every edit from the panel, the catalog or the
+  web.
+- A preset written from the screen is saved to the file by `radio.save` = 1.
 
-### Каталог Radio Browser
+### Radio Browser catalog
 
-**Панель** (`modules/radio/src/catalog.cpp`, задача `radio_cat`; запити, розбір і фільтри —
-`components/radio_catalog`, тест `tests/host/test_radio_catalog.cpp`).
+**Panel** (`modules/radio/src/catalog.cpp`, task `radio_cat`; requests, parsing and filters —
+`components/radio_catalog`, test `tests/host/test_radio_catalog.cpp`).
 
-- Лише HTTP, порт 80, User-Agent `P4Player/<версія програми>`.
-- Сервери — з `/json/servers`, раз на добу; запасне ім'я `all.api.radio-browser.info`.
-- Запит `radio.cat_query`: `top:UA`, `country:DE`, `tag:jazz`, `tag:jazz@UA`, `name:kiss`,
-  `name:kiss@UA`; рейтинг — у межах країни чи жанру, бо глобальні голоси Radio Browser накручені.
-  Порядок `radio.cat_sort`: 0 кліки за добу, 1 голоси, 2 бітрейт, 3 назва. Поріг
-  `radio.cat_quality`: 0 усі, 1 від 128, 2 від 192, 3 320 кбіт/с, 4 лише FLAC.
-- Сторінка — 12 рядків із 24, запитаних у сервера: пристрій відкидає кодеки, крім MP3, AAC, AAC+ і
-  FLAC, HLS, URL довші за 223 Б і повтори одного потоку. До 64 сторінок уперед; кеш 6 сторінок на
-  10 хв; не частіше двох запитів на секунду; тіло ≤ 64 КБ.
-- Країни — `/json/countrycodes`, раз на добу; жанри — `/data/www/radio_genres.json` (назви uk, en,
-  de, pl і тег запиту).
-- `radio.cat_play` = N — грати рядок як станцію (перепідключається, має назву), `radio.cat_fav` = N
-  — додати до списку, `radio.fav_add` — додати до списку станцію з каталогу, що грає. Станція з
-  каталогу поза списком: `radio.station` = −1, `radio.uuid` — її uuid.
-- Стан — `radio.cat_state` (`idle|loading|ready|error`), `radio.cat_page`, `radio.cat_count`,
+- HTTP only, port 80, User-Agent `P4Player/<app version>`.
+- Servers — from `/json/servers`, once a day; fallback name `all.api.radio-browser.info`.
+- Query `radio.cat_query`: `top:UA`, `country:DE`, `tag:jazz`, `tag:jazz@UA`, `name:kiss`,
+  `name:kiss@UA`; ranking is within a country or genre, because Radio Browser's global votes are
+  inflated. Order `radio.cat_sort`: 0 clicks per day, 1 votes, 2 bitrate, 3 name. Threshold
+  `radio.cat_quality`: 0 all, 1 from 128, 2 from 192, 3 320 kbit/s, 4 FLAC only.
+- A page is 12 rows out of 24 requested from the server: the device discards codecs other than MP3,
+  AAC, AAC+ and FLAC, HLS, URLs longer than 223 B and repeats of one stream. Up to 64 pages ahead;
+  a cache of 6 pages for 10 min; no more than two requests per second; body ≤ 64 KB.
+- Countries — `/json/countrycodes`, once a day; genres — `/data/www/radio_genres.json` (names in uk,
+  en, de, pl and the query tag).
+- `radio.cat_play` = N — play a row as a station (reconnects, has a name), `radio.cat_fav` = N
+  — add to the list, `radio.fav_add` — add the playing catalog station to the list. A catalog
+  station outside the list: `radio.station` = −1, `radio.uuid` — its uuid.
+- State — `radio.cat_state` (`idle|loading|ready|error`), `radio.cat_page`, `radio.cat_count`,
   `radio.cat_more`, `radio.cat_list`, `radio.cat_error`.
 
-**Веб** (Станції → каталог, `webui/src/lib/radiobrowser.js`): браузер сам ходить у Radio Browser по
-HTTPS (API дає CORS `*`) з тими самими фільтрами. Панелі передаються лише `radio.web_name`,
-`radio.web_url`, `radio.web_uuid`, потім `radio.web_act`: 0 грати, 1 до списку, 2–7 у пресет 1–6.
-URL має бути `http(s)://` і ≤ 223 Б.
+**Web** (Stations → catalog, `webui/src/lib/radiobrowser.js`): the browser itself goes to Radio
+Browser over HTTPS (the API gives CORS `*`) with the same filters. Only `radio.web_name`,
+`radio.web_url`, `radio.web_uuid` are passed to the panel, then `radio.web_act`: 0 play, 1 to the
+list, 2–7 to preset 1–6. The URL must be `http(s)://` and ≤ 223 B.
 
-**Кліки.** Коли станція з `uuid` (зі списку чи з каталогу) почала грати, модуль раз на налаштування
-робить `GET /json/url/<uuid>` — так Radio Browser рахує популярне. Вимикає `radio.report_clicks`.
+**Clicks.** When a station with a `uuid` (from the list or from the catalog) has started playing, the
+module makes `GET /json/url/<uuid>` once per tuning — this is how Radio Browser counts what is
+popular. Turned off by `radio.report_clicks`.
 
-### Обкладинки й логотипи
+### Covers and logos
 
-`modules/radio/src/art.cpp`, задача `radio_art` (16 КБ, PSRAM); розбір назви, запит і вибір
-результату — `components/radio_catalog/include/radio_art.h`, тест `tests/host/test_radio_art.cpp`.
+`modules/radio/src/art.cpp`, task `radio_art` (16 KB, PSRAM); parsing the title, the request and
+choosing the result — `components/radio_catalog/include/radio_art.h`, test
+`tests/host/test_radio_art.cpp`.
 
-- **Обкладинка треку.** ICY-назва `Виконавець - Назва` (також із `–` чи `—`) → пошук Deezer
-  `http://api.deezer.com/search?q=…&limit=10`; береться перший результат з тією самою назвою і тим
-  самим виконавцем (прямо, коли одне починається з іншого, або через транслітерацію кирилиці);
-  `album.cover_big` (500 px) по HTTP, ≤ 256 КБ. `radio.covers` = false — назва в Deezer не
-  надсилається.
-- **Логотип станції.** `favicon` рядка каталогу або з `/json/stations/byuuid?uuids=<uuid>`; спершу по
-  HTTP (і для `https://`-адреси), по HTTPS — лише коли сама станція грає по HTTP; ≤ 128 КБ, JPEG або
-  PNG.
-- Плитка `CoverSource::Radio`: обкладинка треку, без неї — логотип, без нього — нічого. Трек,
-  надісланий через DLNA, показує обкладинку контрол-поінта (`CoverSource::Network`), без неї —
-  плитку Radio.
+- **Track cover.** ICY title `Artist - Title` (also with `–` or `—`) → Deezer search
+  `http://api.deezer.com/search?q=…&limit=10`; the first result with the same title and the same
+  artist is taken (directly, when one starts with the other, or through transliteration of
+  Cyrillic); `album.cover_big` (500 px) over HTTP, ≤ 256 KB. `radio.covers` = false — the title is
+  not sent to Deezer.
+- **Station logo.** The `favicon` of the catalog row or from `/json/stations/byuuid?uuids=<uuid>`;
+  first over HTTP (for an `https://` address too), over HTTPS only when the station itself plays
+  over HTTP; ≤ 128 KB, JPEG or PNG.
+- Tile `CoverSource::Radio`: the track cover, without it — the logo, without that — nothing. A track
+  pushed through DLNA shows the control point's cover (`CoverSource::Network`), without it — the
+  Radio tile.
 
-### URL ззовні: позиція, перемотка, наступний трек
+### External URLs: position, seek, next track
 
-`radio.play_url` (з вебу або від DLNA) грає URL один раз: `radio.mode` = `push`, `radio.name`
-порожня, `radio.url` — сам URL, назву тримає той, хто надіслав (`dlna.title`). URL — до 256 Б
-проти 223 у станції: медіасервер кладе в URL id елемента й токен сесії, і обрізаний URL падає як
-404.
+`radio.play_url` (from the web or from DLNA) plays a URL once: `radio.mode` = `push`, `radio.name`
+empty, `radio.url` — the URL itself, the title is held by the sender (`dlna.title`). The URL is up
+to 256 B against 223 for a station: a media server puts the item id and a session token into the
+URL, and a truncated URL fails as 404.
 
-- Нескінченного перепідключення немає: невдале перше з'єднання зупиняє трек; обрив посеред треку —
-  продовження з тієї самої позиції через `Range`, до 20 спроб на трек (3 з'єднання на епізод з
-  паузою 0,5 с).
-- **Тривалість** `radio.dur_s` = `Content-Length` × 8 / бітрейт; 0 — невідома (станція). Декодер
-  MP3 рапортує бітрейт у кбіт/с, тож значення < 10 000 читається як кбіт/с
-  (`components/audio_pipe`, тест `tests/host/test_stream_pos.cpp`).
-- **Позиція** `radio.pos_s` — кадри на виході декодера, поділені на частоту джерела: прийняті байти
-  гнали б її вперед на весь буфер.
-- **Перемотка** `radio.seek_s` = секунда (−1 — нічого): та сама частка байтів, що й секунд, новий
-  `GET` з `Range: bytes=N-`, довжина — з `Content-Range` відповіді 206.
-  Вміст кільця згасає (`request_flush`); декодер не перевідкривається — синхронізується на
-  наступному заголовку кадру. На VBR перемотка наближена.
-- `radio.seekable` = надісланий трек, не WAV, відома тривалість. У WAV частка байтів може влучити в
-  заголовки RIFF/JUNK або між кадрами PCM, тому WAV не перемотується і після обриву не
-  продовжується.
-- **Наступний трек** — `radio.next_url` (DLNA пише туди слот наступного треку). За ≤ 12 с до кінця
-  надісланого треку задача `radio_next` (12 КБ, PSRAM) відкриває його (`esp_http_client`, потрібні
-  відповідь 200 і `Content-Length`), за сигнатурою файлу бере декодер MP3, FLAC чи WAV (інший
-  формат не готується) і декодує перший PCM-блок (префікс ≤ 128 КБ). На кінці треку з тією самою
-  частотою джерела підготовлений потік стає поточним без спорожнення кільця (лог
-  `prepared handoff`); інша частота, невідома довжина чи неготовий префікс — звичайний перехід
-  після спорожнення. Затримку й доповнення енкодера MP3 не обрізано: стик MP3 не sample-accurate.
-- **Кінець треку:** `radio.completed` + 1, `radio.completed_uri` — трек, що скінчився,
-  `radio.promoted_uri` — підхоплений наступний (порожньо, коли трек дограв до кінця без нього, лог
-  `track drained to end`).
+- There is no endless reconnection: a failed first connection stops the track; a break mid-track —
+  continuation from the same position through `Range`, up to 20 attempts per track (3 connections
+  per episode with a 0.5 s pause).
+- **Duration** `radio.dur_s` = `Content-Length` × 8 / bitrate; 0 — unknown (station). The MP3
+  decoder reports the bitrate in kbit/s, so a value < 10 000 is read as kbit/s
+  (`components/audio_pipe`, test `tests/host/test_stream_pos.cpp`).
+- **Position** `radio.pos_s` — the frames at the decoder output divided by the source rate: received
+  bytes would push it ahead by the whole buffer.
+- **Seek** `radio.seek_s` = second (−1 — nothing): the same fraction of bytes as of seconds, a new
+  `GET` with `Range: bytes=N-`, the length from the `Content-Range` of the 206 response.
+  The ring's contents fade out (`request_flush`); the decoder is not reopened — it synchronizes on
+  the next frame header. On VBR the seek is approximate.
+- `radio.seekable` = a pushed track, not WAV, known duration. In WAV the byte fraction may land in
+  the RIFF/JUNK headers or between PCM frames, so WAV is not seekable and is not resumed after a
+  break.
+- **Next track** — `radio.next_url` (DLNA writes the next-track slot there). ≤ 12 s before the end
+  of the pushed track, the `radio_next` task (12 KB, PSRAM) opens it (`esp_http_client`, a 200
+  response and `Content-Length` are required), picks the MP3, FLAC or WAV decoder by the file
+  signature (another format is not prepared) and decodes the first PCM block (prefix ≤ 128 KB). At
+  the end of the track, with the same source rate, the prepared stream becomes current without
+  draining the ring (log `prepared handoff`); another rate, an unknown length or an unready prefix —
+  an ordinary transition after draining. The MP3 encoder's delay and padding are not trimmed: the
+  MP3 join is not sample-accurate.
+- **End of track:** `radio.completed` + 1, `radio.completed_uri` — the track that ended,
+  `radio.promoted_uri` — the next one picked up (empty when the track played to the end without one,
+  log `track drained to end`).
 
-### Ключі `radio.*`
+### `radio.*` keys
 
-| Ключ | Значення |
+| Key | Value |
 |---|---|
 | `radio.state` | `idle` / `connecting` / `buffering` / `playing` / `reconnecting` |
-| `radio.cmd` | команда: 1 грати, 2 стоп, 3 наступна, 4 попередня |
-| `radio.station` | індекс у списку (0–63), −1 — станція з каталогу; persist |
-| `radio.name`, `radio.url`, `radio.uuid`, `radio.now_playing`, `radio.format`, `radio.buffer` | що грає |
-| `radio.count`, `radio.list_rev`, `radio.save` | список станцій |
+| `radio.cmd` | command: 1 play, 2 stop, 3 next, 4 previous |
+| `radio.station` | index in the list (0–63), −1 — a catalog station; persist |
+| `radio.name`, `radio.url`, `radio.uuid`, `radio.now_playing`, `radio.format`, `radio.buffer` | what is playing |
+| `radio.count`, `radio.list_rev`, `radio.save` | station list |
 | `radio.mode` | `station` / `push` |
-| `radio.play_url`, `radio.next_url` | URL ззовні; наступний трек |
-| `radio.pos_s`, `radio.dur_s`, `radio.seek_s`, `radio.seekable` | позиція й перемотка |
-| `radio.completed`, `radio.completed_uri`, `radio.promoted_uri` | кінець треку |
-| `radio.cat_*`, `radio.fav_add`, `radio.web_*` | каталог |
-| `radio.covers`, `radio.report_clicks` | persist, типово true |
+| `radio.play_url`, `radio.next_url` | external URL; next track |
+| `radio.pos_s`, `radio.dur_s`, `radio.seek_s`, `radio.seekable` | position and seek |
+| `radio.completed`, `radio.completed_uri`, `radio.promoted_uri` | end of track |
+| `radio.cat_*`, `radio.fav_add`, `radio.web_*` | catalog |
+| `radio.covers`, `radio.report_clicks` | persist, default true |
 
 ## DLNA
 
-Рендерер (DMR) і контрол-поінт (браузер медіасерверів); медіасервера немає. Через рендерер панель
-видно в Music Assistant (DLNA-провайдер), BubbleUPnP, mConnect, foobar2000 і «Передати на пристрій»
-Windows.
+Renderer (DMR) and control point (media server browser); there is no media server. Through the
+renderer the panel is visible in Music Assistant (DLNA provider), BubbleUPnP, mConnect, foobar2000
+and Windows' "Cast to Device".
 
-| Шар | Звідки |
+| Layer | Source |
 |---|---|
-| SSDP, опис пристрою, SOAP, GENA | `espressif/esp_media_protocols` 1.0.1 — прибитий передзібраний архів; ISA `xespv2p1`, без інструкцій `xespv2p2`, яких P4 v1.3 не має |
-| AVTransport, RenderingControl, ConnectionManager | `components/esp_dlna`, вендорено з ESP-ADF ([README](../components/esp_dlna/README.md)) |
+| SSDP, device description, SOAP, GENA | `espressif/esp_media_protocols` 1.0.1 — a pinned prebuilt archive; ISA `xespv2p1`, without the `xespv2p2` instructions, which the P4 v1.3 does not have |
+| AVTransport, RenderingControl, ConnectionManager | `components/esp_dlna`, vendored from ESP-ADF ([README](../components/esp_dlna/README.md)) |
 | SOAP AVTransport | `avt_soap`, `modules/dlna/src/dlna_soap.inc` |
-| Зв'язок із SharedState | `modules/dlna/src/dlna_module.cpp` |
-| Модель транспорту | `components/dlna_client/include/dlna_transport.h`, спільна з браузером |
+| Link to SharedState | `modules/dlna/src/dlna_module.cpp` |
+| Transport model | `components/dlna_client/include/dlna_transport.h`, shared with the browser |
 
-Модуль не відтворює звук: трек віддається рушію радіо через `radio.play_url` з `audio.source` = 5,
-стан читається з `radio.*`. Модулі не включають один одного — контракт лише ключі.
+The module does not play sound: the track is handed to the radio engine through `radio.play_url`
+with `audio.source` = 5, the state is read from `radio.*`. The modules do not include each other —
+the contract is keys only.
 
-### Запуск рендерера
+### Renderer startup
 
-- Стартує один раз, коли `dlna.enabled` і `wifi.connected`, на задачі `dlna` (6 КБ PSRAM,
-  пріоритет 3, ядро 0): `esp_dlna_*_register_service()` будують таблиці сервісів масивами на
-  стеку.
-- Перед стартом у NVS ставиться `dlna/starting`, після — знімається. Мітка, знайдена на старті,
-  означає, що попередній старт не повернувся: рендерер вимкнений на цей запуск, мітка стерта,
-  наступний запуск пробує знову.
-- Реєстрація маршрутів: wildcard `/*` знімається; на час виклику вмикається
-  `components/esp_dlna/httpd_uri_compat.c`. Бібліотека зібрана без `CONFIG_HTTPD_WS_SUPPORT` і
-  передає 16-байтний `httpd_uri_t` проти 24 байтів у цій збірці — httpd читав би
-  `supported_subprotocol` за межею об'єкта. `-Wl,--wrap=httpd_register_uri_handler` діє лише поки
-  реєструється бібліотека: перебудовує структуру з чотирьох заповнених полів і для
-  `POST /AVTransport/*` ставить обробник `avt_soap`. Потім wildcard повертається.
-- Маршрути: `/rootDesc.xml`; для кожного сервісу (`AVTransport`, `RenderingControl`,
-  `ConnectionManager`) — `/<Service>.xml` і маршрути керування й подій під `/<Service>/`, разом сім
-  обробників httpd (реєструє `esp_media_protocols`); SOAP AVTransport приходить на
-  `/AVTransport/Control`. Модуль додає `/api/dlna/browser` (у вікні `http_routes` на старті). Веб ці
-  шляхи не займає.
-- SSDP — поки `dlna.enabled` і є мережа: 239.255.255.250:1900, `LOCATION:
-  http://<ip>/rootDesc.xml`, оголошення `upnp:rootdevice`, `MediaRenderer:1`,
-  `ConnectionManager:1`, `RenderingControl:1`, `AVTransport:1`. Стек задачі SSDP — у внутрішній
-  RAM, всупереч типовому значенню компонента (`stack_in_ext = false`): задача зі стеком у PSRAM не
-  може виконуватися, поки кеш flash вимкнений, а NVS і LittleFS пишуть інші задачі. Ядро 0.
-  Вимкнення шле `ssdp:byebye`; маршрути рендерера лишаються зареєстрованими.
-- Ідентичність: UUID `50344453-0000-1000-8000-<MAC>` (сталий між перезапусками, контрол-поінти
-  пам'ятають пристрій за ним), UDN `P4_DMR_<device_id>`, friendlyName — ім'я пристрою, manufacturer
-  `ModESP`, model `P4 Player`. Іконки немає.
+- Starts once, when `dlna.enabled` and `wifi.connected`, on the `dlna` task (6 KB PSRAM,
+  priority 3, core 0): `esp_dlna_*_register_service()` build the service tables as arrays on the
+  stack.
+- Before the start `dlna/starting` is set in NVS, after it — cleared. A mark found at boot means the
+  previous start did not return: the renderer is disabled for this run, the mark is erased, the
+  next run tries again.
+- Route registration: the wildcard `/*` is removed; for the duration of the call
+  `components/esp_dlna/httpd_uri_compat.c` is switched in. The library is built without
+  `CONFIG_HTTPD_WS_SUPPORT` and passes a 16-byte `httpd_uri_t` against 24 bytes in this build — httpd
+  would read `supported_subprotocol` past the end of the object. `-Wl,--wrap=httpd_register_uri_handler`
+  acts only while the library registers: it rebuilds the structure from the four filled fields and
+  for `POST /AVTransport/*` installs the `avt_soap` handler. Then the wildcard comes back.
+- Routes: `/rootDesc.xml`; for each service (`AVTransport`, `RenderingControl`,
+  `ConnectionManager`) — `/<Service>.xml` and the control and event routes under `/<Service>/`, seven
+  httpd handlers in all (registered by `esp_media_protocols`); SOAP AVTransport arrives at
+  `/AVTransport/Control`. The module adds `/api/dlna/browser` (in the `http_routes` window at
+  startup). The web does not occupy these paths.
+- SSDP — while `dlna.enabled` and there is a network: 239.255.255.250:1900, `LOCATION:
+  http://<ip>/rootDesc.xml`, announcements `upnp:rootdevice`, `MediaRenderer:1`,
+  `ConnectionManager:1`, `RenderingControl:1`, `AVTransport:1`. The SSDP task stack is in internal
+  RAM, contrary to the component's default (`stack_in_ext = false`): a task with its stack in PSRAM
+  cannot run while the flash cache is disabled, and NVS and LittleFS are written by other tasks.
+  Core 0. Disabling sends `ssdp:byebye`; the renderer routes stay registered.
+- Identity: UUID `50344453-0000-1000-8000-<MAC>` (stable across restarts, control points remember
+  the device by it), UDN `P4_DMR_<device_id>`, friendlyName — the device name, manufacturer
+  `ModESP`, model `P4 Player`. No icon.
 
-### Потоки
+### Threads
 
-1. Колбек рендерера (`renderer_request`) і `avt_soap` виконуються в задачі httpd усередині
-   SOAP-запиту: лише читання й запис SharedState під м'ютексом моделі (очікування 50 мс у
-   `avt_soap`, 1 с у колбеку).
-2. Дії, що запускають чи зупиняють звук, ставляться в чергу моделі (8 команд); виконує головний
-   цикл — по одній за оберт і лише коли рушій забрав попередній `radio.play_url`.
-3. GENA NOTIFY — HTTP-запити до підписників; їх шле лише задача `dlna` (черга 8): підписник, що
-   зник без відписки, блокує до тайм-ауту з'єднання, а головний цикл годує watchdog.
+1. The renderer callback (`renderer_request`) and `avt_soap` run in the httpd task inside the SOAP
+   request: only reading and writing SharedState under the model's mutex (a wait of 50 ms in
+   `avt_soap`, 1 s in the callback).
+2. Actions that start or stop sound are put in the model's queue (8 commands); the main loop
+   executes them — one per turn and only once the engine has taken the previous `radio.play_url`.
+3. GENA NOTIFY — HTTP requests to subscribers; only the `dlna` task sends them (queue of 8): a
+   subscriber that vanished without unsubscribing blocks until the connection timeout, and the
+   main loop feeds the watchdog.
 
 ### AVTransport
 
-| Дія | Поведінка |
+| Action | Behavior |
 |---|---|
-| `SetAVTransportURI` | URI ≤ 256 Б, DIDL-Lite ≤ 2048 Б (інакше `402`); не `http(s)://` — `716`; порожній URI — Stop. Очищує наступний і попередній трек. Коли транспорт грає, новий трек грає одразу; інакше лише завантажується (`STOPPED` або `PAUSED_PLAYBACK`) |
-| `SetNextAVTransportURI` | слот наступного треку; ті самі межі й коди, що в `SetAVTransportURI` |
-| `Play` | `Speed` лише `1` (`717`); без треку — `701`. На паузі з тим самим URI — продовження; інакше старт: `audio.source` = 5, `radio.play_url`, стан `TRANSITIONING` |
-| `Pause` | пауза споживача кільця (`pcm_ring().set_paused`): сокет лишається, TCP притримує сервер, продовження миттєве. Не свій трек або `STOPPED` — `701` |
-| `Stop` | свій трек — `radio.cmd` = 2; стан `STOPPED` |
-| `Next` | наступний трек; немає — `711` |
-| `Previous` | попередній трек; немає — перемотка на 0 (діє лише при `radio.seekable`) |
-| `Seek` | `REL_TIME` / `ABS_TIME` (інакше `710`); ціль < тривалості (`711`); не свій трек — `701`. Виконується лише при `radio.seekable`; інакше відповідь OK, а головний цикл команду відкидає |
-| `GetTransportInfo`, `GetPositionInfo`, `GetMediaInfo`, `GetDeviceCapabilities`, `GetTransportSettings`, `GetCurrentTransportActions` | читання; час у форматі `H:MM:SS` |
-| `SetPlayMode` | лише `NORMAL` (`712`) |
+| `SetAVTransportURI` | URI ≤ 256 B, DIDL-Lite ≤ 2048 B (otherwise `402`); not `http(s)://` — `716`; empty URI — Stop. Clears the next and the previous track. When the transport is playing, the new track plays at once; otherwise it is only loaded (`STOPPED` or `PAUSED_PLAYBACK`) |
+| `SetNextAVTransportURI` | the next-track slot; the same limits and codes as in `SetAVTransportURI` |
+| `Play` | `Speed` only `1` (`717`); with no track — `701`. Paused with the same URI — resume; otherwise a start: `audio.source` = 5, `radio.play_url`, state `TRANSITIONING` |
+| `Pause` | pause of the ring's consumer (`pcm_ring().set_paused`): the socket stays, TCP holds back the server, resuming is instant. Not its own track, or `STOPPED` — `701` |
+| `Stop` | its own track — `radio.cmd` = 2; state `STOPPED` |
+| `Next` | the next track; none — `711` |
+| `Previous` | the previous track; none — seek to 0 (works only with `radio.seekable`) |
+| `Seek` | `REL_TIME` / `ABS_TIME` (otherwise `710`); target < duration (`711`); not its own track — `701`. Executed only with `radio.seekable`; otherwise the response is OK and the main loop discards the command |
+| `GetTransportInfo`, `GetPositionInfo`, `GetMediaInfo`, `GetDeviceCapabilities`, `GetTransportSettings`, `GetCurrentTransportActions` | reads; time in the `H:MM:SS` format |
+| `SetPlayMode` | only `NORMAL` (`712`) |
 
-- Спільне: `InstanceID` ≠ 0 — `718`; тіло ≥ 16 КБ — `402`; черга повна або м'ютекс зайнятий —
-  `715`; відповідь понад 32 КБ — `501`. Помилка — справжній UPnP SOAP fault, HTTP 500.
-- SOAP-відповідь `GetCurrentTransportActions` завжди містить `Seek`; змінна події
-  `CurrentTransportActions` — лише при `radio.seekable`.
-- Позиція й тривалість — `radio.pos_s` / `radio.dur_s`, які модуль дзеркалить раз на 250 мс:
-  контрол-поінт питає `GetPositionInfo` щосекунди на кожного підписника.
-- **Володіння.** Дія контрол-поінта діє лише на трек, який він надіслав (`audio.source` = 5,
-  `radio.mode` = `push`, `radio.url` = його URI): пауза чи стоп з телефону не зупиняє станцію чи трек
-  з картки. `Play` з новим URI — це і є запит забрати вихід.
-- **Старт.** Після пушу модуль до 15 с чекає першої ознаки життя рушія (`connecting`, `buffering`,
-  `playing`, `reconnecting`): перші ~500 мс `radio.state` ще `idle`, бо команда в черзі. Після неї
-  `idle` означає кінець треку.
-- **Кінець треку.** `radio.completed` з `radio.completed_uri` = свій трек → наступний трек моделі:
-  `Adopt`, коли рушій його вже підхопив (`radio.promoted_uri`), або `Play`; стан `TRANSITIONING`.
-  Без наступного — `STOPPED`. Лог `Dlna: track completion: <uri>, next adopted|scheduled|empty`.
+- Common: `InstanceID` ≠ 0 — `718`; body ≥ 16 KB — `402`; queue full or mutex busy —
+  `715`; response over 32 KB — `501`. An error is a real UPnP SOAP fault, HTTP 500.
+- The SOAP response of `GetCurrentTransportActions` always contains `Seek`; the event variable
+  `CurrentTransportActions` — only with `radio.seekable`.
+- Position and duration — `radio.pos_s` / `radio.dur_s`, which the module mirrors every 250 ms:
+  a control point asks `GetPositionInfo` every second per subscriber.
+- **Ownership.** A control point's action applies only to the track it sent (`audio.source` = 5,
+  `radio.mode` = `push`, `radio.url` = its URI): pause or stop from the phone does not stop a
+  station or a track from the card. `Play` with a new URI is itself the request to take over the
+  output.
+- **Start.** After a push the module waits up to 15 s for the engine's first sign of life
+  (`connecting`, `buffering`, `playing`, `reconnecting`): for the first ~500 ms `radio.state` is still
+  `idle`, because the command is in the queue. After it, `idle` means the end of the track.
+- **End of track.** `radio.completed` with `radio.completed_uri` = its own track → the model's next
+  track: `Adopt` when the engine has already picked it up (`radio.promoted_uri`), or `Play`; state
+  `TRANSITIONING`. Without a next one — `STOPPED`. Log
+  `Dlna: track completion: <uri>, next adopted|scheduled|empty`.
 
 ### RenderingControl, ConnectionManager
 
-- `GetVolume` / `SetVolume` ↔ `audio.volume` (0–100), mute ↔ `audio.mute`. Зміна гучності на панелі
-  шле подію RenderingControl — повзунок у застосунку йде слідом.
-- Sink-список `GetProtocolInfo`: MP3 (`audio/mpeg`, `audio/mp3`, `audio/x-mpeg`, `audio/mpeg3`), FLAC
-  (`audio/flac`, `audio/x-flac`), WAV (`audio/wav`, `audio/x-wav`, `audio/wave`), плейлисти
-  (`audio/mpegurl`, `audio/x-mpegurl`, `audio/x-scpls`). За ним Music Assistant вирішує, що
-  перекодувати на сервері. Рушій декодує також AAC і M4A, але ні sink-список, ні браузер їх не
-  пропонують.
+- `GetVolume` / `SetVolume` ↔ `audio.volume` (0–100), mute ↔ `audio.mute`. A volume change on the
+  panel sends a RenderingControl event — the slider in the app follows.
+- The `GetProtocolInfo` sink list: MP3 (`audio/mpeg`, `audio/mp3`, `audio/x-mpeg`, `audio/mpeg3`),
+  FLAC (`audio/flac`, `audio/x-flac`), WAV (`audio/wav`, `audio/x-wav`, `audio/wave`), playlists
+  (`audio/mpegurl`, `audio/x-mpegurl`, `audio/x-scpls`). Music Assistant uses it to decide what to
+  transcode on the server. The engine also decodes AAC and M4A, but neither the sink list nor the
+  browser offers them.
 
-### Браузер медіасерверів
+### Media server browser
 
-`components/dlna_client`, задача `dlna_client` (12 КБ PSRAM, пріоритет 1). Сторінки — «DLNA» на
-панелі (`modules/ui_lvgl/src/screen_dlna.cpp`) і «Медіасервери DLNA» у вебі ([UI.md](UI.md)).
+`components/dlna_client`, task `dlna_client` (12 KB PSRAM, priority 1). Pages — "DLNA" on the panel
+(`modules/ui_lvgl/src/screen_dlna.cpp`) and "DLNA media servers" in the web ([UI.md](UI.md)).
 
-- Пошук: `M-SEARCH`, `ST: urn:schemas-upnp-org:device:MediaServer:1`, `MX: 2`, відповіді 2,5 с; до 8
-  серверів, без повторів `LOCATION`. З опису — `friendlyName`, `URLBase`, `controlURL`
-  ContentDirectory.
-- `Browse` `BrowseDirectChildren` по 12 рядків, до 16 рівнів углиб, XML ≤ 64 КБ. HTTP або HTTPS: 4 с
-  на операцію, 12 с на запит, до 3 переадресацій.
-- Трек відтворюваний, коли в нього є `<res>` з `protocolInfo` `http-get:*:<mime>` і MIME зі
-  sink-списку (MP3, FLAC, WAV). DIDL-Lite для рендерера будується наново з відомими просторами імен.
-- Команда — `dlna.browse_cmd` = `ревізія << 12 | рядок << 4 | команда`; команди: 1 пошук, 2 відкрити,
-  3 назад, 4 наступна сторінка, 5 попередня, 6 у чергу, 7 скасувати. Команда з ревізією, відмінною
-  від показаної, ігнорується: дотик до рядка, що встиг змінитися, нічого не робить.
-- «Відкрити» на треку — трек стає поточним і грає; «у чергу» — слот наступного треку.
-- Обкладинка: `albumArtURI` відносно адреси сервера, ≤ 512 КБ → `CoverSource::Network`.
-- `status` знімка і `title` списку серверів — ключі каталогу перекладів `@dlna.*` (аргументи після
-  `\x1f`): панель і веб показують їх своєю мовою; у папці `title` — її назва.
+- Discovery: `M-SEARCH`, `ST: urn:schemas-upnp-org:device:MediaServer:1`, `MX: 2`, responses for
+  2.5 s; up to 8 servers, no repeated `LOCATION`. From the description — `friendlyName`, `URLBase`,
+  the ContentDirectory `controlURL`.
+- `Browse` `BrowseDirectChildren` 12 rows at a time, up to 16 levels deep, XML ≤ 64 KB. HTTP or
+  HTTPS: 4 s per operation, 12 s per request, up to 3 redirects.
+- A track is playable when it has a `<res>` with `protocolInfo` `http-get:*:<mime>` and a MIME from
+  the sink list (MP3, FLAC, WAV). The DIDL-Lite for the renderer is built anew with known namespaces.
+- Command — `dlna.browse_cmd` = `revision << 12 | row << 4 | command`; commands: 1 search, 2 open,
+  3 back, 4 next page, 5 previous, 6 queue, 7 cancel. A command with a revision other than the one
+  shown is ignored: a tap on a row that has meanwhile changed does nothing.
+- *Open* on a track — the track becomes current and plays; *queue* — the next-track slot.
+- Cover: `albumArtURI` relative to the server's address, ≤ 512 KB → `CoverSource::Network`.
+- The snapshot's `status` and the server list's `title` are translation catalog keys `@dlna.*`
+  (arguments after `\x1f`): the panel and the web show them in their own language; in a folder,
+  `title` is its name.
 - `GET /api/dlna/browser` → `{"revision","busy","servers","can_back","count","next","previous",
   "title","status","rows":[{"title","artist","folder","playable"}]}`.
 
-### Ключі `dlna.*`
+### `dlna.*` keys
 
-| Ключ | Значення |
+| Key | Value |
 |---|---|
-| `dlna.enabled` | SSDP-оголошення; persist, типово true |
-| `dlna.state` | `NO_MEDIA_PRESENT` / `STOPPED` / `TRANSITIONING` / `PLAYING` / `PAUSED_PLAYBACK` — те саме, що отримує контрол-поінт |
+| `dlna.enabled` | SSDP announcement; persist, default true |
+| `dlna.state` | `NO_MEDIA_PRESENT` / `STOPPED` / `TRANSITIONING` / `PLAYING` / `PAUSED_PLAYBACK` — the same as the control point receives |
 | `dlna.name` | friendlyName |
-| `dlna.uri`, `dlna.title`, `dlna.artist`, `dlna.album`, `dlna.art_uri` | трек і DIDL-Lite |
-| `dlna.cmd` | транспорт з панелі чи вебу: 1 грати/продовжити, 2 стоп, 3 пауза, 4 наступний, 5 попередній |
-| `dlna.browse_cmd` | команда браузера |
+| `dlna.uri`, `dlna.title`, `dlna.artist`, `dlna.album`, `dlna.art_uri` | track and DIDL-Lite |
+| `dlna.cmd` | transport from the panel or the web: 1 play/resume, 2 stop, 3 pause, 4 next, 5 previous |
+| `dlna.browse_cmd` | browser command |
 
-### Перевірка
+### Verification
 
 ```
 curl -u <user>:<pass> -X POST http://<panel>/api/loglevel -d '{"tag":"Dlna","level":"info"}'
-curl http://<panel>/rootDesc.xml     # XML опису; HTML вебу — маршрути стали після wildcard
+curl http://<panel>/rootDesc.xml     # the description XML; the web's HTML means the routes went in after the wildcard
 ```
 
-- `dlna.name` і `dlna.state` — у `GET /api/state`.
-- Контрол-поінт у тій самій мережі показує рендерер за кілька секунд; повзунок гучності ↔
-  `audio.volume` в обидва боки.
-- Пуш треку: `Radio: playing pushed URL …`, `dlna.state` `TRANSITIONING` → `PLAYING`.
-- Кінець треку: `Radio: track drained to end` або `prepared handoff: …`, далі
-  `Dlna: track completion: …`; `dlna.state` = `STOPPED` без наступного треку, `TRANSITIONING` — з ним.
-- `tools/dlna_fixture_server.py --host <IP ПК>` (MediaServer з тестовими WAV і PNG) і
-  `tools/dlna_acceptance.py --panel <URL> --fixture <URL>` — обмежені перевірки рендерера й
-  браузера на панелі; хост-тести `tests/host/test_dlna_*.cpp`.
+- `dlna.name` and `dlna.state` — in `GET /api/state`.
+- A control point on the same network shows the renderer within a few seconds; volume slider ↔
+  `audio.volume` both ways.
+- Track push: `Radio: playing pushed URL …`, `dlna.state` `TRANSITIONING` → `PLAYING`.
+- End of track: `Radio: track drained to end` or `prepared handoff: …`, then
+  `Dlna: track completion: …`; `dlna.state` = `STOPPED` without a next track, `TRANSITIONING` with
+  one.
+- `tools/dlna_fixture_server.py --host <PC IP>` (a MediaServer with test WAV and PNG) and
+  `tools/dlna_acceptance.py --panel <URL> --fixture <URL>` — bounded checks of the renderer and the
+  browser on the panel; host tests `tests/host/test_dlna_*.cpp`.
 
 ## AirPlay
 
-`modules/airplay` над `components/airplay2` — ядром
-[rbouteiller/airplay-esp32](https://github.com/rbouteiller/airplay-esp32) з некомерційною ліцензією;
-походження, ліцензія й локальні зміни — [UPSTREAM.md](../components/airplay2/UPSTREAM.md). Збірка
-без модуля не пропонує `audio.source` = 6.
+`modules/airplay` over `components/airplay2` — the core of
+[rbouteiller/airplay-esp32](https://github.com/rbouteiller/airplay-esp32) under a non-commercial
+license; origin, license and local changes — [UPSTREAM.md](../components/airplay2/UPSTREAM.md). A
+build without the module does not offer `audio.source` = 6.
 
-Приймач: realtime ALAC по UDP і буферизований AAC по TCP, HAP-спарювання (ключі в NVS-просторі
-`airplay`), годинники PTP і NTP, DACP-клієнт. Звук іде в PCM-кільце як `OWNER_AIRPLAY`
+Receiver: realtime ALAC over UDP and buffered AAC over TCP, HAP pairing (keys in the `airplay` NVS
+namespace), PTP and NTP clocks, DACP client. Sound goes into the PCM ring as `OWNER_AIRPLAY`
 ([AUDIO.md](AUDIO.md)).
 
-### Профілі
+### Profiles
 
-| `airplay.mode` | Профіль | mDNS | Порт RTSP | `Server` | model |
+| `airplay.mode` | Profile | mDNS | RTSP port | `Server` | model |
 |---|---|---|---|---|---|
-| 0 (типово) | AirPlay 2 | `_airplay._tcp` і `_raop._tcp` | 7000 | `AirTunes/377.40.00` | `AudioAccessory5,1` |
-| 1 | AirPlay 1 · сумісність із Windows | лише `_raop._tcp` | 5000 | `AirTunes/105.1` | `Shairport` |
+| 0 (default) | AirPlay 2 | `_airplay._tcp` and `_raop._tcp` | 7000 | `AirTunes/377.40.00` | `AudioAccessory5,1` |
+| 1 | AirPlay 1 · Windows compatible | only `_raop._tcp` | 5000 | `AirTunes/105.1` | `Shairport` |
 
-- Спільна політика — `components/airplay2/port/mode_policy.h`: оголошення, порт, версія, features,
-  відповідь `/info` (бінарний plist на RTSP, XML на HTTP).
-- Профіль 1 — лише класичний RAOP: без функцій AirPlay 2 і без мультируму AirPlay 2.
-- Оголошується один профіль за раз.
+- Shared policy — `components/airplay2/port/mode_policy.h`: announcement, port, version, features,
+  the `/info` response (binary plist over RTSP, XML over HTTP).
+- Profile 1 is classic RAOP only: without AirPlay 2 features and without AirPlay 2 multiroom.
+- One profile is announced at a time.
 
-### Увімкнення й перемикання
+### Enabling and switching
 
-- Приймач стартує один раз, коли `airplay.enabled` і Wi-Fi підключений у режимі STA, на задачі
-  `ap_start` з 8 КБ внутрішнього стека: HAP на першому старті пише ключі у flash. Мітка
-  `airplay_mod/starting` у NVS діє як у DLNA: старт, що не повернувся, вимикає приймач на
-  наступний запуск.
-- Ім'я береться під час старту модуля, ідентичність — базова MAC; нове ім'я — після перезапуску.
-- `airplay.mode` зберігається й застосовується без перезапуску P4: записи mDNS знімаються, задача
-  `ap_mode` перезапускає лише слухача RTSP з новим профілем, поточна сесія AirPlay рветься, решта
-  служб працює; потім оголошення повертається. Без Wi-Fi перемикання чекає зі статусом
-  `@airplay.st_wifi`.
-- `airplay.enabled` = false: записи mDNS знімаються, усі клієнти відключаються, слухач RTSP
-  зупиняється. true — слухач стартує з обраним профілем.
-- Веб: сторінка «Налаштування», група «Служби» — рядок AirPlay з перемикачем, під ним, поки AirPlay
-  увімкнений, рядок «Режим AirPlay» зі списком; у підписі — помилка або стан, поки триває
-  перемикання. Активний профіль показує сторінка «Плеєр», поки грає AirPlay. Панель:
-  «Налаштування → Служби», дотик до рядка AirPlay (не до перемикача) відкриває список із двох
-  режимів.
-- Відправник читає features, коли приймач обирають. Після прошивки, що змінює features, треба
-  обрати на телефоні інший вихід і знову панель.
+- The receiver starts once, when `airplay.enabled` and Wi-Fi is connected in STA mode, on the
+  `ap_start` task with an 8 KB internal stack: on the first start HAP writes keys to flash. The
+  `airplay_mod/starting` mark in NVS works as in DLNA: a start that did not return disables the
+  receiver for the next run.
+- The name is taken at module start, the identity is the base MAC; a new name — after a restart.
+- `airplay.mode` is saved and applied without restarting the P4: the mDNS records are withdrawn, the
+  `ap_mode` task restarts only the RTSP listener with the new profile, the current AirPlay session
+  drops, the other services keep working; then the announcement comes back. Without Wi-Fi the switch
+  waits with the status `@airplay.st_wifi`.
+- `airplay.enabled` = false: the mDNS records are withdrawn, all clients are disconnected, the RTSP
+  listener stops. true — the listener starts with the chosen profile.
+- Web: the "Settings" page, the "Services" group — the AirPlay row with a switch, below it, while
+  AirPlay is enabled, the "AirPlay mode" row with a list; the caption shows an error, or the state
+  while switching is in progress. The active profile is shown on the "Player" page while AirPlay
+  plays. Panel: "Settings → Services", a tap on the AirPlay row (not on the switch) opens a list of
+  the two modes.
+- The sender reads features when the receiver is selected. After firmware that changes features,
+  select another output on the phone and then the panel again.
 
-### Джерело, гучність, пульт
+### Source, volume, remote
 
-- Відправник, що почав грати, перемикає `audio.source` на 6 — лише на початку відтворення і лише
-  при `airplay.enabled`. Вибір іншого джерела на панелі: відправника AirPlay 1 просять стати на
-  паузу через DACP; відправник AirPlay 2 (MRP не реалізовано) шле далі, приймач тримає сесію і
-  годинник і відкидає звук, тож повернення до джерела 6 продовжує синхронно.
-- Гучність: повзунок телефону −30…0 дБ ↔ `audio.volume` 0–100 за положенням (−144, mute → 0).
-  Гучність кімнати оголошується відправникам як `initialVolume` у `/info`. Рівень телефону рухає
-  кімнату лише поки AirPlay — джерело і не в перші 3 с після підключення чи початку відтворення
-  (`modules/airplay/include/airplay_volume.h`).
-- Пульт: відправник, що дав `DACP-ID` і `Active-Remote` (AirPlay 1: TuneBlade, Music Assistant,
-  iTunes, iPhone чи Mac у режимі 1), — `airplay.remote` = true; `airplay.cmd` (1 грати, 2 пауза,
-  3 стоп, 4 наступний, 5 попередній, 6 перемкнути) іде йому через DACP. Відправник AirPlay 2 пульта
-  не дає.
+- A sender that started playing switches `audio.source` to 6 — only at the start of playback and
+  only with `airplay.enabled`. Choosing another source on the panel: an AirPlay 1 sender is asked to
+  pause through DACP; an AirPlay 2 sender (MRP is not implemented) keeps sending, the receiver holds
+  the session and the clock and discards the sound, so returning to source 6 resumes in sync.
+- Volume: the phone's slider −30…0 dB ↔ `audio.volume` 0–100 by position (−144, mute → 0).
+  The room volume is announced to senders as `initialVolume` in `/info`. The phone's level moves the
+  room only while AirPlay is the source and not in the first 3 s after connecting or the start of
+  playback (`modules/airplay/include/airplay_volume.h`).
+- Remote: a sender that gave `DACP-ID` and `Active-Remote` (AirPlay 1: TuneBlade, Music Assistant,
+  iTunes, an iPhone or a Mac in mode 1) — `airplay.remote` = true; `airplay.cmd` (1 play, 2 pause,
+  3 stop, 4 next, 5 previous, 6 toggle) goes to it through DACP. An AirPlay 2 sender gives no
+  remote.
 
-### Обкладинки
+### Covers
 
-Запитуються, коли працює задача обкладинок `ap_cover` (6 КБ PSRAM): RAOP-запис `md=0,1,2` для
-відправника AirPlay 1 і біт features 15 для AirPlay 2 — відправник AirPlay 2 питає обкладинку за
-features, а не за `md`. Біти 16 (прогрес) і 17 (текст) профіль AirPlay 2 ставить завжди.
-Обкладинка ≤ 256 КБ (межа буфера RTSP), JPEG або PNG → `CoverSource::AirPlay`; `image/none`
-очищує; нова назва без обкладинки в межах 5 с прибирає стару.
+Requested while the cover task `ap_cover` (6 KB PSRAM) runs: the RAOP record `md=0,1,2` for an
+AirPlay 1 sender and features bit 15 for AirPlay 2 — an AirPlay 2 sender asks for the cover by
+features, not by `md`. Bits 16 (progress) and 17 (text) are always set by the AirPlay 2 profile.
+Cover ≤ 256 KB (the RTSP buffer limit), JPEG or PNG → `CoverSource::AirPlay`; `image/none`
+clears it; a new title without a cover within 5 s removes the old one.
 
-### Ключі `airplay.*`
+### `airplay.*` keys
 
-| Ключ | Значення |
+| Key | Value |
 |---|---|
-| `airplay.enabled` | persist, типово true |
-| `airplay.mode` | обраний профіль; persist |
-| `airplay.active_mode`, `airplay.active_mode_label` | активний профіль: `AirPlay 2` / `AirPlay 1 · Windows` / `@airplay.st_stopped` |
-| `airplay.switching` | перемикання триває |
-| `airplay.mode_status` | `@airplay.st_starting`, `st_switching`, `st_applied`, `st_not_applied`, `st_stopped`, `st_wifi` — ключі каталогу перекладів |
-| `airplay.mode_error` | назва `esp_err_t`; порожньо — без помилки |
+| `airplay.enabled` | persist, default true |
+| `airplay.mode` | the chosen profile; persist |
+| `airplay.active_mode`, `airplay.active_mode_label` | the active profile: `AirPlay 2` / `AirPlay 1 · Windows` / `@airplay.st_stopped` |
+| `airplay.switching` | switching is in progress |
+| `airplay.mode_status` | `@airplay.st_starting`, `st_switching`, `st_applied`, `st_not_applied`, `st_stopped`, `st_wifi` — translation catalog keys |
+| `airplay.mode_error` | the `esp_err_t` name; empty — no error |
 | `airplay.state` | `off` / `idle` / `connected` / `playing` / `paused` / `switching` |
-| `airplay.name` | ім'я в списку AirPlay |
-| `airplay.title`, `airplay.artist`, `airplay.album`, `airplay.pos_s`, `airplay.dur_s` | метадані відправника |
-| `airplay.remote`, `airplay.cmd` | пульт DACP |
+| `airplay.name` | the name in the AirPlay list |
+| `airplay.title`, `airplay.artist`, `airplay.album`, `airplay.pos_s`, `airplay.dur_s` | the sender's metadata |
+| `airplay.remote`, `airplay.cmd` | DACP remote |
 
-Kconfig `components/airplay2/Kconfig`: `AIRPLAY_TIMING_THRESHOLD_MS` 25 (буферизований потік),
-`AIRPLAY_RT_TIMING_THRESHOLD_MS` 50 (realtime) — наскільки кадр може випереджати чи запізнюватися,
-перш ніж його притримають чи відкинуть.
+Kconfig `components/airplay2/Kconfig`: `AIRPLAY_TIMING_THRESHOLD_MS` 25 (buffered stream),
+`AIRPLAY_RT_TIMING_THRESHOLD_MS` 50 (realtime) — how far a frame may be early or late before it is
+held back or dropped.
 
-### Перевірки
+### Checks
 
 ```
 python tools/tests/test_airplay_mode.py
 python tools/tests/test_airplay_mode_module.py
 python tools/tests/test_airplay_reconfigure.py
-python tools/airplay_send.py <ip панелі>     # відправник AirPlay 1 (RAOP) з тестовим сигналом
+python tools/airplay_send.py <panel ip>     # an AirPlay 1 (RAOP) sender with a test signal
 ```
 
-Тести проганяють обидва профілі з імітацією транспорту й mDNS (потрібні Python і нативний
-компілятор C). `airplay_send.py` не досягає половини AirPlay 2 (HAP, PTP, буферизований AAC).
+The tests run both profiles with simulated transport and mDNS (they need Python and a native C
+compiler). `airplay_send.py` does not reach the AirPlay 2 half (HAP, PTP, buffered AAC).
 
 ## MQTT
 
-`components/modesp_mqtt`. Компілюється разом із мережею (`CONFIG_MODESP_CLOUD_MQTT` — типовий
-вибір при `MODESP_NET_ENABLE`), вимкнений під час роботи: NVS `mqtt/enabled` типово false.
+`components/modesp_mqtt`. Compiled together with networking (`CONFIG_MODESP_CLOUD_MQTT` — the
+default choice with `MODESP_NET_ENABLE`), disabled at runtime: NVS `mqtt/enabled` defaults to false.
 
-- Налаштування: `GET /api/mqtt` → `{"enabled","connected","broker","port","user","prefix",
+- Settings: `GET /api/mqtt` → `{"enabled","connected","broker","port","user","prefix",
   "tenant","device_id","status"}`, `POST /api/mqtt` ← `{"enabled","broker","port","user",
-  "password","prefix","tenant"}`; або веб, «Сервіс → Інші параметри». NVS-простір `mqtt`:
-  `broker`, `port` (типово 1883), `user`, `pass`, `prefix`, `tenant`, `enabled`, `broker_ca` (PEM).
-- TLS: `mqtts://` у `broker` або порт 8883 при адресі без схеми → TLS із сертифікатом `broker_ca`
-  чи вбудованим пакетом; інакше відкритий текст, `mqtt.status` = `insecure`.
-- Префікс: `player/v1/<tenant>/<device_id>`, без tenant — `player/v1/pending/<device_id>`
-  (`mqtt_topic_root` у `project.json`; `device_id` — три останні байти MAC, hex).
+  "password","prefix","tenant"}`; or the web, "Service → Other settings". NVS namespace `mqtt`:
+  `broker`, `port` (default 1883), `user`, `pass`, `prefix`, `tenant`, `enabled`, `broker_ca` (PEM).
+- TLS: `mqtts://` in `broker`, or port 8883 with an address without a scheme → TLS with the
+  `broker_ca` certificate or the built-in bundle; otherwise plain text, `mqtt.status` = `insecure`.
+- Prefix: `player/v1/<tenant>/<device_id>`, without a tenant — `player/v1/pending/<device_id>`
+  (`mqtt_topic_root` in `project.json`; `device_id` — the last three bytes of the MAC, hex).
 - `<prefix>/status` — `online` / `offline` (LWT, QoS 1, retain).
-- `<prefix>/state/<ключ>` — раз на 1 с змінені ключі з розділів `mqtt.publish` маніфестів:
-  `audio.source`, `audio.volume`, `audio.mute`, `audio.state`, `audio.underruns`, `ui.backlight`,
-  `ui.encoder_pos`, а також `_ota.status`, `_ota.progress`, `_ota.error`.
-- `<prefix>/heartbeat` — раз на 30 с `{"proto":1,"fw","up","heap","rssi":0}`.
-- Команди — підписка `<prefix>/cmd/+`: будь-який writable-ключ типу int, float або bool з
-  `state_meta` (діапазон обрізається, command-ключ — у чергу модуля). Рядкові ключі
-  (`radio.play_url`) через MQTT не застосовуються. Retained-команди ігноруються. Службові:
-  `_ota` (`{"url","version","checksum":"sha256:…"}` — завантаження прошивки по HTTP чи HTTPS,
-  перевірка й запис в OTA-слот), `_request_full_state`, `_set_mqtt_creds`, `_set_tenant`.
-- Перепідключення: 5 с, подвоєння до 5 хв. Мережеві кроки клієнта — з тайм-аутом 3 с, а старий
-  клієнт зупиняє задача `mqtt_stop`: `esp_mqtt_client_stop()` може чекати цілу спробу з'єднання, а
-  головний цикл годує 5-секундний watchdog.
-- Home Assistant discovery: маніфести не оголошують сутностей, нічого не публікується.
+- `<prefix>/state/<key>` — every 1 s, the changed keys from the `mqtt.publish` sections of the
+  manifests: `audio.source`, `audio.volume`, `audio.mute`, `audio.state`, `audio.underruns`,
+  `ui.backlight`, `ui.encoder_pos`, and also `_ota.status`, `_ota.progress`, `_ota.error`.
+- `<prefix>/heartbeat` — every 30 s `{"proto":1,"fw","up","heap","rssi":0}`.
+- Commands — subscription `<prefix>/cmd/+`: any writable key of type int, float or bool from
+  `state_meta` (the range is clamped, a command key goes to the module's queue). String keys
+  (`radio.play_url`) are not applied through MQTT. Retained commands are ignored. Service commands:
+  `_ota` (`{"url","version","checksum":"sha256:…"}` — firmware download over HTTP or HTTPS,
+  verification and writing to an OTA slot), `_request_full_state`, `_set_mqtt_creds`, `_set_tenant`.
+- Reconnection: 5 s, doubling up to 5 min. The client's network steps have a 3 s timeout, and the
+  old client is stopped by the `mqtt_stop` task: `esp_mqtt_client_stop()` can wait out a whole
+  connection attempt, while the main loop feeds a 5-second watchdog.
+- Home Assistant discovery: the manifests declare no entities, nothing is published.
 - `mqtt.status`: `disabled`, `no_broker`, `waiting_wifi`, `connecting`, `connected`, `insecure`,
-  `disconnected`, `error`; також `mqtt.connected`, `mqtt.broker`.
+  `disconnected`, `error`; also `mqtt.connected`, `mqtt.broker`.
 
-## Діагностика
+## Diagnostics
 
-- Типовий рівень логів — WARN; із мережевих тегів на INFO лише `Radio`
-  (`components/modesp_services/src/log_policy.cpp`). Решту — `WiFi`, `HTTP`, `WS`, `Dlna`,
-  `NextStream`, `AirPlay`, `airplay2`, `mdns_airplay`, `MQTT`, `UserData` — відкриває
-  `POST /api/loglevel` до перезапуску; рядки, надруковані під час старту, так не побачити.
-- `Radio` раз на 5 с, поки грає: `stream: buffer P%, net N B/s (need M), audio X.XXx` і рядок
-  навантаження помпи, декодера й ресемплера.
-- Задачі `radio`, `radio_net` (30 с) і `dlna` (10 с) під наглядом `modesp::liveness`.
-- Соук-тест SDIO-лінку під потоком — [SOAK_TEST.md](SOAK_TEST.md).
+- The default log level is WARN; of the network tags only `Radio` is at INFO
+  (`components/modesp_services/src/log_policy.cpp`). The rest — `WiFi`, `HTTP`, `WS`, `Dlna`,
+  `NextStream`, `AirPlay`, `airplay2`, `mdns_airplay`, `MQTT`, `UserData` — are opened by
+  `POST /api/loglevel` until a restart; lines printed during boot cannot be seen this way.
+- `Radio` every 5 s while playing: `stream: buffer P%, net N B/s (need M), audio X.XXx` and a line
+  with the load of the pump, the decoder and the resampler.
+- Tasks `radio`, `radio_net` (30 s) and `dlna` (10 s) are supervised by `modesp::liveness`.
+- Soak test of the SDIO link under a stream — [SOAK_TEST.md](SOAK_TEST.md).

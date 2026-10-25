@@ -152,6 +152,7 @@ enum class S : uint16_t {
     nav_player,              // nav.player
     nav_settings,            // nav.settings
     nav_source,              // nav.source
+    nav_web,                 // nav.web
     now_airplay_pick,        // now.airplay_pick
     now_airplay_waiting,     // now.airplay_waiting
     now_aux,                 // now.aux
@@ -202,10 +203,6 @@ enum class S : uint16_t {
     spk_closed,              // spk.closed
     spk_l,                   // spk.l
     spk_left,                // spk.left
-    spk_place_corner,        // spk.place_corner
-    spk_place_free,          // spk.place_free
-    spk_place_wall,          // spk.place_wall
-    spk_placement,           // spk.placement
     spk_port_manual,         // spk.port_manual
     spk_port_measured,       // spk.port_measured
     spk_port_none,           // spk.port_none

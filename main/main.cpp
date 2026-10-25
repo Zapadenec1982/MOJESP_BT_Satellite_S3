@@ -82,7 +82,8 @@
 static const char* TAG = "main";
 
 // Heap by capability: on the P4 the PSRAM-inflated total hides the internal / DMA-capable
-// SRAM that ESP-Hosted, mbedTLS and I2S DMA actually fight over (docs/CONCEPT.md «Обмеження плати»).
+// SRAM that ESP-Hosted, mbedTLS and I2S DMA actually fight over (docs/CONCEPT.md, "Board
+// constraints").
 static void log_heap(const char* when)
 {
     ESP_LOGI(TAG, "Heap %s: total %u | internal %u (largest %u) | DMA %u (largest %u) | PSRAM %u",

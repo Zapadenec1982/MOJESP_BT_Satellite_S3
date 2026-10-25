@@ -2,12 +2,12 @@
  * @file audio_module.h
  * @brief Audio core — source select, ASRC, DSP, I²S output; own task on core 1.
  *
- * Contract with ModESP (docs/CONCEPT.md «Аудіоядро на ядрі 1»): the module owns SharedState keys
- * (audio.*) and pushes COMMANDS to the audio task through a FreeRTOS queue from
- * on_update(); the task returns only slow STATUS (meters, underruns, measured input
+ * Contract with ModESP (docs/CONCEPT.md, "The audio core on core 1"): the module owns
+ * SharedState keys (audio.*) and pushes COMMANDS to the audio task through a FreeRTOS queue
+ * from on_update(); the task returns only slow STATUS (meters, underruns, measured input
  * rate) through a spinlock-guarded POD. No sample ever crosses the message bus.
  *
- * Signal path (CONCEPT «Сигнальний тракт і тактування»): source → [ASRC for BT] → PEQ →
+ * Signal path (docs/CONCEPT.md, "Signal path and clocking"): source → [ASRC for BT] → PEQ →
  * volume → limiter → I2S-A TX.
  * I2S-A is full duplex in one clock domain, so AUX (ADC) needs no resampling; the BT
  * port is an I²S slave to the module's clock, so a reader task fills a PSRAM ring and
@@ -38,8 +38,8 @@ struct resample;   // dbry/audio-resampler context
 
 class AudioModule : public modesp::BaseModule {
 public:
-    /// The numbers are the contract (CONCEPT «Значення `audio.source`»): the cards on the sources
-    /// screen and the audio.sources bit mask are both indexed by them.
+    /// The numbers are the contract (docs/CONCEPT.md, "`audio.source` values"): the cards on
+    /// the sources screen and the audio.sources bit mask are both indexed by them.
     ///
     /// Spelled from generated/state_enums.h rather than written out here, so that this enum,
     /// the manifest's `options` (which is where the web UI and the API clamp get their
@@ -149,11 +149,9 @@ private:
     int32_t read_port();
     /// «Звичайна гучність» (audio.loud_ref), the loudness's reference: held to 20…100 %.
     int32_t loud_ref();
-    /// audio.bass_db and audio.treble_db as one command value: bass in bits 8-15, treble in 0-7,
-    /// each a signed byte within ±6, and audio.placement 0…2 in bits 16-17 (DspChain::set_tone).
+    /// audio.bass_db and audio.treble_db as one command value: bass in the high byte, treble in the
+    /// low one, each a signed byte within ±6 (DspChain::set_tone).
     int32_t timbre();
-    /// The audio task: a timbre() value to the chain.
-    void apply_timbre(int32_t v);
     /// audio.vol_max, «Максимум»: 40…100 % of the scale (S4).
     int32_t vol_max();
     void send(CmdType t, int32_t v);
@@ -464,8 +462,8 @@ private:
     /// published anything last block (so the row can be sent to the floor exactly once).
     bool     spectrum_wanted_ = false;
     bool     spectrum_live_   = false;
-    /// Output mode from eq.json (CONCEPT «Виходи»). Only "2.0" is implemented; the value is
-    /// published as audio.out_mode so the UI and MQTT can see what the file asks for.
+    /// Output mode from eq.json (docs/CONCEPT.md, "Outputs"). Only "2.0" is implemented; the
+    /// value is published as audio.out_mode so the UI and MQTT can see what the file asks for.
     char     out_mode_[8] = "2.0";
     /// The section's gain from eq.json, applied ahead of the EQ. See DspChain::set_pre_gain_db.
     float    eq_trim_db_ = 0.0f;

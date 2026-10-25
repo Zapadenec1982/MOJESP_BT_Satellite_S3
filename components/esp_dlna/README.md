@@ -1,71 +1,77 @@
-# esp_dlna — вендорений
+**English** · [Українська](README.uk.md)
 
-Три UPnP-сервіси, на які має відповідати DLNA MediaRenderer, — AVTransport, RenderingControl і
-ConnectionManager — як таблиці сервісів поверх UPnP-стека Espressif.
+# esp_dlna — vendored
 
-## Походження
+The three UPnP services a DLNA MediaRenderer has to answer — AVTransport, RenderingControl and
+ConnectionManager — as service tables on top of Espressif's UPnP stack.
 
-`espressif/esp-adf`, гілка `release/v2.x`, `examples/advanced_examples/dlna/components/esp_dlna`.
-Ліцензія — ESPRESSIF MIT: безкоштовно для використання на кристалах Espressif (заголовки файлів).
-Вендорений, а не залежність: в ADF компонент лежить у дереві прикладу і пакета в реєстрі не має.
+## Origin
 
-UPnP-стек під ним не вендорений: `espressif/esp_media_protocols` 1.0.1 з реєстру (прибитий у
-`idf_component.yml`; бібліотека зібрана заздалегідь, її архів для esp32p4 не містить інструкцій, яких
-немає на P4 v1.3) робить SSDP, опис пристрою, розбір SOAP і події GENA й чіпляється до наявного
-`httpd_handle_t`.
+`espressif/esp-adf`, branch `release/v2.x`, `examples/advanced_examples/dlna/components/esp_dlna`.
+Licence: ESPRESSIF MIT, free of charge for use on Espressif chips (file headers).
+Vendored rather than a dependency: in ADF the component sits in the example's tree and has no
+package in the registry.
 
-## Локальні зміни
+The UPnP stack under it is not vendored: `espressif/esp_media_protocols` 1.0.1 from the registry
+(pinned in `idf_component.yml`; the library is prebuilt, and its esp32p4 archive contains no
+instructions the P4 v1.3 lacks) does SSDP, the device description, SOAP parsing and GENA events, and
+attaches to an existing `httpd_handle_t`.
 
-Решта — як в ADF, без переформатування: diff проти ADF має лишатися читабельним. Коментар
-`p4-player:` у `.c`-файлах стоїть біля змін 1–5; XML у пункті 5 і зміни 6–7 позначки не мають.
+## Local changes
 
-1. `esp_dlna.c` — `audio_mem.h` / `audio_calloc()` замінено на `<stdlib.h>` / `calloc()`: заголовок
-   ADF тягнув би `audio_sal` заради одного виділення.
-2. `esp_dlna.c` — рядки опису пристрою (`manufacturer` «ModESP», `model_name` «P4 Player»,
-   `model_description`, URL) замість рядків прикладу ADF: їх показує телефон у списку пристроїв.
-3. `esp_dlna.c` — `esp_dlna_start()` звільняє дескриптор, коли `esp_upnp_init()` не вдався.
-4. `esp_dlna_avt.c` — `SetAVTransportURI` віддає рендереру й `CurrentURIMetaData` як
-   `AVT_SET_TRACK_METADATA`, щоб рендерер знав назву треку.
-5. `esp_dlna_cmr.c` і `xml/EventProtocolCMR.xml` — список sink-протоколів ConnectionManager називає
-   лише те, що прошивка декодує: MP3 (`audio/mpeg`, `audio/mp3`, `audio/x-mpeg`, `audio/mpeg3`), FLAC
-   (`audio/flac`, `audio/x-flac`), WAV (`audio/wav`, `audio/x-wav`, `audio/wave`) і плейлисти, які
-   розбирає `modules/radio` (`audio/mpegurl`, `audio/x-mpegurl`, `audio/x-scpls`). Без
-   `http-get:*:*:*`, без L16 і без AAC. Заявлений формат, якого декодер не бере, мовчки дає тишу; за
-   цим списком Music Assistant вирішує, що перекодувати на сервері.
-6. `esp_dlna_avt.c`, `include/esp_dlna.h` — черга наступного треку: дії `SetNextAVTransportURI` і
-   `GetCurrentTransportActions`; `NextURI` / `NextURIMetaData` у `GetMediaInfo` і події
+Everything else is as in ADF, not reformatted: the diff against ADF has to stay readable. A
+`p4-player:` comment in the `.c` files stands next to changes 1–5; the XML in item 5 and changes 6–7
+carry no mark.
+
+1. `esp_dlna.c` — `audio_mem.h` / `audio_calloc()` replaced with `<stdlib.h>` / `calloc()`: the ADF
+   header would drag in `audio_sal` for the sake of one allocation.
+2. `esp_dlna.c` — device description strings (`manufacturer` "ModESP", `model_name` "P4 Player",
+   `model_description`, URLs) in place of the ADF example's strings: the phone shows them in its
+   device list.
+3. `esp_dlna.c` — `esp_dlna_start()` frees the handle when `esp_upnp_init()` fails.
+4. `esp_dlna_avt.c` — `SetAVTransportURI` also hands `CurrentURIMetaData` to the renderer as
+   `AVT_SET_TRACK_METADATA`, so the renderer knows the track title.
+5. `esp_dlna_cmr.c` and `xml/EventProtocolCMR.xml` — ConnectionManager's sink protocol list names
+   only what the firmware decodes: MP3 (`audio/mpeg`, `audio/mp3`, `audio/x-mpeg`, `audio/mpeg3`), FLAC
+   (`audio/flac`, `audio/x-flac`), WAV (`audio/wav`, `audio/x-wav`, `audio/wave`) and the playlists
+   `modules/radio` parses (`audio/mpegurl`, `audio/x-mpegurl`, `audio/x-scpls`). No
+   `http-get:*:*:*`, no L16 and no AAC. A declared format the decoder does not take plays as silence,
+   with no error; Music Assistant decides from this list what to transcode on the server.
+6. `esp_dlna_avt.c`, `include/esp_dlna.h` — next-track queue: the `SetNextAVTransportURI` and
+   `GetCurrentTransportActions` actions; `NextURI` / `NextURIMetaData` in `GetMediaInfo` and the
    `NextAVTransportURI`, `NextAVTransportURIMetaData`, `CurrentTransportActions`, `TransportStatus`
-   беруться через callback, а не константами. Нові значення `renderer_request_type_t`
-   (`AVT_SET_NEXT_URI`, `AVT_SET_NEXT_METADATA`, `AVT_GET_NEXT_URI`, `AVT_GET_NEXT_METADATA`,
-   `AVT_GET_ACTIONS`) додані в кінець enum, щоб наявні значення не зсунулися.
-7. `httpd_uri_compat.c`, `include/esp_dlna_compat.h` — нові файли:
-   - ABI-прокладка. Бібліотека `esp_media_protocols` зібрана без `CONFIG_HTTPD_WS_SUPPORT` і передає
-     16-байтний `httpd_uri_t`, а в прошивці він 24-байтний (WebSocket для веб-інтерфейсу); httpd читав
-     би `supported_subprotocol` за межею об'єкта. `httpd_register_uri_handler` обгорнуто на етапі
-     лінкування (`-Wl,--wrap`, `CMakeLists.txt`), і поки `esp_dlna_httpd_compat(true)` — лише на час
-     `esp_dlna_start()` — запит перебудовується з чотирьох справжніх полів. Решта реєстрацій, зокрема
-     WebSocket, іде без змін.
-   - Заміна обробника AVTransport. `esp_dlna_avt_handler()` задає власний обробник; під час тієї самої
-     реєстрації POST-маршрути `/AVTransport/…` бібліотеки отримують його замість її диспетчера.
+   events are taken through the callback rather than from constants. The new `renderer_request_type_t`
+   values (`AVT_SET_NEXT_URI`, `AVT_SET_NEXT_METADATA`, `AVT_GET_NEXT_URI`, `AVT_GET_NEXT_METADATA`,
+   `AVT_GET_ACTIONS`) are appended to the end of the enum so the existing values do not shift.
+7. `httpd_uri_compat.c`, `include/esp_dlna_compat.h` — new files:
+   - ABI shim. The `esp_media_protocols` library is built without `CONFIG_HTTPD_WS_SUPPORT` and passes
+     a 16-byte `httpd_uri_t`, while in the firmware it is 24 bytes (WebSocket for the web UI); httpd
+     would read `supported_subprotocol` past the end of the object. `httpd_register_uri_handler` is
+     wrapped at link time (`-Wl,--wrap`, `CMakeLists.txt`), and while `esp_dlna_httpd_compat(true)` is
+     on — only for the duration of `esp_dlna_start()` — the request is rebuilt from the four real
+     fields. All other registrations, WebSocket included, pass unchanged.
+   - AVTransport handler replacement. `esp_dlna_avt_handler()` sets a handler of its own; during that
+     same registration the library's `/AVTransport/…` POST routes get it instead of its dispatcher.
 
-Шість XML (`rootDesc`, `rootDescLogo`, `rootDescService`, `devicelist`, `SoapResponseOk`,
-`SoapResponseErr`) потрібні зібраній бібліотеці, а не цьому компоненту; вони вбудовані тут, і
-компонент лінкується `WHOLE_ARCHIVE` (`CMakeLists.txt`).
+Six XML files (`rootDesc`, `rootDescLogo`, `rootDescService`, `devicelist`, `SoapResponseOk`,
+`SoapResponseErr`) are needed by the prebuilt library, not by this component; they are embedded here,
+and the component is linked `WHOLE_ARCHIVE` (`CMakeLists.txt`).
 
-## Як використовується
+## How it is used
 
-Дескриптором володіє `modules/dlna`. Перед `esp_dlna_start()` модуль знімає wildcard-маршрут httpd,
-реєструє `esp_dlna_avt_handler(avt_soap)` і вмикає `esp_dlna_httpd_compat(true)`; після — вимикає
-прокладку й повертає wildcard.
+`modules/dlna` owns the handle. Before `esp_dlna_start()` the module removes httpd's wildcard route,
+registers `esp_dlna_avt_handler(avt_soap)` and turns on `esp_dlna_httpd_compat(true)`; afterwards it
+turns the shim off and puts the wildcard back.
 
-- **AVTransport** (`POST /AVTransport/Control`) до callback бібліотеки не доходить: його розбирає
-  `avt_soap()` модуля (`modules/dlna/src/dlna_soap.inc`), який сам формує відповіді й повертає
-  справжні UPnP-помилки (`500` з `UPnPError`). Тому дії AVTransport із таблиці `esp_dlna_avt.c`
-  (зміна 4 і дії зміни 6) на SOAP-запити не виконуються; з цієї таблиці діють події.
-- **RenderingControl, ConnectionManager** і значення для подій GENA (зокрема AVTransport) ідуть через
-  один callback `esp_dlna_start()` як `renderer_request_type_t`; модуль перекладає їх у ключі
-  SharedState і назад.
-- Події надсилаються `esp_dlna_notify()` / `esp_dlna_notify_avt_by_action()` — так повзунок гучності
-  й кнопка відтворення в контрольній точці йдуть за панеллю.
+- **AVTransport** (`POST /AVTransport/Control`) never reaches the library's callback: it is parsed by
+  the module's `avt_soap()` (`modules/dlna/src/dlna_soap.inc`), which builds the replies itself and
+  returns real UPnP errors (`500` with `UPnPError`). So the AVTransport actions in the `esp_dlna_avt.c`
+  table (change 4 and the actions of change 6) are not executed on SOAP requests; only the events
+  from that table take effect.
+- **RenderingControl, ConnectionManager** and the values for GENA events (AVTransport's included) go
+  through the one callback of `esp_dlna_start()` as `renderer_request_type_t`; the module translates
+  them into SharedState keys and back.
+- Events are sent by `esp_dlna_notify()` / `esp_dlna_notify_avt_by_action()` — this is how the volume
+  slider and the play button in the control point follow the panel.
 
-DLNA-рендерер і браузер медіасерверів з боку користувача — [NETWORK.md](../../docs/NETWORK.md).
+The DLNA renderer and the media server browser as the user sees them: [NETWORK.md](../../docs/NETWORK.md).

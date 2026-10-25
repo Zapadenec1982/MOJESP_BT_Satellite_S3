@@ -514,14 +514,12 @@ void DspChain::stage_tone(bool fade) {
     }
 }
 
-void DspChain::set_tone(float bass_db, float treble_db, float place_db) {
+void DspChain::set_tone(float bass_db, float treble_db) {
     auto clamp = [](float v) {
         if (!(v == v)) return 0.0f;             // NaN: no shelf, rather than the most of one
         return v < -TONE_MAX_DB ? -TONE_MAX_DB : v > TONE_MAX_DB ? TONE_MAX_DB : v;
     };
-    if (!(place_db < 0.0f)) place_db = 0.0f;    // NaN and anything above 0: free-standing
-    if (place_db < PLACE_DB[2]) place_db = PLACE_DB[2];
-    tone_db_[0] = clamp(bass_db) + place_db;
+    tone_db_[0] = clamp(bass_db);
     tone_db_[1] = clamp(treble_db);
     stage_tone(true);
     update_headroom();

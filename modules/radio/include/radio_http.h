@@ -3,7 +3,7 @@
  * @brief One plain-HTTP GET into a caller's buffer, for the station catalog and the covers.
  *
  * Plain HTTP on purpose: the panel holds one TLS session at a time, and while the radio
- * plays it belongs to the station (docs/NETWORK.md «Інтернет-радіо»). Radio Browser and Deezer both
+ * plays it belongs to the station (docs/NETWORK.md, "Internet radio"). Radio Browser and Deezer both
  * answer on port 80 (checked 04–05.10.2026).
  */
 

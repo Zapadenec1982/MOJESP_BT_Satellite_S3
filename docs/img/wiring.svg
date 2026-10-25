@@ -22,21 +22,21 @@
   </defs>
   <rect width="1200" height="830" fill="#ffffff"/>
 
-  <text class="t" x="40" y="42">Підключення до панелі JC4880P443C</text>
-  <text class="s" x="40" y="64">Піни — boards/p4_player/board.json і CONCEPT.md «Розпіновка»; піни супутника — його README. Живлення модулів не показано.</text>
+  <text class="t" x="40" y="42">Wiring to the JC4880P443C panel</text>
+  <text class="s" x="40" y="64">Pins from boards/p4_player/board.json and CONCEPT.md, "Pinout"; the satellite's pins from its README. Module power is not shown.</text>
 
   <!-- ===== Panel ===== -->
   <rect class="box" x="40" y="90" width="360" height="680" rx="8"/>
-  <text class="h" x="60" y="118">ESP32-P4 · гребінка JP1, роз'єм J5</text>
+  <text class="h" x="60" y="118">ESP32-P4 · header JP1, connector J5</text>
 
   <text class="p" x="390" y="155" text-anchor="end">GPIO50 · I2S0 BCK</text>
   <text class="p" x="390" y="185" text-anchor="end">GPIO51 · I2S0 WS</text>
   <text class="p" x="390" y="215" text-anchor="end">GPIO52 · I2S0 DOUT</text>
-  <text class="n" x="60" y="250">I2S0 — майстер; частота йде за джерелом,</text>
-  <text class="n" x="60" y="266">44,1–96 кГц, слоти 32 біти</text>
+  <text class="n" x="60" y="250">I2S0 is the master; the rate follows the source,</text>
+  <text class="n" x="60" y="266">44.1–96 kHz, 32-bit slots</text>
 
-  <text class="p" x="390" y="295" text-anchor="end">GPIO34 · amp_enable (HIGH = грає)</text>
-  <text class="n" x="60" y="318">GPIO34 і GPIO35 — strapping-піни</text>
+  <text class="p" x="390" y="295" text-anchor="end">GPIO34 · amp_enable (HIGH = plays)</text>
+  <text class="n" x="60" y="318">GPIO34 and GPIO35 are strapping pins</text>
 
   <text class="p" x="390" y="375" text-anchor="end">GPIO33 · BT BCLK</text>
   <text class="p" x="390" y="405" text-anchor="end">GPIO30 · BT WS</text>
@@ -46,30 +46,30 @@
   <text class="p" x="390" y="525" text-anchor="end">GPIO27 · J5 UART1 RX</text>
   <text class="p" x="390" y="555" text-anchor="end">GND</text>
 
-  <text class="p" x="390" y="615" text-anchor="end">GPIO32 · енкодер A</text>
-  <text class="p" x="390" y="645" text-anchor="end">GPIO28 · енкодер B</text>
-  <text class="p" x="390" y="675" text-anchor="end">GPIO35 · кнопка енкодера</text>
-  <text class="n" x="60" y="696">на платі: R34 10 кОм ↑ і кнопка BOOT</text>
+  <text class="p" x="390" y="615" text-anchor="end">GPIO32 · encoder A</text>
+  <text class="p" x="390" y="645" text-anchor="end">GPIO28 · encoder B</text>
+  <text class="p" x="390" y="675" text-anchor="end">GPIO35 · encoder button</text>
+  <text class="n" x="60" y="696">on the board: R34 10 kΩ pull-up and the BOOT button</text>
   <text class="p" x="390" y="725" text-anchor="end">3V3</text>
   <text class="p" x="390" y="755" text-anchor="end">GND</text>
 
   <!-- ===== PCM5102A ===== -->
   <rect class="mod" x="640" y="110" width="250" height="160" rx="6"/>
-  <text class="h" x="660" y="135">PCM5102A · ЦАП</text>
+  <text class="h" x="660" y="135">PCM5102A · DAC</text>
   <text class="p" x="652" y="155">BCK</text>
   <text class="p" x="652" y="185">LRCK</text>
   <text class="p" x="652" y="215">DIN</text>
   <text class="p" x="652" y="245">XSMT</text>
   <text class="n" x="730" y="167">SCK, FMT, DEMP → GND</text>
-  <text class="n" x="730" y="185">PLL від BCK, без MCLK</text>
-  <text class="n" x="730" y="203">LOW на XSMT = mute</text>
+  <text class="n" x="730" y="185">PLL from BCK, no MCLK</text>
+  <text class="n" x="730" y="203">LOW on XSMT = mute</text>
   <text class="p" x="882" y="255" text-anchor="end">L / R</text>
 
   <!-- ===== TPA3255 ===== -->
   <rect class="mod" x="950" y="110" width="210" height="190" rx="6"/>
   <text class="h" x="968" y="135">TPA3255 · Class-D</text>
-  <text class="n" x="968" y="163">PVDD 24 В — окреме живлення</text>
-  <text class="n" x="968" y="181">виходи → колонки</text>
+  <text class="n" x="968" y="163">PVDD 24 V, own supply</text>
+  <text class="n" x="968" y="181">outputs → speakers</text>
   <text class="p" x="962" y="255">IN L / R</text>
   <text class="p" x="962" y="285">/RESET</text>
 
@@ -81,7 +81,7 @@
   <text class="p" x="652" y="495">GPIO16 · UART RX</text>
   <text class="p" x="652" y="525">GPIO17 · UART TX</text>
   <text class="p" x="652" y="555">GND</text>
-  <text class="h" x="800" y="375">BT-супутник</text>
+  <text class="h" x="800" y="375">BT satellite</text>
   <text class="n" x="800" y="394">ESP32-WROOM-32</text>
   <text class="n" x="800" y="418">A2DP: SBC, AAC,</text>
   <text class="n" x="800" y="435">aptX, aptX HD</text>
@@ -93,11 +93,11 @@
   <text class="p" x="652" y="615">A</text>
   <text class="p" x="652" y="645">B</text>
   <text class="p" x="652" y="675">SW</text>
-  <text class="p" x="652" y="725">«+»</text>
+  <text class="p" x="652" y="725">"+"</text>
   <text class="p" x="652" y="755">GND</text>
-  <text class="h" x="710" y="615">Енкодер з кнопкою</text>
-  <text class="n" x="710" y="636">PCNT, 4 фронти на клацання</text>
-  <text class="n" x="710" y="725">лише 3V3, не 5 В</text>
+  <text class="h" x="710" y="615">Encoder with button</text>
+  <text class="n" x="710" y="636">PCNT, 4 edges per detent</text>
+  <text class="n" x="710" y="725">3V3 only, not 5 V</text>
 
   <!-- ===== Wires ===== -->
   <!-- I2S0 to the DAC -->
@@ -110,13 +110,13 @@
   <path class="w amp" d="M400,290 H560 V240 H640" marker-end="url(#ar)"/>
   <path class="w amp" d="M560,290 V312 H925 V280 H950" marker-end="url(#ar)"/>
   <circle cx="560" cy="290" r="4" fill="#cf222e"/>
-  <text class="n" x="575" y="332">10 кОм униз: ЦАП і підсилювач мовчать до старту прошивки</text>
+  <text class="n" x="575" y="332">10 kΩ pull-down: DAC and amplifier stay mute until the firmware starts</text>
   <!-- BT I2S -->
   <path class="w bt" d="M400,370 H640" marker-start="url(#ar)" marker-end="url(#ar)"/>
   <path class="w bt" d="M400,400 H640" marker-start="url(#ar)" marker-end="url(#ar)"/>
   <path class="w bt" d="M640,430 H400" marker-end="url(#ar)"/>
-  <text class="n" x="410" y="452">BCLK, WS: тактує панель,</text>
-  <text class="n" x="410" y="468">якщо супутник ≥ 1.9; інакше — він</text>
+  <text class="n" x="410" y="452">BCLK, WS: driven by the panel</text>
+  <text class="n" x="410" y="468">with a satellite ≥ 1.9, else by it</text>
   <!-- UART link -->
   <path class="w uart" d="M400,490 H640" marker-end="url(#ar)"/>
   <path class="w uart" d="M640,520 H400" marker-end="url(#ar)"/>
@@ -130,11 +130,11 @@
 
   <!-- ===== Legend ===== -->
   <g transform="translate(40,805)">
-    <path class="w i2sa" d="M0,0 H34"/><text class="n" x="42" y="4">I2S0 → ЦАП</text>
+    <path class="w i2sa" d="M0,0 H34"/><text class="n" x="42" y="4">I2S0 → DAC</text>
     <path class="w amp" d="M150,0 H184"/><text class="n" x="192" y="4">amp_enable</text>
-    <path class="w bt" d="M300,0 H334"/><text class="n" x="342" y="4">I2S від супутника</text>
-    <path class="w uart" d="M490,0 H524"/><text class="n" x="532" y="4">UART-лінк (J5)</text>
-    <path class="w enc" d="M660,0 H694"/><text class="n" x="702" y="4">енкодер</text>
-    <path class="w gnd" d="M790,0 H824"/><text class="n" x="832" y="4">аналог, 3V3, земля</text>
+    <path class="w bt" d="M300,0 H334"/><text class="n" x="342" y="4">I2S from the satellite</text>
+    <path class="w uart" d="M490,0 H524"/><text class="n" x="532" y="4">UART link (J5)</text>
+    <path class="w enc" d="M660,0 H694"/><text class="n" x="702" y="4">encoder</text>
+    <path class="w gnd" d="M790,0 H824"/><text class="n" x="832" y="4">analog, 3V3, ground</text>
   </g>
 </svg>

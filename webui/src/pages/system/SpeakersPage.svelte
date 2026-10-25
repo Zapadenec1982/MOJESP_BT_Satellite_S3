@@ -17,7 +17,6 @@
   import Group from '../../m3/Group.svelte';
   import Row from '../../m3/Row.svelte';
   import CenterSlider from '../../m3/CenterSlider.svelte';
-  import Chip from '../../m3/Chip.svelte';
   import Wizard from '../speakers/Wizard.svelte';
 
   /** '' | 'setup' | 'details' — the route's third segment */
@@ -32,12 +31,6 @@
   $: p = port(s);
   $: type = s['audio.spk_type'] ?? 0;
   $: closed = type === SPK_CLOSED;
-
-  // where they stand: the room's cut on Бас's shelf (audio.placement, DspChain::PLACE_DB)
-  const PLACES = [K('spk.place_free'), K('spk.place_wall'), K('spk.place_corner')];
-  const placement = createSettingSender('audio.placement', { debounceMs: 0 });
-  onDestroy(() => placement.cleanup());
-  $: place = s['audio.placement'] ?? 0;
 
   // the balance, in whole dB here (the key keeps tenths: audio.balance_db10)
   const balance = createSettingSender('audio.balance_db10', { debounceMs: 120, live: true });
@@ -92,11 +85,6 @@
     </section>
 
     <Group caption={$t['spk.placement']}>
-      <div class="place" role="radiogroup" aria-label={$t['spk.placement']}>
-        {#each PLACES as key, i}
-          <Chip button selected={place === i} on:click={() => placement.send(i)}>{$t[key]}</Chip>
-        {/each}
-      </div>
       <div class="bal">
         <div class="bal-h"><span>{$t['spk.balance']}</span><span class="v">{balText(bal)}</span></div>
         <CenterSlider label={$t['spk.balance']} value={bal} min={-6} max={6} step={0.5}
@@ -133,7 +121,6 @@
   .t { margin-top: 10px; font-size: 22px; line-height: 28px; font-weight: 500; }
   .line { display: flex; align-items: center; gap: 6px; font-size: 15px; line-height: 20px; color: var(--on-surface-var); }
   .ok { color: var(--tertiary); display: flex; }
-  .place { display: flex; flex-wrap: wrap; gap: 8px; padding: 14px 16px 0; }
   .bal { padding: 14px 16px 6px; }
   .bal-h { display: flex; justify-content: space-between; align-items: baseline; font-size: 16px; }
   .bal-h .v { font-size: 15px; color: var(--on-surface-var); }

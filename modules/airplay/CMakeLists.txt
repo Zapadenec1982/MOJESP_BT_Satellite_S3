@@ -1,6 +1,6 @@
 # airplay — AirPlay 2 as audio.source 6. The receiver itself is components/airplay2 (vendored
 # upstream code, UPSTREAM.md there); this is the player's side of it: lifecycle, events into
-# SharedState, and the source contract of docs/CONCEPT.md «Контракт SharedState: джерела».
+# SharedState, and the source contract of docs/CONCEPT.md, "SharedState contract: sources".
 idf_component_register(
     SRCS "src/airplay_module.cpp"
          "src/mdns_query_guard.cpp"

@@ -155,7 +155,6 @@
   $: stages = showSystem ? systemBands({
     bass: s['audio.bass_db'] ?? 0,
     treble: s['audio.treble_db'] ?? 0,
-    place: s['audio.placement'] ?? 0,
     loudDb,
     hpHz: s['audio.hp_hz'] ?? 40,
     portHz: p.hz,

@@ -613,7 +613,6 @@ void UiLvglModule::mirror_state() {
     const int32_t port_hz = has_audio ? read_int("audio.port_hz", 0) : 0;
     const int32_t port_src = has_audio ? read_int("audio.port_src", 0) : 0;
     const int32_t balance_db10 = has_audio ? read_int("audio.balance_db10", 0) : 0;
-    const int32_t placement = has_audio ? read_int("audio.placement", 0) : 0;
     const int32_t underruns = has_audio ? read_int("audio.underruns", 0) : 0;
     // read_number, not read_int: the audio module publishes both of these as floats.
     const int32_t cpu_pct = has_audio ? read_number("audio.cpu_pct", 0) : 0;
@@ -802,7 +801,6 @@ void UiLvglModule::mirror_state() {
     snap_.port_hz = port_hz;
     snap_.port_src = port_src;
     snap_.balance_db10 = balance_db10;
-    snap_.placement = placement;
     snap_.underruns = underruns;
     snap_.cpu_pct = cpu_pct;
     snap_.in_rate = in_rate;
@@ -1053,10 +1051,6 @@ void UiLvglModule::apply_requests() {
             if (it.value >= -60 && it.value <= 60 && it.value % 5 == 0 &&
                 state_get("audio.balance_db10").has_value())
                 state_set("audio.balance_db10", it.value);
-            break;
-        case Req::PLACEMENT:
-            if (it.value >= 0 && it.value <= 2 && state_get("audio.placement").has_value())
-                state_set("audio.placement", it.value);
             break;
         case Req::THEME:
             want_theme(it.value);

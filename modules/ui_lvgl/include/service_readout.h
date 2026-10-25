@@ -183,7 +183,7 @@ inline Grade stack_free(int32_t b) {
 }
 
 /// `system.heap_dma` — free DMA-capable internal SRAM, the resource this board actually runs
-/// out of. 80 KB is stage 7's bench DoD (docs/PLAN_HARDENING_2026-09-21.md:162, "вільна
+/// out of. 80 KB is stage 7's bench DoD ("вільна
 /// DMA-internal ≥ 80 КБ"); the wave started from 28 275 B, which is what failure looked
 /// like, so half the DoD is the line below which the same failure is in reach.
 inline Grade dma_free(int32_t b) {

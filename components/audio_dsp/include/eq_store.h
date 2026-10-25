@@ -2,13 +2,13 @@
  * @file eq_store.h
  * @brief The EQ as one document with two editors — the panel's DSP page and the web.
  *
- * Until the web could edit it (docs/PLAN_WEBUI_2026-10-11.md, A3), the EQ lived in the panel's
+ * Until the web could edit it, the EQ lived in the panel's
  * screen and its module wrote the files. A second editor writing the same files on its own
  * schedule would overwrite the first, as the EQ lost on 24.09.2026 was. So the document lives
  * here, once: the current bands, the user's own set («Власний»), the preset that is on, and a
  * revision that moves with every change.
  *
- * The files (docs/PLAN_SOUND_UX_2026-10-14.md, S2). eq.json is what plays and eq_custom.json is
+ * The files. eq.json is what plays and eq_custom.json is
  * «Власний»; each carries "preset", the sound it was saved as. The bands decide what plays and
  * the name only names it: a name whose curve this build does not have plays as it was saved,
  * under «Власний», and does not replace the set eq_custom.json holds. Before this build first

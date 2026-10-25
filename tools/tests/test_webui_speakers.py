@@ -1,4 +1,4 @@
-"""Колонки (docs/PLAN_SOUND_UX_2026-10-14.md, S6): webui/src/lib/speakers.js in Node.
+"""Колонки: webui/src/lib/speakers.js in Node.
 
 The DoD of S6: a measurement is not applied without «Прийняти» or «Застосувати», «Пропустити» at
 any step writes nothing, and neither does the choice of step 1. Also what the speakers page says

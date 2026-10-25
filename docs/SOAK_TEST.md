@@ -1,92 +1,151 @@
 # Соук-тест SDIO (ESP-Hosted P4 ↔ C6)
 
-`tools/sdio_soak/` — окремий голий IDF-проєкт для P4 (без ModESP), який годинами тягне один
-HTTP(S)-потік через C6 у PSRAM-кільце і рахує розриви. Це «фаза 0» з `docs/CONCEPT.md` §10:
-відповідь на питання, чи йде мережева частина (автономне радіо, slimproto) на цю панель узагалі.
-Результат — рішення замовника; інструмент лише дає цифри.
+`tools/sdio_soak/` — окремий IDF-проєкт для P4 без ModESP. Він підключається до Wi-Fi через C6,
+годинами тягне один HTTP(S)-потік у PSRAM-кільце, яке «декодер» спорожнює з заданою швидкістю, і
+рахує розриви, зависання та вільну пам'ять. Блок ESP-Hosted у `tools/sdio_soak/sdkconfig.defaults`
+(SDIO-піни, 40 МГц, reset, ревізія P4) той самий, що в `boards/p4_player/sdkconfig.board`, і має
+таким лишатися. Відрізняється решта мережевого стека: тут типове TCP-вікно lwIP, немає
+`components/hosted_mem` (копії кадрів esp_hosted ідуть у внутрішню DMA-RAM) і mbedTLS алокує з
+внутрішньої RAM.
 
-## Що вимірює
+## Що друкує
 
-Кожні `SOAK_REPORT_SEC` (30 с) один рядок, зручний для `grep SOAK`:
+Кожні `SOAK_REPORT_SEC` (30 с) — один рядок для `grep SOAK`:
 
 ```
-SOAK t=01:23:45 rx=123.4MB kbps=318 ring=61% reconn=2 restart=0 stall=0 http_err=2 wifi_drop=0 rssi=-57 dma=380.1K dma_min=372.9K dma_big=335.9K int=401.2K int_min=398.0K psram=31.5M
+SOAK t=01:23:45 rx=123.4MB kbps=318 ring=61% reconn=2 restart=0 stall=0 http_err=2 wifi_drop=0 rssi=0 dma=380.1K dma_min=372.9K dma_big=335.9K int=401.2K int_min=398.0K psram=31.5M
 ```
 
 | Поле | Значення |
 |---|---|
+| `t` | час від старту |
 | `rx`, `kbps` | усього прийнято; середня швидкість за останній період |
-| `ring` | заповнення PSRAM-кільця, яке «декодер» спорожнює зі швидкістю `SOAK_DRAIN_KBPS` |
-| `reconn` | повторні відкриття потоку після помилки/таймауту (TCP/TLS/HTTP) |
-| `restart` | скінченний файл дійшов до кінця і відкритий знову (LAN-тест) — не помилка |
+| `ring` | заповнення PSRAM-кільця (`SOAK_RING_KB`, 512 КБ), яке спорожнюється зі швидкістю `SOAK_DRAIN_KBPS`; спорожнення починається з 25 % заповнення |
+| `reconn` | повторні відкриття потоку після помилки, таймауту або відповіді не 2xx |
+| `restart` | потік закінчився без помилки з відповіддю 2xx (скінченний файл дійшов до кінця, LAN-прогін) і відкритий знову — не помилка |
 | `stall` | `SOAK_STALL_SEC` (5 с) без жодного байта — головний показник «лінк завис» |
+| `http_err` | ті з `reconn`, де `esp_http_client_perform()` повернув помилку (з'єднання, TLS, таймаут сокета `SOAK_HTTP_TIMEOUT_MS`); відповідь не 2xx сюди не входить |
 | `wifi_drop` | події `STA_DISCONNECTED` |
-| `rssi` | на стенді **0**: у esp_hosted 3.0.7 відповідь `sta_get_ap_info` не містить rssi (host glue копіює лише ssid/bssid/channel/authmode), а `esp_wifi_sta_get_rssi()` host-шар не вміє скласти (`pack_req_payload failed msg_id=341`). Те саме, що `wifi.rssi = 0` у плеєрі; чекати bump esp_hosted |
-| `dma`, `dma_min`, `dma_big` | вільна DMA-SRAM зараз / мінімум з початку / найбільший блок |
-| `int`, `int_min`, `psram` | внутрішня SRAM зараз / мінімум; PSRAM |
+| `rssi` | з esp_hosted 3.0.7 завжди 0: відповідь `sta_get_ap_info` не містить rssi, а `esp_wifi_sta_get_rssi()` хост не вміє скласти (`pack_req_payload failed msg_id=341`); так само `wifi.rssi` у плеєрі |
+| `dma`, `dma_min`, `dma_big` | вільна DMA-SRAM зараз / мінімум / найбільший вільний блок |
+| `int`, `int_min`, `psram` | вільна внутрішня SRAM зараз / мінімум; вільна PSRAM |
 
-Розриви потоку логуються окремо (`stream broke: … reconnect #N in M ms`), перепідключення з
-бекофом 1 → 30 с без обмеження спроб. Наприкінці `SOAK_DURATION_MIN` — підсумковий рядок
-`SOAK DONE …`, після чого тест продовжує працювати (нічний прогін просто довший).
+`dma_min` і `int_min` — мінімум від старту, а у фазовому прогоні — від початку поточної фази.
 
-## Два прогони (CONCEPT §10)
+Розрив потоку логується окремо: `stream broke: <помилка>, HTTP <код>, after <T> ms — reconnect #N in
+M ms`. Перепідключення з бекофом 1 → 30 с, без обмеження спроб; кінець скінченного файлу відкривається
+знову одразу. `STALL #N: no data for 5 s (ring P%)` — на початку зависання, `data resumed` — коли дані
+пішли знову. Через `SOAK_DURATION_MIN` (типово 120 хв; 0 — без підсумку) один раз друкується
+підсумок:
+
+```
+SOAK DONE after 120 min: rx=… reconn=… restart=… stall=… http_err=… wifi_drop=… ring_underruns=… ring_overflow=…B dma_min=… int_min=…
+```
+
+`ring_underruns` — скільки разів кільце спорожніло і «декодер» чекав нового заповнення до 25 %,
+`ring_overflow` — байти, що не влізли в кільце (спорожнення повільніше за прийом). Після підсумку тест
+працює далі.
+
+## Налаштування (`menuconfig` → «SDIO soak test»)
+
+| Опція | Типово | Що задає |
+|---|---|---|
+| `SOAK_URL` | `https://icecast.radiofrance.fr/fip-midfi.mp3` | потік, `http://` або `https://` |
+| `SOAK_DURATION_MIN` | 120 | коли друкувати `SOAK DONE`; 0 — ніколи |
+| `SOAK_REPORT_SEC` | 30 | період рядка `SOAK` |
+| `SOAK_RING_KB` | 512 | розмір PSRAM-кільця |
+| `SOAK_DRAIN_KBPS` | 128 | темп «декодера», кбіт/с; 0 — забирати все одразу (чиста пропускна здатність) |
+| `SOAK_STALL_SEC` | 5 | поріг `stall` |
+| `SOAK_HTTP_TIMEOUT_MS` | 10000 | таймаут сокета HTTP |
+| `SOAK_PHASE_MIN` | 0 | довжина фази, хв; 0 — без фаз |
+| `SOAK_BALLAST_TARGETS` | `0` | цілі вільної DMA-SRAM по фазах, КБ, через кому |
+| `SOAK_WIFI_SSID`, `SOAK_WIFI_PASS` | порожньо | мережа; порожньо — з NVS плеєра |
+
+## Прогони
 
 1. **Контроль, без інтернету і TLS:** великий файл (FLAC) на HTTP-сервері в локальній мережі,
-   наприклад `python -m http.server 8000` у теці з файлом → `SOAK_URL = http://192.168.1.x:8000/track.flac`,
-   `SOAK_DRAIN_KBPS = 1000` (або 0 — чиста пропускна здатність). Файл перевідкривається на EOF.
-2. **Реальний шлях, HTTPS:** публічна MP3-станція. За замовчуванням `https://icecast.radiofrance.fr/fip-midfi.mp3`
-   (128 кбіт/с), `SOAK_DRAIN_KBPS = 128` (= бітрейт станції; більше — кільце порожніє, це не помилка лінку).
+   наприклад `python -m http.server 8000` у теці з файлом →
+   `SOAK_URL = http://<ip ПК>:8000/track.flac`, `SOAK_DRAIN_KBPS = 1000` або 0. Файл відкривається
+   знову на EOF (`restart`).
+2. **Реальний шлях, HTTPS:** публічна MP3-станція, типово `SOAK_URL` вище (128 кбіт/с),
+   `SOAK_DRAIN_KBPS` = бітрейт станції. Більший drain спорожнює кільце (`ring_underruns`) — це не
+   помилка лінку.
+3. **Керований бітрейт:** `tools/sdio_soak/rate_server.py` на ПК віддає нескінченне HTTP-тіло
+   (chunked, псевдовипадковий нестискуваний блок) зі швидкістю, яку можна змінювати, не розриваючи
+   з'єднання:
 
-   **Перевірено на стенді 15.09.2026:** з `CONFIG_MBEDTLS_SSL_IN_CONTENT_LEN=4096` (бюджет плеєра з
-   CONCEPT §8а) ця станція рветься кожну секунду з `esp-tls-mbedtls: read error :-0x7200` — сервер
-   ігнорує max_fragment_length і шле 16-КБ записи. Тому в `sdkconfig.defaults` тесту вхідний буфер
-   TLS = 16384 (OUT лишається 4096). Для плеєра це означає: HTTPS-радіо коштує ~+12 КБ DMA-SRAM на
-   сесію понад план — вхідний рядок для етапу «мережа».
+   ```
+   python tools/sdio_soak/rate_server.py --port 8000 --rate-file rate.txt   # --rate <кбіт/с> — початкова, якщо файла ще немає
+   echo 320 > rate.txt                                                       # перечитується щосекунди; 0 = стеля
+   ```
 
-По 2 години кожен, краще — ніч.
+   `SOAK_URL = http://<ip ПК>:8000/`. Вміст на панелі не перевіряється — тест рахує байти; втрати
+   пакетів міряються окремо ICMP-пінгом панелі з того самого ПК, паралельно з потоком.
+
+Кожен прогін — щонайменше 2 години, краще ніч.
+
+## Фазовий прогін: тиск на DMA-SRAM
+
+На плеєрі внутрішню DMA-SRAM, з якої бере буфери ESP-Hosted, ділять із ним DMA I2S і решта
+прошивки, тож лінк, виміряний із сотнями вільних кілобайтів, нічого не каже про плеєр. З
+`SOAK_PHASE_MIN > 0` тест по колу проходить `SOAK_BALLAST_TARGETS` (до 8 цілей): перед кожною фазою
+займає DMA-SRAM блоками по 4 КБ (до 2 МБ), доки вільної не лишиться не більше цілі (0 — без баласту),
+і тримає так `SOAK_PHASE_MIN` хвилин. Цілі — від найбільшої вільної до найменшої: тісні фази можуть
+обірвати прогін. Фактичну вільну DMA-SRAM плеєра видно в його рядку
+`main: Heap …: … DMA <N> (largest <M>) …`.
+
+На початку і в кінці кожної фази:
+
+```
+SOAK PHASE <i>/<n> target=<ціль>K ballast=<зайнято>K dma_free=<…>K dma_big=<…>K
+SOAK PHASE END <i>/<n> target=<ціль>K ballast=<зайнято>K kbps_avg=<…> rx=<…>MB reconn=<…> stall=<…> http_err=<…> wifi_drop=<…> dma_min=<…>K int_min=<…>K
+```
+
+`ballast` — скільки зайнято; `kbps_avg`, `rx`, лічильники й мінімуми — лише за цю фазу. Бітрейт
+змінюється з боку ПК (`rate_server.py`), тож сітку «пам'ять × бітрейт» можна пройти за один прогін
+без перепрошивки.
+
+## TLS: вхідний буфер 16 КБ
+
+`CONFIG_MBEDTLS_SSL_IN_CONTENT_LEN=16384` (OUT — 4096). Станція `SOAK_URL` ігнорує
+`max_fragment_length` і шле записи по 16 КБ; запис, що не влазить у вхідний буфер, не розшифровується,
+і з 4096 кожне читання падає з `esp-tls-mbedtls: read error :-0x7200` приблизно через секунду. Плеєр
+має те саме значення (`boards/p4_player/sdkconfig.board`). У плеєрі mbedTLS алокує з PSRAM
+(`CONFIG_MBEDTLS_EXTERNAL_MEM_ALLOC`); у соук-тесті цієї опції немає, тож TLS-сесія займає внутрішню
+RAM і це видно в `int` / `dma`.
 
 ## Запуск
 
-Передумови: C6 уже на CP 3.0.7 (`docs/C6_UPDATE.md`), плеєр хоча б раз підключався до Wi-Fi —
-тест читає SSID/пароль із того самого NVS (`wifi/ssid`, `wifi/pass`), нічого вводити не треба.
-(Альтернатива — `SOAK_WIFI_SSID/PASS` у menuconfig.)
+Передумови: C6 уже на CP 3.0.7 ([C6_UPDATE.md](C6_UPDATE.md)); плеєр хоча б раз підключався до Wi-Fi — тест
+читає мережу з того самого NVS (простір `wifi`, ключі `ssid`, `pass`). Якщо NVS вимагає стирання, тест
+відмовляється працювати, щоб не втратити облікові дані плеєра.
 
-```powershell
-. C:\Espressif\tools\Microsoft.v5.5.5.PowerShell_profile.ps1
-$env:IDF_COMPONENT_CACHE_PATH = "D:\P4_DSP\.idf_cache"
-cd D:\P4_DSP\modesp-player\tools\sdio_soak
+```
+cd tools/sdio_soak
 idf.py set-target esp32p4
-idf.py menuconfig          # "SDIO soak test" → URL, тривалість, drain
+idf.py menuconfig          # «SDIO soak test»
 idf.py build
-cd build; python -m esptool --chip esp32p4 -p COM12 -b 460800 write_flash "@flash_args"; cd ..
-idf.py -p COM12 monitor    # або будь-який термінал 115200; лог — у файл
+idf.py -p <порт панелі> flash
+idf.py -p <порт панелі> monitor | tee soak.log
 ```
 
-Прошивка лягає в `ota_0` замість плеєра (таблиця розділів та сама, NVS і LittleFS не чіпаються).
-Після тесту повернути плеєр: `cd D:\P4_DSP\modesp-player\build; python -m esptool --chip esp32p4 -p COM12 -b 460800 write_flash "@flash_args"`.
-
-Лог у файл з PowerShell: `idf.py -p COM12 monitor | Tee-Object -FilePath soak_$(Get-Date -f yyyyMMdd_HHmm).log`
-(Ctrl+] — вихід). Або `python -m esp_idf_monitor -p COM12 build\sdio_soak.elf`.
+- Windows: перед збіркою `$env:IDF_COMPONENT_CACHE_PATH = "<коротка тека>"` (як для плеєра);
+  лог — `| Tee-Object -FilePath soak.log`. Без `idf.py`: `python -m esp_idf_monitor -p <порт>
+  build/sdio_soak.elf`.
+- `idf.py monitor` при підключенні скидає P4 (DTR — лінія скидання USB-Serial/JTAG), тест починається
+  заново. Підключатися на початку прогону і не перепідключатися.
+- Таблиця розділів (`tools/sdio_soak/partitions.csv`) рядок у рядок — `partitions_p4_16mb.csv`. Тест
+  стає в `ota_0` замість плеєра; NVS, `data` і `userdata` не чіпаються.
+- Повернути плеєр: з кореня репозиторію `idf.py -p <порт панелі> flash`.
 
 ## Як читати результат
 
-- `stall` > 0, після якого `reconn` не рятує і `rx` не росте — лінк завис («тихе вмирання»,
-  esp-hosted #220, начебто виправлене у 3.0.7). Це і є негативний результат.
-- `reconn` кілька за ніч з миттєвим відновленням і `stall = 0` — нормально для інтернет-радіо
-  (станції рвуть з'єднання самі); дивитися на `wifi_drop`.
-- `dma_min` — мінімум, з яким має жити аудіоядро поруч зі стрімом: I2S DMA-кільце, mbedTLS
-  (~71 КБ при 16 КБ фрагментах), буфери SD. Якщо `dma_min` < ~150 КБ за 4 КБ TLS-фрагментів —
-  бюджет DMA-SRAM треба переглядати до написання стрімера.
-- `ring_underruns` у підсумку при `stall = 0` — drain задано вище за реальний бітрейт станції,
-  не проблема лінку.
-
-Негативний результат → план Б з CONCEPT §8: панель лишається UI + DSP + BT + AUX, мережевий потік
-заходить у AUX з окремого стрімера.
-
-## Прогін 16.09.2026 (HTTPS, 8 год 28 хв)
-
-Лог стенду лежить у репозиторії: `docs/bench/2026-09-16-sdio-soak/soak_log.txt`, підсумок — у
-README поруч. Коротко: 465 МБ при 127–128 кбіт/с, `stall=2` (обидва відновились самі),
-`reconn=1` (сервер обірвав chunked-потік, перепідключення за ~2 с), `http_err=1`,
-`wifi_drop=0`, мінімум DMA 400,7 КБ, мінімум internal 439,3 КБ. За правилами розділу
-«Як читати результат» — «тихого вмирання» лінку немає.
+- `stall` > 0, після якого `reconn` не рятує і `rx` не росте, — лінк завис. Це негативний результат.
+- `stall` > 0, що закінчується `data resumed` або перепідключенням за секунди, — пауза, не
+  зависання; дивитися, як часто.
+- `reconn` кілька за ніч з миттєвим відновленням і `stall = 0` — норма для інтернет-радіо (сервери
+  самі рвуть з'єднання); тоді дивитися на `wifi_drop` і `http_err`.
+- `ring_underruns` при `stall = 0` — drain вищий за реальний бітрейт джерела, не проблема лінку.
+- `dma_min` — найнижча вільна DMA-SRAM поруч із потоком; у фазовому прогоні — порівнювати по фазах
+  `SOAK PHASE END`: фаза, де ростуть `stall` / `reconn` або падає `kbps_avg`, показує поріг пам'яті,
+  нижче якого лінк деградує.

@@ -3,7 +3,7 @@
  * @brief The sounds (presets) and the rules for «Власний» — shared by the panel and the web.
  *
  * They lived in modules/ui_lvgl/src/screen_eq.cpp while the screen was the only editor. The
- * web edits the EQ too now (docs/PLAN_WEBUI_2026-10-11.md, A3), and two copies of "which
+ * web edits the EQ too now, and two copies of "which
  * preset is on" and "what a hand edit does to it" would be two answers. So both live here,
  * pure, and both editors call them.
  *
@@ -14,7 +14,7 @@
  *   - an edit by hand makes the edited result «Власний», on a preset or not. So «Власний»
  *     always holds what was last tuned by hand, and leaving it has nothing left to keep.
  *
- * Eight sounds are offered (docs/PLAN_SOUND_UX_2026-10-14.md, decision 4): «Власний» and the
+ * Eight sounds are offered: «Власний» and the
  * seven after it. The presets offered before stay in the table, not offered, so a set saved
  * as one of them still plays under its name. Ids never change, and an id a sound had before
  * is still understood (eq_preset_find).

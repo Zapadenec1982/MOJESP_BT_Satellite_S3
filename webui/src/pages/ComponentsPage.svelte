@@ -1,6 +1,6 @@
 <script>
   // Every component of the web's design system on one page, in the current scheme — what the
-  // panel's m3test screen is for the glass (PLAN_UI_M3 U0). Not in any menu: #/components.
+  // panel's m3test screen is for the glass. Not in any menu: #/components.
   import { t } from '../stores/i18n.js';
   import Button from '../m3/Button.svelte';
   import IconButton from '../m3/IconButton.svelte';

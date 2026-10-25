@@ -1,7 +1,7 @@
 /**
  * @file test_user_backup.cpp
- * @brief The user's files as one JSON document (components/user_store/user_backup,
- *        PLAN_WEBUI A6): what a restore body may carry, and the text that comes out of it.
+ * @brief The user's files as one JSON document (components/user_store/user_backup):
+ *        what a restore body may carry, and the text that comes out of it.
  */
 
 #include "doctest.h"

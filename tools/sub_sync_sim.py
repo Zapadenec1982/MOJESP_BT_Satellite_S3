@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""S9 of docs/PLAN_SOUND_UX_2026-10-14.md: aligning a subwoofer with the speakers from one
+"""Aligning a subwoofer with the speakers from one
 microphone at the listening place — a model of the method, not a measurement.
 
 The plan's prototype questions, and how this answers them:
@@ -25,7 +25,6 @@ what the measured responses pick instead. Needs numpy only:
     python3 tools/sub_sync_sim.py            # the report: 20 rooms a placement, two minutes or so
     python3 tools/sub_sync_sim.py --trials 5 # quicker
     python3 tools/sub_sync_sim.py --snr 20   # a noisier phone
-docs/SUB_SYNC_RESEARCH_2026-10-15.md has what it found.
 """
 import argparse
 import math

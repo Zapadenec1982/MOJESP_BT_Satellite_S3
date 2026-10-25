@@ -1,5 +1,5 @@
 /*
- * Which language the web speaks (docs/PLAN_PANEL_LANG_2026-10-12.md §4, U8.6): this browser's own
+ * Which language the web speaks: this browser's own
  * pick if it made one; otherwise the panel's, ui.lang; otherwise, until the panel has said, the
  * browser's. Plain functions, so the tests can load them in Node; stores/i18n.js keeps the state.
  */

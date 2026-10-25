@@ -1,5 +1,5 @@
 <script>
-  // The speakers' wizard (docs/PLAN_SOUND_UX_2026-10-14.md, S6 and appendix A). Step 1 asks what
+  // The speakers' wizard. Step 1 asks what
   // the speakers are; closed ones need nothing more and «Готово» says so. Step 2 finds the port —
   // here with the panel's microphone on a bench, or by hand on the calibration page; the phone's
   // microphone is the app's (§9.1). Nothing is written by a choice, a skip or a measurement: only
@@ -113,7 +113,7 @@
     <span class="big ok"><Icon name="check_circle" size={56} fill /></span>
     <h2 class="q" role="status">{fmt($t['spk.result'], { hz })}</h2>
     <div class="table">
-      <div class="tr"><span>{$t['spk.now']}</span><span class="dim">{now.hz ? `${now.hz} Hz` : $t['cal.port_none']}</span></div>
+      <div class="tr"><span>{$t['spk.now']}</span><span class="dim">{now.hz ? `${now.hz} ${$t['unit.hz']}` : $t['cal.port_none']}</span></div>
       <div class="tr"><span>{$t['spk.after']}</span><span>{fmt($t['spk.after_v'], { hz })}</span></div>
     </div>
     <div class="acts">

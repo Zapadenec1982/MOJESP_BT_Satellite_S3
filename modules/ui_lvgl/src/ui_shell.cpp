@@ -3,11 +3,11 @@
  * @brief The frame every page lives in: the header, the one menu (a modal drawer), the
  *        snackbar, the standby face — and page switching.
  *
- * The structure agreed on 24.09.2026 (docs/PLAN_UI_M3_2026-09-24.md §2): the Player is the
+ * The structure agreed on 24.09.2026: the Player is the
  * home and owns the screen; nothing permanent stands beside a 48 px header. There is ONE
  * menu, the drawer — opened by ≡, by a press on the left edge or by holding the encoder —
- * with the three sections: Плеєр · Джерело · Налаштування (DSP left it in S1 of
- * docs/PLAN_SOUND_UX_2026-10-14.md: the equalizer is a list under Налаштування › Звук, for
+ * with the three sections: Плеєр · Джерело · Налаштування (DSP left it in S1:
+ * the equalizer is a list under Налаштування › Звук, for
  * those who want it, and the daily sound goes to the Player). Nothing else is in it: the rail
  * the design package drew was dropped (88 px off every page for something wanted a few times
  * a day), and so were its "sleep" and "off" actions — standby comes by itself on the idle
@@ -20,7 +20,7 @@
  * Volume is a moment, not a readout: a turn of the encoder brings up a slider for two
  * seconds, and the Player's loudspeaker button does the same.
  *
- * The knob has one job on every page (customer, 18.10.2026, docs/UX_RESEARCH_2026-10-18.md):
+ * The knob has one job on every page (customer, 18.10.2026):
  * a turn is the volume, a press plays and pauses, a hold opens the drawer. It used to walk each
  * page's rows with a ring, and set the volume where a page did not take it — what a turn did
  * depended on the page and on whether a ring was up: a mode, where people err. What is on the
@@ -648,7 +648,7 @@ void refresh_pairing(UiCtx& c) {
         if (g.standby && c.mod) c.mod->lvgl_post(UiLvglModule::Req::WAKE, 0);
         return;
     }
-    // Answered in a web tab while this dialog waited (PLAN_WEBUI decision 6): the panel's own
+    // Answered in a web tab while this dialog waited: the panel's own
     // answer would be ignored now (bt_settings, first answer wins), so the buttons go and the
     // dialog says where it was answered, until the result comes.
     if (g.pair_open && !g.pair_done && !g.pair_there && p.active && p.seq == g.pair_seq &&

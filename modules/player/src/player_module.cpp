@@ -6,10 +6,11 @@
  * at a time, and the audio task must never block — so the two are separated by the lock-free
  * ring in components/audio_dsp, and the audio core simply finds frames there or does not.
  *
- * Rate: everything downstream is fixed at 48 kHz (CONCEPT §3), while most MP3 and FLAC is
- * 44.1. The resampler written for Bluetooth therefore sits on this path too — but at a
- * CONSTANT ratio, because a file has no clock of its own to drift against. That makes it
- * strictly simpler here than the case it was written for: no ring-fill feedback, no ppm trim.
+ * Rate: the output clock follows the session's first track (docs/AUDIO.md «Частота виходу і
+ * сесії»); a later track at another rate is converted to it. The resampler written for
+ * Bluetooth therefore sits on this path too — but at a CONSTANT ratio, because a file has no clock of its own to drift against.
+ * That makes it strictly simpler here than the case it was written for: no ring-fill feedback,
+ * no ppm trim.
  */
 
 #include "player_module.h"
@@ -78,8 +79,7 @@ enum class Cmd : uint8_t { PLAY, PAUSE, RESUME, STOP, NEXT, PREV, TOGGLE, QUEUE,
 // Resolved once, on the first pass of on_update(), through UserStore — /userdata/last_track
 // when the store is up, /data/last_track on a panel still running the old partition table.
 // The file is last_track and holds a track, not a directory; the constant that pointed at it
-// was called LAST_DIR_PATH, and that name is why docs/PLAN_HARDENING_2026-09-21.md item 11.1
-// lists a "last_dir" file no code has ever written.
+// was called LAST_DIR_PATH.
 char s_last_track_path[160] = "/data/last_track";
 
 /// audio.source value that means "the local file ring".
@@ -88,7 +88,7 @@ char s_last_track_path[160] = "/data/last_track";
 /// independently and a build may carry either one without the other, so depending on the
 /// audio module's header would be a lie about how they are wired. The generated header is
 /// the MANIFEST set, which is exactly the contract these two modules do share — see
-/// docs/CONCEPT.md §7a. It used to be this number, written out here by hand.
+/// docs/CONCEPT.md «Значення `audio.source`». It used to be this number, written out here by hand.
 constexpr int32_t AUDIO_SRC_FILE = modesp::gen::AUDIO_SOURCE_FILE;
 
 /// As long as anything SharedState can carry for a path — the side table's width, since
@@ -882,7 +882,7 @@ Pump pump() {
     if (err == ESP_AUDIO_ERR_BUFF_NOT_ENOUGH) {
         // The frame's PCM does not fit, and the decoder keeps it until it does: 24-bit FLAC
         // at 96 kHz or in 5.1 runs past 32 KB. Read as "nothing decoded yet" it was asked
-        // again with the same buffer for ever, in silence (PLAN_REVIEW_2026-09-29 Р18; deep
+        // again with the same buffer for ever, in silence (deep
         // review 2026-10-12, RP-4). Grow as asked and try again, or end the track.
         if (out.needed_size > s.pcm_cap && out.needed_size <= PCM_MAX) {
             if (void* p = heap_caps_realloc(s.pcm, out.needed_size,
@@ -1222,7 +1222,7 @@ bool PlayerModule::on_init() {
         return true;
     }
 
-    // Almost all MP3 and FLAC is 44.1 kHz (CONCEPT 10a), so build that bank now. A hundred
+    // Almost all MP3 and FLAC is 44.1 kHz, so build that bank now. A hundred
     // milliseconds during startup is invisible; the same hundred milliseconds when the first
     // track starts is a crackle.
     // Pre-build the one bank a card of music is most likely to need, so the first track of

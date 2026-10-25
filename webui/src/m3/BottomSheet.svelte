@@ -1,8 +1,8 @@
 <script>
   // A modal bottom sheet (M3), as the mock-up draws the Player's «Звук»: a 50 % scrim, the sheet
   // from the bottom edge with a drag handle, a title row with a close button, radius 28 on top.
-  // Wider than a phone it keeps a phone's width, centred. Esc, the scrim and the close button
-  // dismiss it (`close`). docs/PLAN_SOUND_UX_2026-10-14.md, S3.
+  // Wider than a phone it keeps a phone's width, centred. Esc, the scrim, the close button and a
+  // phone's «назад» dismiss it (`close`).
   import { createEventDispatcher, onMount, tick } from 'svelte';
   import { fade, fly } from 'svelte/transition';
   import { t } from '../stores/i18n.js';
@@ -18,6 +18,20 @@
   onMount(async () => {
     await tick();
     sheet?.focus();
+  });
+  // A phone's «назад» closes the sheet, not the page under it: the open sheet
+  // holds a step of the history — the same address, so the hash router sees nothing — and gives
+  // it back when it closes some other way. A sheet gone with its page (a link in it) leaves
+  // that page's step alone: the step on top is not the sheet's any more.
+  onMount(() => {
+    let popped = false;
+    history.pushState({ sheet: id }, '');
+    const pop = () => { popped = true; close(); };
+    window.addEventListener('popstate', pop);
+    return () => {
+      window.removeEventListener('popstate', pop);
+      if (!popped && history.state && history.state.sheet === id) history.back();
+    };
   });
 </script>
 

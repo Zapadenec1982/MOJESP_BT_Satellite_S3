@@ -224,7 +224,7 @@ size_t eq_serialize(const EqConfig& cfg, char* buf, size_t buf_sz) {
     };
 
     add("{\n  \"_comment\": \"%s\",\n",
-        "Written by the player. DSP config, sectioned by output — see docs/CONCEPT.md 7a. "
+        "Written by the player. DSP config, sectioned by output — see docs/CONCEPT.md «Виходи». "
         "Band type: peak | lowshelf | highshelf | lowpass | highpass | notch.");
     add("  \"version\": %d,\n  \"mode\": \"%s\",\n", EQ_SCHEMA_VERSION, cfg.mode);
     // A new field and not a new schema: an older build skips it and reads the bands as ever.

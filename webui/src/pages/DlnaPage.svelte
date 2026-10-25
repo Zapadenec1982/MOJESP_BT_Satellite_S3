@@ -5,7 +5,7 @@
 </script>
 
 <script>
-  // DLNA media servers (W6, PLAN_WEBUI §2): servers › folders › tracks, the browser the panel's
+  // DLNA media servers: servers › folders › tracks, the browser the panel's
   // DLNA page drives (components/dlna_client) — the same snapshot, GET /api/dlna/browser, and the
   // same revision-stamped commands, dlna.browse_cmd (screen_dlna.cpp). One browser for both: a
   // folder opened on the glass is the folder this page shows.

@@ -3,7 +3,7 @@ import { apiGet } from './api.js';
 
 /*
  * The device's whole state, read every 2 s while a page that shows diagnostics is open and the
- * tab is visible (PLAN_WEBUI §5). The diagnostics — CPU, heap, the limiter, the satellite's
+ * tab is visible. The diagnostics — CPU, heap, the limiter, the satellite's
  * counters — are written without WebSocket deltas, and the firmware is not changed for that.
  * One poll however many components subscribe; none at all once they are gone.
  *

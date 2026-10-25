@@ -3,7 +3,7 @@
 # modules that write user files (audio, radio, player, ui_lvgl) need the answer and must not
 # take a dependency on the service layer to get it.
 idf_component_register(
-    # user_backup: the files as one JSON document for GET/POST /api/userdata (PLAN_WEBUI A6) —
+    # user_backup: the files as one JSON document for GET/POST /api/userdata —
     # the pure half; the HTTP half is main/userdata_http.cpp, since the server depends on this.
     SRCS "src/user_store.cpp" "src/user_backup.cpp"
     INCLUDE_DIRS "include"

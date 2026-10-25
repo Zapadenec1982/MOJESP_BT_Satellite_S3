@@ -1,7 +1,7 @@
 /**
  * @file cover_tone.cpp
- * @brief The colour of a cover tile, for the Player's background (docs/PLAN_SOUND_UX_2026-10-14.md,
- *        S5). See cover_tone() in cover.h.
+ * @brief The colour of a cover tile, for the Player's background.
+ *        See cover_tone() in cover.h.
  *
  * Pure: no ESP-IDF, so the host tests run it. The tile is RGB565 and every fourth pixel each way
  * is read — 4 900 of a 280-pixel tile, a colour's worth, run once when a picture is published.

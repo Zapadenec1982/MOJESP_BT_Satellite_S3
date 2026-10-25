@@ -1,5 +1,5 @@
 <script>
-  // A phone asks to pair (PLAN_WEBUI decision 6): the question is on the panel and over any page
+  // A phone asks to pair: the question is on the panel and over any page
   // of every open tab at once, with the panel's own words and code (ui_shell.cpp, pairing). The
   // first answer wins on the device; the place that was second says where it was answered.
   //

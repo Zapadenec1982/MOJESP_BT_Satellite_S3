@@ -5,7 +5,7 @@
  * The design tokens proper are in src/ui_m3.h (colour roles, shape, type). This struct is
  * filled from those roles by ui_theme.cpp, so the old screens change colour with the new
  * ones and nobody maintains two palettes. New code names an m3 role; it does not add to
- * this struct. The struct leaves with the last old screen (docs/PLAN_UI_M3_2026-09-24.md, U6).
+ * this struct. The struct leaves with the last old screen.
  */
 
 #pragma once

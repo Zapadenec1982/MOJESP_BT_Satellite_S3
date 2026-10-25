@@ -1,17 +1,18 @@
 #pragma once
 /// The satellite link, byte for byte.
 ///
-/// A second ESP32 carries Bluetooth for this player: it decodes A2DP and clocks the audio
-/// into I2S-B as master, and this UART carries everything that is not audio — what is
+/// A second ESP32 carries Bluetooth for this player: it decodes A2DP and sends the audio on
+/// I2S-B, clocked by the satellite or, with a 1.9+ satellite, by this panel
+/// (docs/LINK_PROTOCOL.md «Хто тактує I2S»), and this UART carries everything that is not audio — what is
 /// playing, what the phone did to the volume and which transport button we want pressed.
-/// Since 1.10 nothing else: the port expander is gone (docs/LINK_PROTOCOL.md, section 11).
+/// Nothing else travels on it (docs/LINK_PROTOCOL.md, section 11).
 ///
 /// Framing is COBS between 0x00 delimiters. That choice is what lets a receiver drop a
 /// frame it cannot hold, or lose a byte to noise, and be back in step at the very next
 /// delimiter — no timeout, no guessing, no half-frame delivered as if it were whole.
 ///
 /// docs/LINK_PROTOCOL.md is the contract and it is shared with the satellite's own repo.
-/// This file implements version 1.8 of it and nothing else.
+/// This file implements version 1.10 of it (PROTO_MINOR) and nothing else.
 ///
 /// Nothing here touches ESP-IDF, so it builds and is tested on the host.
 

@@ -107,6 +107,7 @@ enum class S : uint16_t {
     dlna_unsupported,        // dlna.unsupported
     eq_band_n,               // eq.band_n
     eq_band_on,              // eq.band_on
+    eq_enabled,              // eq.enabled
     eq_freq,                 // eq.freq
     eq_gain,                 // eq.gain
     eq_loudness,             // eq.loudness
@@ -134,6 +135,7 @@ enum class S : uint16_t {
     eq_preset_ska,           // eq.preset.ska
     eq_preset_soft,          // eq.preset.soft
     eq_preset_soft_rock,     // eq.preset.soft_rock
+    eq_q_width,              // eq.q_width
     eq_reset_done,           // eq.reset_done
     eq_reset_mine,           // eq.reset_mine
     eq_slope,                // eq.slope
@@ -200,6 +202,10 @@ enum class S : uint16_t {
     spk_closed,              // spk.closed
     spk_l,                   // spk.l
     spk_left,                // spk.left
+    spk_place_corner,        // spk.place_corner
+    spk_place_free,          // spk.place_free
+    spk_place_wall,          // spk.place_wall
+    spk_placement,           // spk.placement
     spk_port_manual,         // spk.port_manual
     spk_port_measured,       // spk.port_measured
     spk_port_none,           // spk.port_none
@@ -263,6 +269,7 @@ enum class S : uint16_t {
     svc_safe_short,          // svc.safe.short
     svc_stack,               // svc.stack
     svc_stalled,             // svc.stalled
+    svc_uart_ovf,            // svc.uart_ovf
     svc_underruns,           // svc.underruns
     svc_uptime,              // svc.uptime
     sys_airplay_1,           // sys.airplay_1
@@ -294,10 +301,14 @@ enum class S : uint16_t {
     sys_wifi_own_ap,         // sys.wifi_own_ap
     undo_action,             // undo.action
     unit_b,                  // unit.b
+    unit_bit,                // unit.bit
+    unit_ch,                 // unit.ch
     unit_day,                // unit.day
     unit_db,                 // unit.db
     unit_hz,                 // unit.hz
     unit_kb,                 // unit.kb
+    unit_kbps,               // unit.kbps
+    unit_khz,                // unit.khz
     unit_mb,                 // unit.mb
     unit_ms,                 // unit.ms
     wifi_ap_title,           // wifi.ap_title

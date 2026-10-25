@@ -1,6 +1,11 @@
 import { writable } from 'svelte/store';
 import { createUndo, UNDO_MS } from '../lib/undo.js';
 
+/** A failure in words (lib/errors.js through the catalog). stores/i18n.js gives it — this store
+ *  imports no catalog, so the pages' libraries stay loadable in Node; until then, as it came. */
+let words = (raw) => (raw instanceof Error ? raw.message : raw);
+export function setErrorWords(fn) { words = fn; }
+
 export const toasts = writable([]);
 
 const MAX_TOASTS = 3;
@@ -24,11 +29,12 @@ export function dismissToast(id) {
 }
 
 export function toastSuccess(msg) { addToast(msg, 'success', 3000); }
-export function toastError(msg) { addToast(msg, 'error', 8000); }
+/** A failure: in words, whatever came with it — an Error's message or a page's text. */
+export function toastError(msg) { addToast(words(msg), 'error', 8000); }
 export function toastWarn(msg) { addToast(msg, 'warn', 5000); }
 
 /**
- * A snackbar with an action — "Повернути" after a reset (docs/PLAN_SOUND_UX_2026-10-14.md, S3).
+ * A snackbar with an action — "Повернути" after a reset.
  * `run` is called once if the action is taken; the snackbar goes either way.
  */
 export function toastAction(msg, label, run, duration = 6000) {

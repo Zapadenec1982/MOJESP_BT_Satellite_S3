@@ -1,4 +1,4 @@
-"""The panel's strings: one catalog with the web, tables in flash (docs/PLAN_PANEL_LANG_2026-10-12.md).
+"""The panel's strings: one catalog with the web, tables in flash.
 
 The C++ side (tr, plural, fmt, num) is tests/host/test_i18n.cpp. These hold the generator to its
 input and output: the committed tables are what the catalogs and the code say, every string the

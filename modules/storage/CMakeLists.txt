@@ -1,4 +1,4 @@
-# storage — microSD (CONCEPT 3a). The volume comes from bindings.json like every other
+# storage — microSD (CONCEPT «microSD»). The volume comes from bindings.json like every other
 # driver-backed peripheral (item 8.9): drivers/sdmmc_card owns the controller, the power rail and
 # the FAT mount, this module owns when it is mounted and what the panel is told about it.
 # Only `vfs` is left here, for the opendir() that counts what is playable.

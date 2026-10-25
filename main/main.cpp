@@ -82,7 +82,7 @@
 static const char* TAG = "main";
 
 // Heap by capability: on the P4 the PSRAM-inflated total hides the internal / DMA-capable
-// SRAM that ESP-Hosted, mbedTLS and I2S DMA actually fight over (docs/CONCEPT.md §8а).
+// SRAM that ESP-Hosted, mbedTLS and I2S DMA actually fight over (docs/CONCEPT.md «Обмеження плати»).
 static void log_heap(const char* when)
 {
     ESP_LOGI(TAG, "Heap %s: total %u | internal %u (largest %u) | DMA %u (largest %u) | PSRAM %u",
@@ -344,7 +344,7 @@ extern "C" void app_main(void)
 #endif
 
     // BLE transport (optional) — after Wi-Fi so NimBLE host inits after the Wi-Fi
-    // stack (coexist init order, docs/ble/ipixel_nimble_spec.md §2.5).
+    // stack (coexist init order).
 #if defined(CONFIG_MODESP_BLE_ENABLE)
 #if defined(CONFIG_MODESP_BLE_PROVISIONING)
     ble_service.set_wifi(&wifi_service);   // provisioning: save creds + trigger reconnect

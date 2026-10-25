@@ -1,8 +1,8 @@
 <script>
   // What is playing, small, over the navigation: the source's glyph, the title and the line
   // under it, and play/pause. A tap on the text opens the Player.
-  import { now } from '../stores/now.js';
-  import { t } from '../stores/i18n.js';
+  import { now, subLine } from '../stores/now.js';
+  import { t, language } from '../stores/i18n.js';
   import { href } from '../stores/router.js';
   import { command } from '../lib/cmd.js';
   import Icon from '../m3/Icon.svelte';
@@ -10,7 +10,7 @@
 
   $: np = $now;
   $: title = np.title ?? $t[np.titleKey];
-  $: sub = np.subtitle ?? (np.subtitleKey ? $t[np.subtitleKey] : '');
+  $: sub = subLine(np, $t, $language);
   $: toggleIcon = np.playing ? (np.stopIcon ? 'stop' : 'pause') : 'play_arrow';
   $: toggleLabel = !np.playing ? $t['transport.play'] : np.stopIcon ? $t['transport.stop'] : $t['transport.pause'];
 </script>

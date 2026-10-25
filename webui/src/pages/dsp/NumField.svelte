@@ -1,7 +1,7 @@
 <script>
   // One band parameter as on the panel's band panel — − and + at the sides of the value
   // (m3/Stepper) — and the value itself a field: on a phone the steps are the quick way, and a
-  // typed number is the exact one (PLAN_WEBUI §2, DSP). "1.2k" and a decimal comma are read too.
+  // typed number is the exact one. "1.2k" and a decimal comma are read too.
   import { createEventDispatcher } from 'svelte';
   import { parseNumber, parseNonPositive } from '../../lib/numbers.js';
   import IconButton from '../../m3/IconButton.svelte';

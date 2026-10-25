@@ -167,7 +167,7 @@ constexpr float    I32_SCALE    = 2147483648.0f;
 // 2.97 V peak (2.1 Vrms, SLAS859C §8.5) clips it 9.8 dB under the DAC's full scale. That holds
 // both for a DAC driving one input (INPUT_A, "input signal for half bridge A") and for the
 // TPA3255EVM-style front end that drives both inputs at the DAC's level. Calibration
-// (docs/DSP_V2_DESIGN_2026-09-30.md §4) replaces it with the module's real number.
+// replaces it with the module's real number.
 constexpr int32_t  AMP_CLIP_DEFAULT_DB10 = -98;
 // A raw calibration tone is the DAC at a known level: 1.0 is the DAC's full scale. The largest
 // float under 2^31, so a full-scale sample cannot overflow the conversion.
@@ -334,7 +334,7 @@ void AudioModule::take_eq(const audio_core::EqConfig& cfg, audio_core::EqBand* b
         ESP_LOGW(TAG, "eq.json: mode '%s' needs a second DAC — running 2.0", out_mode_);
     }
     // Only section 0 drives the one stereo pair this firmware has. The parser keeps the
-    // rest so nothing is lost when the file is written back (CONCEPT 7a).
+    // rest so nothing is lost when the file is written back (CONCEPT «Виходи»).
     const audio_core::EqSection& sec = cfg.sec[0];
     count = sec.count;
     for (int i = 0; i < count; i++) bands[i] = sec.bands[i];
@@ -420,7 +420,7 @@ void AudioModule::port_meter_loop() {
     constexpr uint32_t WIN = 19200;                       // 0.4 s at 48 kHz
     constexpr int MAXG = 64;
     // audio.port_meas_status is a message of the web's catalog ("@<key>", arguments behind
-    // MSG_ARG; docs/PLAN_PANEL_LANG_2026-10-12.md U8.5): each browser shows it in its language.
+    // MSG_ARG): each browser shows it in its language.
     // The log gets it with the separators as spaces.
     auto say = [this](const char* s) {
         state_set("audio.port_meas_status", s);
@@ -595,7 +595,16 @@ int32_t AudioModule::timbre() {
         const int32_t v = read_int(key, 0);
         return v < -6 ? -6 : v > 6 ? 6 : v;
     };
-    return (int32_t)(((uint32_t)(uint8_t)(int8_t)db("audio.bass_db") << 8) | (uint8_t)(int8_t)db("audio.treble_db"));
+    int32_t place = read_int("audio.placement", 0);
+    if (place < 0 || place > 2) place = 0;
+    return (int32_t)(((uint32_t)place << 16) | ((uint32_t)(uint8_t)(int8_t)db("audio.bass_db") << 8) |
+                     (uint8_t)(int8_t)db("audio.treble_db"));
+}
+
+void AudioModule::apply_timbre(int32_t v) {
+    const int32_t place = (v >> 16) & 3;
+    dsp_.set_tone((float)(int8_t)(v >> 8), (float)(int8_t)v,
+                  audio_core::DspChain::PLACE_DB[place > 2 ? 0 : place]);
 }
 
 bool AudioModule::on_init() {
@@ -613,7 +622,7 @@ bool AudioModule::on_init() {
     state_set("audio.eq_headroom_db", 0.0f);
     state_set("audio.loud_db", 0.0f);
     // The output schemes this firmware plays (out_caps.h): «Кросовер» offers what is said here
-    // and shows the rest as not supported yet (docs/PLAN_SOUND_UX_2026-10-14.md, S8).
+    // and shows the rest as not supported yet.
     state_set("audio.out_caps", audio_core::OUT_CAPS_NOW);
     state_set("audio.port_meas", false);
     state_set("audio.cal_port_off", false);
@@ -720,7 +729,7 @@ bool AudioModule::on_init() {
     last_loud_ref_ = loud_ref();
     dsp_.set_loud_ref((float)last_loud_ref_);
     last_timbre_ = timbre();
-    dsp_.set_tone((float)(int8_t)(last_timbre_ >> 8), (float)(int8_t)last_timbre_);
+    apply_timbre(last_timbre_);
     last_balance_ = read_int("audio.balance_db10", 0);
     dsp_.set_balance_db((float)last_balance_ / 10.0f);
     log_bass("boot");
@@ -823,7 +832,7 @@ bool AudioModule::on_init() {
 
     cmd_q_ = xQueueCreate(16, sizeof(Cmd));
     run_ = true;
-    // Audio task: core 1, high priority, stack in INTERNAL RAM (CONCEPT §8а — a PSRAM
+    // Audio task: core 1, high priority, stack in INTERNAL RAM (CONCEPT «Обмеження плати» — a PSRAM
     // stack dies on the first NVS write while the cache is off).
     if (xTaskCreatePinnedToCore(audio_task_entry, "audio", 8192, this, 22, &task_, 1) != pdPASS) {
         ESP_LOGE(TAG, "audio task not created");
@@ -1273,7 +1282,7 @@ void AudioModule::publish_consumer() {
 void AudioModule::retime() {
     // The fades, the empty-block tail and the priming cushion are times; a block is a number of
     // frames. Counted in frames at 48 kHz, they shrank with the rate: at 192 kHz the envelope was
-    // a 2.5 ms fade and the cushion 25 ms (docs/AUDIO_PATH_REVIEW_2026-10-05.md, A06).
+    // a 2.5 ms fade and the cushion 25 ms.
     const float fs = (float)(out_rate_ ? out_rate_ : 48000u);
     sig_up_   = audio_core::FadeGate::open_step(fs);
     sig_down_ = audio_core::FadeGate::close_step(fs);
@@ -2069,7 +2078,7 @@ void AudioModule::task_loop() {
             case CmdType::LOUDNESS:  dsp_.set_loudness((float)c.value / 100.0f); break;
             case CmdType::LOUD_REF:  dsp_.set_loud_ref((float)c.value); break;
             case CmdType::PORT:      dsp_.set_port((float)(c.value >> 4), (float)(c.value & 15)); break;
-            case CmdType::TIMBRE:    dsp_.set_tone((float)(int8_t)(c.value >> 8), (float)(int8_t)c.value); break;
+            case CmdType::TIMBRE:    apply_timbre(c.value); break;
             case CmdType::BALANCE:   dsp_.set_balance_db((float)c.value / 10.0f); break;
             case CmdType::TONE_MODE: {
                 const int32_t m = (c.value == TONE_RAW || c.value == TONE_BURSTS) ? c.value : TONE_CHAIN;
@@ -2114,7 +2123,7 @@ void AudioModule::task_loop() {
         //
         // apply_source() used to run the moment the command arrived: it reset the chain mid-note,
         // and the next block the DAC received was silence while the TX queue still played the
-        // music before it, which is a step (docs/AUDIO_PATH_REVIEW_2026-10-05.md, A01). Now the
+        // music before it, which is a step. Now the
         // old source plays on while both gates close over it, and the switch happens in the
         // silence they leave. Going OFF also waits for the TX queue to play that silence out,
         // because the amplifier goes off with it (A03).
@@ -2503,7 +2512,7 @@ void AudioModule::task_loop() {
         // listening starts and once when it ends, and both of those are put into silence by
         // the settle below.
         //
-        // And only the source (docs/AUDIO_PATH_REVIEW_2026-10-05.md, A03). Mute used to drop the
+        // And only the source. Mute used to drop the
         // line too, in the same pass that started the chain's fade, while the TX queue was still
         // playing music; the DAC and the amplifier then ran their own transients over it. Mute is
         // a fade in the chain now and leaves the line alone. OFF reaches this point only after
@@ -2580,7 +2589,7 @@ void AudioModule::task_loop() {
         // reset only once the gate is shut: what it holds belongs to what was playing, not to
         // what comes next, and an edit waiting on a fade lands. Resetting after the look-ahead
         // alone, as this did, cut the ringing off mid-cycle — a click at every pause, louder in
-        // the bass than the music was (docs/AUDIO_PATH_REVIEW_2026-10-05.md, A02).
+        // the bass than the music was.
         const bool silent = !env_done && sig_gain_ == 0.0f;
         if (!raw_block && (!silent || !out_gate_.shut() || dsp_dirty_)) {
             // In cycles of this core, not microseconds of the clock: an interrupt landing in the

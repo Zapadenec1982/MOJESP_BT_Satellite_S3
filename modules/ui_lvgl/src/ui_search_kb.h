@@ -3,7 +3,7 @@
  * @brief A keyboard for a search line: the panel's language's letters or the other alphabet's,
  *        digits and a few signs.
  *
- * Stage 20в (docs/PLAN_RADIO_V2_2026-10-04.md). Station names are looked for in Ukrainian as
+ * Stage 20в. Station names are looked for in Ukrainian as
  * often as in English, so this is not m3w::keyboard, which is Latin and ASCII by design — what
  * Wi-Fi passwords are made of. No shift: Radio Browser matches a name without regard to case,
  * and a key fewer is a bigger key. The last row has the other page's code, the space and the

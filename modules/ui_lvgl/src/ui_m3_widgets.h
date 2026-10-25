@@ -8,7 +8,7 @@
  *
  * Geometry is in LOGICAL pixels (800x480 landscape), 8.54 px a millimetre. Whatever a finger
  * takes is at least 64 px (7.5 mm) each way — the glass for a finger, the customer, 20.10.2026
- * (docs/UX_RESEARCH_2026-10-18.md: 48-px targets were 5.6 mm, under every guideline): the
+ * (48-px targets were 5.6 mm, under every guideline): the
  * slider's row, a chip, a list row, a dialog's buttons, the switch's reach. Nothing here animates by itself —
  * a morph is an lv_anim the caller starts on the object's radius, so a screen that must not
  * spend frames does not.

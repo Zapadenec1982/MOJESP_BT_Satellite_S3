@@ -41,7 +41,7 @@
     seeded = true;
   }
 
-  // Read-back від зовнішніх store змін (WifiScan.selectNetwork, MqttSave onMount)
+  // Read-back від зовнішніх store змін (MqttSave onMount)
   $: if (config.key === 'wifi.ssid' && $wifiSsid !== inputValue) inputValue = $wifiSsid;
   $: if (config.key === 'mqtt.broker' && $mqttBroker !== inputValue) inputValue = $mqttBroker;
   $: if (config.key === 'mqtt.user' && $mqttUser !== inputValue) inputValue = $mqttUser;

@@ -2,7 +2,7 @@ dependencies:
   # Decoding for local files and, later, network streams. One "simple decoder" interface
   # covers MP3, FLAC, WAV and M4A, so the container is not the player's problem.
   #
-  # Licence, checked 2026-09-16 (docs/CONCEPT.md §10а): Espressif Modified MIT — use is
+  # Licence, checked 2026-09-16 (docs/CONCEPT.md «Ліцензії»): Espressif Modified MIT — use is
   # permitted exclusively with Espressif silicon, which is not a constraint here. The
   # third-party decoders inside are all permissive (Apache-2.0, BSD, Xiph BSD-like).
   #

@@ -3,7 +3,7 @@
  * @brief LVGL memory core in PSRAM (CONFIG_LV_USE_CUSTOM_MALLOC).
  *
  * Widgets, styles and draw buffers go to external RAM first; internal/DMA-capable SRAM
- * stays for ESP-Hosted, mbedTLS and audio DMA (docs/CONCEPT.md §8а). Falls back to the
+ * stays for ESP-Hosted, mbedTLS and audio DMA (docs/CONCEPT.md «Обмеження плати»). Falls back to the
  * default heap only when PSRAM is exhausted. Mirrors LVGL's own lv_mem_core_clib.c.
  */
 

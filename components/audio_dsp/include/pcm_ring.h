@@ -324,7 +324,7 @@ constexpr int FLUSH_WAIT_NAPS = 60;
 ///
 /// claim() empties the ring on the spot. If that producer's music is playing, the consumer is left
 /// mid-waveform with nothing to fade, and the result is a step. This was the second road to the
-/// click on a source change (docs/AUDIO_PATH_REVIEW_2026-10-05.md, A01): switching from the card to
+/// click on a source change: switching from the card to
 /// a station, or AirPlay arriving over the radio. So while the consumer says the ring is being
 /// heard, the queue goes back to it first, to fade and drop. That is the same flush a producer asks
 /// for at its own track change. The claim waits for it, but only so long: `nap` sleeps about 5 ms,

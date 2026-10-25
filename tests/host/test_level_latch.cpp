@@ -1,7 +1,7 @@
 /**
  * @file test_level_latch.cpp
  * @brief HOST tests for the volume's way to the audio task and its scale (components/audio_dsp,
- *        LevelLatch; docs/PLAN_SOUND_UX_2026-10-14.md, S4): the last value always arrives, however
+ *        LevelLatch): the last value always arrives, however
  *        many were written while the reader was away — a full queue used to drop one for good; the
  *        pair is never read half-changed; 100 % on any client is «Найгучніше»; after power-on the
  *        volume is no louder than audio.vol_start; the loudness follows the level that plays.

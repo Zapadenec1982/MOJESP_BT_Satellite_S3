@@ -54,14 +54,14 @@ TEST_CASE("the readouts in the panel's language: unit, decimal separator, reset 
     CHECK(bytes_of(400) == "400 B");
     CHECK(gr_of(15) == "−1.5 dB");
     CHECK(uptime_of(90061) == "1d 01:01");
-    CHECK(std::string(svc::boot_reason("brownout")) == "brownout");
+    CHECK(std::string(svc::boot_reason("brownout")) == "Brownout");
     i18n::set_lang(i18n::Lang::DE);
     CHECK(bytes_of(31 * 1024 * 1024 + 524288) == "31,50 MB");
     CHECK(uptime_of(90061) == "1T 01:01");
     CHECK(std::string(svc::boot_reason("power_on")) == "Einschalten");
     i18n::set_lang(i18n::Lang::PL);
     CHECK(gr_of(60) == "−6,0 dB");
-    CHECK(std::string(svc::boot_reason("unknown")) == "nieznany");
+    CHECK(std::string(svc::boot_reason("unknown")) == "Nieznany");
 }
 
 TEST_CASE("byte counts keep the digits that matter at the scale they matter") {
@@ -146,10 +146,10 @@ TEST_CASE("the day count is clamped, so the field's width is a provable bound") 
 }
 
 TEST_CASE("a boot reason is translated, or handed back as itself") {
-    CHECK(std::string(svc::boot_reason("power_on")) == "живлення");
+    CHECK(std::string(svc::boot_reason("power_on")) == "Живлення");
     CHECK(std::string(svc::boot_reason("task_wdt")) == "WDT задачі");
-    CHECK(std::string(svc::boot_reason("brownout")) == "просідання");
-    CHECK(std::string(svc::boot_reason("unknown"))  == "невідомо");
+    CHECK(std::string(svc::boot_reason("brownout")) == "Просідання");
+    CHECK(std::string(svc::boot_reason("unknown"))  == "Невідомо");
     CHECK(std::string(svc::boot_reason(""))         == "—");
     CHECK(std::string(svc::boot_reason(nullptr))    == "—");
     // A token this build has never heard of — a newer ESP-IDF reset reason — must show up as
@@ -213,7 +213,7 @@ TEST_CASE("the main stack margin grades in bytes, not words") {
 }
 
 TEST_CASE("free DMA-internal grades against stage 7's bench DoD") {
-    // docs/PLAN_HARDENING_2026-09-21.md:162 — "вільна DMA-internal ≥ 80 КБ". The wave began
+    // "вільна DMA-internal ≥ 80 КБ". The wave began
     // at 28 275 B, which is what the failure looked like, and that number must land in Bad.
     CHECK(svc::dma_free(80 * 1024)     == svc::Grade::Ok);
     CHECK(svc::dma_free(80 * 1024 - 1) == svc::Grade::Warn);

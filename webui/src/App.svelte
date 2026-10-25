@@ -1,5 +1,5 @@
 <script>
-  // The web UI of P4 Player (docs/PLAN_WEBUI_2026-10-11.md): the panel's four sections, in the
+  // The web UI of P4 Player: the panel's four sections, in the
   // panel's colours, as a companion for settings and control: Player and Source (W1), Stations
   // (W2), DSP (W3), System (W4) and Service (W5); the card's library and the DLNA browser (W6).
   // The generated pages live on only as Service's long tail.
@@ -60,8 +60,8 @@
 
   $: title = titleOf($route, $t, $deviceName);
   $: document.title = $route[0] === 'player' ? $deviceName : `${title} · ${$deviceName}`;
-  // Pages most visits never open come in their own file, fetched the first time (rollup chunks;
-  // PLAN_WEBUI §5, the bundle budget). The promise is kept: the second visit is instant.
+  // Pages most visits never open come in their own file, fetched the first time (rollup chunks).
+  // The promise is kept: the second visit is instant.
   let stationsPage = null;
   $: if ($route[0] === 'stations' && !stationsPage) stationsPage = import('./pages/StationsPage.svelte');
   // the equalizer (the DSP page until S1): Налаштування › Звук › Еквалайзер

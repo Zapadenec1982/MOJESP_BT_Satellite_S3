@@ -1,4 +1,4 @@
-"""The web's sections and addresses (S1 of docs/PLAN_SOUND_UX_2026-10-14.md, 14.10.2026).
+"""The web's sections and addresses (14.10.2026).
 
 Three sections — Плеєр · Джерело · Налаштування — on the web and on the glass, in the same order:
 the web's NAV (lib/nav.js) is the panel's drawer (ui_shell.cpp PAGES, the first N_MENU). DSP left

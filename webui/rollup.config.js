@@ -14,7 +14,7 @@ export default {
   // rather than become a third file every visit has to fetch
   preserveEntrySignatures: false,
   // ES modules, so a page that is rarely opened (the radio catalog) is its own file, fetched the
-  // first time it is needed: the bundle every visit loads stays small (PLAN_WEBUI §5, budget).
+  // first time it is needed: the bundle every visit loads stays small.
   // Stable names, no hashes: the device serves everything no-store, and data.bin depends on
   // dist's output through data/www/build.txt (scripts/deploy.js).
   output: {

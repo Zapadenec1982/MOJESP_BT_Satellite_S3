@@ -1,8 +1,8 @@
 /**
  * @file sound_sheet.cpp
  * @brief «Звук»: the sounds, Бас and Високі, the loudness and the way to the equalizer — as a side
- *        sheet over the Player and as Налаштування › Звук › Тембр (docs/PLAN_SOUND_UX_2026-10-14.md,
- *        S3 and appendix A; the row named for what it holds, the customer, 18.10.2026: every row
+ *        sheet over the Player and as Налаштування › Звук › Тембр
+ *        (the row named for what it holds, the customer, 18.10.2026: every row
  *        of the group is sound).
  *
  * One set of controls in two hosts, as on the web (pages/sound/SoundControls.svelte): the sheet

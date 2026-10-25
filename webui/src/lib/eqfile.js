@@ -1,5 +1,5 @@
 /*
- * Filters as text (docs/PLAN_SOUND_UX_2026-10-14.md, S7): the lines Equalizer APO reads, Room EQ
+ * Filters as text: the lines Equalizer APO reads, Room EQ
  * Wizard writes and reads (its "Generic" equaliser), and AutoEQ publishes for headphones —
  *
  *   Preamp: -6.4 dB

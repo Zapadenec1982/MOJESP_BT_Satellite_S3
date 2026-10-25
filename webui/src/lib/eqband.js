@@ -1,11 +1,10 @@
 /*
- * One EQ band as the device holds it, and the edits the equalizer page makes on a set of them
- * (docs/PLAN_SOUND_UX_2026-10-14.md, S7). A band is the API's { type, f, gain, q, on }; a set has
+ * One EQ band as the device holds it, and the edits the equalizer page makes on a set of them.
+ * A band is the API's { type, f, gain, q, on }; a set has
  * up to MAX_BANDS, and «Рівно» is the same ten with all of them off.
  *
- * The page lists the bands that are on, by their place in the set — the glass labels its points
- * the same way, so «Смуга 4» is the point 4 on both. Deleting one turns it off; adding one turns
- * the first that is off back on as a fresh 0 dB peak, or adds one to a shorter set.
+ * The page lists every band of the set by its place, on or off, as the glass does: «Смуга 4» is the point 4 on both, and «Увімкнена» in a band's sheet turns it
+ * on and off with its numbers kept. A set shorter than MAX_BANDS (an import) takes a new one.
  *
  * Limits are the panel's page's (eq_web.h): 20 Hz – 20 kHz, ±12 dB, Q 0.3 – 8, a shelf's Q ≤ 1.
  *
@@ -80,26 +79,14 @@ export function freeFrequency(bands) {
 }
 
 /**
- * «+ Додати смугу»: the first band that is off comes back as a 0 dB peak at a free frequency,
- * or a band is added to a set shorter than MAX_BANDS. Returns the new set and the new band's
- * place, or null when the set is full.
+ * «+ Додати смугу», for a set shorter than MAX_BANDS: a 0 dB peak at a free frequency after the
+ * last. Returns the new set and the new band's place, or null when the set has all of them.
  */
 export function addBand(bands) {
+  if (bands.length >= MAX_BANDS) return null;
   const fresh = { type: 'peak', f: freeFrequency(bands), gain: 0, q: 1, on: true };
-  const next = bands.slice();
-  let i = next.findIndex((b) => !b.on);
-  if (i < 0) {
-    if (next.length >= MAX_BANDS) return null;
-    i = next.length;
-    next.push(fresh);
-  } else {
-    next[i] = fresh;
-  }
-  return { bands: next, i };
+  return { bands: [...bands, fresh], i: bands.length };
 }
-
-/** «Видалити смугу»: off — the set keeps its layout, as «Рівно» does. */
-export const deleteBand = (bands, i) => bands.map((b, k) => (k === i ? { ...b, on: false } : b));
 
 /** «Скинути «Власний»»: every band off — what «Рівно» is. */
 export const resetBands = (bands) => bands.map((b) => ({ ...b, on: false }));

@@ -2,7 +2,7 @@ import { writable, derived } from 'svelte/store';
 import { canonical } from '../lib/routes.js';
 
 /*
- * Hash routes (PLAN_WEBUI §2). The hash never reaches the device's static server, which
+ * Hash routes. The hash never reaches the device's static server, which
  * answers 404 for paths of 52 characters or more; the browser's back button and bookmarks work.
  *
  *   #/player  #/source  #/system                  the three sections, as in the panel's drawer

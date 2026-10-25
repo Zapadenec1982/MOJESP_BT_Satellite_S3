@@ -17,7 +17,7 @@ CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions_p4_16mb.csv"
 # Bootloader (0x2000..) with app rollback is > 0x6000 bytes on P4 → move the table to 0x10000
 CONFIG_PARTITION_TABLE_OFFSET=0x10000
 
-# ── Flash chip: Boya BY25Q (no auto-suspend, docs/CONCEPT.md §8а) — use the dedicated driver ──
+# ── Flash chip: Boya BY25Q, no auto-suspend (docs/CONCEPT.md «Обмеження плати») — dedicated driver ──
 CONFIG_SPI_FLASH_SUPPORT_BOYA_CHIP=y
 
 # ── PSRAM: 32 MB HEX/OPI at 200 MHz ──
@@ -51,8 +51,8 @@ CONFIG_MBEDTLS_EXTERNAL_MEM_ALLOC=y
 # TLS input window 16 KB (stage 7, item 7.6). This is a memory decision and it was blocked
 # on the two above it.
 #
-# The evidence is in docs/SOAK_TEST.md: with the 4096 of sdkconfig.defaults, the reference
-# station (icecast.radiofrance.fr) breaks every second with
+# The evidence is in docs/SOAK_TEST.md «TLS: вхідний буфер 16 КБ»: with the 4096 of
+# sdkconfig.defaults, the reference station (icecast.radiofrance.fr) breaks every second with
 # "esp-tls-mbedtls: read error :-0x7200" — the server ignores max_fragment_length and sends
 # 16 KB records, and a record that does not fit the input buffer cannot be decrypted at all.
 # So 4096 is not "enough for a smaller window", it is a station that does not play.
@@ -69,7 +69,7 @@ CONFIG_ESP_COREDUMP_ENABLE_TO_FLASH=y
 CONFIG_ESP_COREDUMP_DATA_FORMAT_ELF=y
 CONFIG_ESP_COREDUMP_CHECKSUM_CRC32=y
 
-# ── Wi-Fi: ESP-Hosted 3.0.7 (esp_wifi_remote 1.6.4) → ESP32-C6 over SDIO, docs/CONCEPT.md §8б ──
+# ── Wi-Fi: ESP-Hosted 3.0.7 (esp_wifi_remote 1.6.4) → ESP32-C6 over SDIO, docs/CONCEPT.md «Мережа» ──
 # Symbol names are the 3.0.x ones (verified in esp-hosted-mcu v3.0.7 Kconfig.host.sdio / host/Kconfig.ext).
 CONFIG_SLAVE_IDF_TARGET_ESP32C6=y
 CONFIG_ESP_HOSTED_CP_TARGET_ESP32C6=y
@@ -93,7 +93,7 @@ CONFIG_ESP_HOSTED_HOST_SDIO_RX_STREAMING_MODE=y
 # iTWT not needed. PREFER_SPIRAM puts esp_hosted's ALIGNED transport buffers (the RX staging
 # slots and the TX aggregate) in PSRAM. It never reached the per-frame copies, which
 # eh_host_port_dma_alloc() takes from internal DMA RAM — components/hosted_mem moves those
-# (CONFIG_HOSTED_MEM_FRAMES_IN_PSRAM, default y; docs/NET_LOSS_2026-09-23.md).
+# (CONFIG_HOSTED_MEM_FRAMES_IN_PSRAM, default y).
 CONFIG_ESP_HOSTED_HOST_FEAT_WIFI_EXT_ITWT=n
 CONFIG_EH_HOST_PORT_DMA_PREFER_SPIRAM=y
 
@@ -117,6 +117,10 @@ CONFIG_LV_COLOR_DEPTH_24=y
 CONFIG_LV_USE_CUSTOM_MALLOC=y
 CONFIG_LV_USE_CLIB_STRING=y
 CONFIG_LV_USE_CLIB_SPRINTF=y
+# The QR code of the web's Колонки on the glass (screen_speakers.cpp).
+# An existing sdkconfig keeps "# CONFIG_LV_USE_QRCODE is not set": delete that line and
+# reconfigure. Without it the page shows the address alone.
+CONFIG_LV_USE_QRCODE=y
 # Draw buffers on cache-line boundaries (DMA2D copy to the DPI frame buffer)
 CONFIG_LV_DRAW_BUF_ALIGN=64
 # Fonts of the bring-up screen
@@ -224,7 +228,7 @@ CONFIG_FREERTOS_HZ=1000
 #
 # with none lost at rest in every case. The heap line says why: the large profile took
 # 126 KB of internal RAM (240 KB free before it, 114 KB after) and left 15 KB of
-# DMA-capable memory once the UI and the audio core were up. CONCEPT §8 records the
+# DMA-capable memory once the UI and the audio core were up. CONCEPT «Мережа» records the
 # confirmed failure threshold for this transport at 6.7 KB free DMA — the buffers the
 # tuning adds are taken from the memory the co-processor's own receive pool needs, so the
 # faster it is told to go the more it drops. On a board that also runs a 480x800 display
@@ -234,7 +238,7 @@ CONFIG_FREERTOS_HZ=1000
 # (docs/SOAK_TEST.md, tools/sdio_soak) and a measurement, not a Kconfig guess. The window
 # below is that measurement's answer, and only the window: the profiles stay refused.
 #
-# What the profiles exhausted is known since 23.09.2026 (docs/NET_LOSS_2026-09-23.md):
+# What the profiles exhausted is known since 23.09.2026:
 # esp_hosted copies every frame into internal DMA RAM and drops it silently when that runs
 # out, and the TCP window decides how many copies exist at once. Two other things that made
 # the 17.09 numbers worse are gone: modem sleep is off while a stream plays, and
@@ -252,10 +256,10 @@ CONFIG_FREERTOS_HZ=1000
 #   burst 10 (14400)           0 % lost, no drops, DMA min 13.7 KB, longest gap  94 ms
 #
 # so 8 x MSS: it costs the co-processor's pool nothing measurable, where 10 already begins to
-# (the failure threshold is 6.7 KB free DMA, CONCEPT §8). The mailbox holds a window's segments
-# and two more. On the panel, the same US host then carried the stream at 51 KB/s while filling
-# and held it at 40 KB/s with the buffer at 96-97 %, internal heap 119.7 KB and DMA 84.3 KB
-# during the stream (82.6 KB with the stock window), no mempool OOM.
+# (the failure threshold is 6.7 KB free DMA, CONCEPT «Мережа»). The mailbox holds a window's
+# segments and two more. On the panel, the same US host then carried the stream at 51 KB/s
+# while filling and held it at 40 KB/s with the buffer at 96-97 %, internal heap 119.7 KB and
+# DMA 84.3 KB during the stream (82.6 KB with the stock window), no mempool OOM.
 CONFIG_LWIP_TCP_WND_DEFAULT=11520
 CONFIG_LWIP_TCP_RECVMBOX_SIZE=10
 #
@@ -342,7 +346,7 @@ CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y
 # i2s_dma_rx_callback, rx_eof_desc_addr). An interrupt held off for longer than one block
 # loses the block before it without an overflow callback. At 96 kHz the satellite input's
 # block is 1.25 ms, and ~130 frames a second went missing that way at 96 kHz / 32-bit while
-# 48 kHz stayed clean (docs/PLAN_REVIEW_2026-09-29.md, section А). Flash operations mask
+# 48 kHz stayed clean. Flash operations mask
 # every interrupt that is not IRAM-safe for far longer than 1.25 ms, so these two are not
 # optional on this board. The callbacks the driver registers are IRAM_ATTR already.
 CONFIG_I2S_ISR_IRAM_SAFE=y

@@ -67,7 +67,7 @@
     x: X(Math.min(1, Math.max(0, fx(b.f)))),
     y: Y(bandMagnitudeDb(b, fs, b.f)),
     on: b.on,
-  })).filter((h) => h.on);
+  }));
   // the selected handle on top, as the panel moves it to the foreground
   $: drawn = [...handles.filter((h) => h.i !== sel), ...handles.filter((h) => h.i === sel)];
 
@@ -155,7 +155,7 @@
     {/each}
     {#each dbLines as db}
       <line class:zero={db === 0} class="grid" x1={LEFT} x2={LEFT + pw} y1={Y(db)} y2={Y(db)} />
-      <text class="lbl" x={LEFT - 6} y={Y(db) + 4} text-anchor="end">{db > 0 ? '+' + db : db}</text>
+      <text class="lbl" x={LEFT - 6} y={Y(db) + 4} text-anchor="end">{db > 0 ? '+' + db : db < 0 ? '−' + -db : db}</text>
     {/each}
     <path class="area" class:off={!on} d={area} />
     <path class="curve" class:off={!on} d={path} />

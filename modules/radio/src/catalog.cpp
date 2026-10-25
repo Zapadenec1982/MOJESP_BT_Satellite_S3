@@ -4,7 +4,7 @@
  *        RadioModule side that turns states into requests and pages into states.
  *
  * Plain HTTP, never TLS. The panel holds one TLS session at a time, and while the radio
- * plays it belongs to the station (CONCEPT §Інтернет-радіо); what comes back here is a page
+ * plays it belongs to the station (docs/NETWORK.md «Інтернет-радіо»); what comes back here is a page
  * of metadata, not audio. Measured 04.10.2026: the service answers on port 80 with no
  * redirect, and it is down to one server, so the list of servers is asked for rather than
  * written down — two other ESP32 radios still point at mirrors that no longer exist.
@@ -12,7 +12,7 @@
  * The request side runs whatever the source is: browsing does not need the radio to be
  * playing, and choosing a row is what makes it the source.
  *
- * Plan: docs/PLAN_RADIO_V2_2026-10-04.md §4–5, stage 20а.
+ * Stage 20а.
  */
 
 #include "radio_module.h"
@@ -382,8 +382,8 @@ void summarise(int count, char* out, size_t out_sz) {
     }
 }
 
-/// data/radio_genres.json, once, for the screen: the genres are data, edited without a build
-/// (PLAN_RADIO_V2 §4). A missing or broken file leaves the screen's genres empty, and says so.
+/// data/radio_genres.json, once, for the screen: the genres are data, edited without a build.
+/// A missing or broken file leaves the screen's genres empty, and says so.
 void load_genres() {
     char* buf = (char*)heap_caps_malloc(GENRES_MAX, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
     void* mem = heap_caps_calloc(1, sizeof(rc::Genres), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);

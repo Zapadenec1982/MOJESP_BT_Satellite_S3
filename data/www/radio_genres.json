@@ -1,5 +1,5 @@
 {
-  "_comment": "Station catalog genres (docs/PLAN_RADIO_V2_2026-10-04.md 4). One Radio Browser tag per genre, matched as a substring, so 'rock' also finds 'classic rock'. Counts of live stations per tag were measured on 04.10.2026. Edit freely: name is what the screen shows, in Ukrainian; name_en, name_de and name_pl in those languages (docs/PLAN_PANEL_LANG_2026-10-12.md 9), and a genre without one shows name. At most 31 bytes a name. tag is what is asked for.",
+  "_comment": "Station catalog genres. One Radio Browser tag per genre, matched as a substring, so 'rock' also finds 'classic rock'. Counts of live stations per tag were measured on 04.10.2026. Edit freely: name is what the screen shows, in Ukrainian; name_en, name_de and name_pl in those languages, and a genre without one shows name. At most 31 bytes a name. tag is what is asked for.",
   "genres": [
     {"name": "Поп", "name_en": "Pop", "name_de": "Pop", "name_pl": "Pop", "tag": "pop"},
     {"name": "Рок", "name_en": "Rock", "name_de": "Rock", "name_pl": "Rock", "tag": "rock"},

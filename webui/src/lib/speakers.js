@@ -1,5 +1,5 @@
 /*
- * Колонки (docs/PLAN_SOUND_UX_2026-10-14.md, S6): what the page says the speakers are, what the
+ * Колонки: what the page says the speakers are, what the
  * wizard and the calibration page write, what the port meter's message means, and «Звичайна
  * гучність»'s reference. The device keeps the rules (modules/audio): closed speakers have no port
  * whatever number is kept, the meter only offers what it found, and the reference is a % of the

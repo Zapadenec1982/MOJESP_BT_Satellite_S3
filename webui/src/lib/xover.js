@@ -1,5 +1,5 @@
 /*
- * «Кросовер» (docs/PLAN_SOUND_UX_2026-10-14.md, S8): the output schemes and which of them play.
+ * «Кросовер»: the output schemes and which of them play.
  * A scheme is offered as working only once the firmware says it plays it, in audio.out_caps
  * (components/audio_dsp/include/out_caps.h, the same bits); the rest are «ще не підтримується».
  * A firmware that does not say has the one stereo pair this board was built with. Which scheme

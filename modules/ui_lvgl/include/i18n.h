@@ -1,6 +1,6 @@
 /**
  * @file i18n.h
- * @brief The panel's strings in four languages (docs/PLAN_PANEL_LANG_2026-10-12.md).
+ * @brief The panel's strings in four languages.
  *
  * The translations are the web UI's: webui/src/i18n/<lang>.json, one key set for the glass and
  * the browser. tools/i18n/gen_panel_strings.py turns the keys the panel's code names into the
@@ -84,9 +84,16 @@ size_t render(char* out, size_t cap, const char* msg);
 char decimal_sep();
 
 /// A fixed-point number: `scaled` / 10^`decimals` (`decimals` 0..3), with the language's
-/// separator, "-" before a negative and, with `plus`, "+" before the rest — printf's "%+.1f".
-/// Returns `out`.
+/// separator, the minus sign (U+2212, three bytes) before a negative and, with `plus`, "+" before
+/// the rest — printf's "%+.1f" as the pages print it. Returns `out`.
 const char* num(char* out, size_t cap, int32_t scaled, int decimals, bool plus = false);
+
+/// A technical line in the language's units and decimals — the codec badge ("44.1 kHz 2 ch
+/// 128 kbps", "16/44.1 kHz", "LDAC 96.0 kHz"), USB's "48.0 kHz 24 bit" — as the web's badge()
+/// (webui/src/lib/numbers.js) writes it: «44,1 кГц 128 кбіт/с». Two channels go unsaid and a
+/// whole number loses its ",0"; a word that is not a number before its unit stays as it is.
+/// Cut on a character boundary, as fmt()'s. Returns the bytes written, without the NUL.
+size_t badge(char* out, size_t cap, const char* raw);
 
 namespace detail {
 

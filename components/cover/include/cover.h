@@ -36,8 +36,8 @@ struct CoverView {
     uint32_t        rgb = 0;         ///< the picture's colour, RGB888 (cover_tone); 0: none
 };
 
-/// The colour of a tile (RGB565, w×h), for the Player's background (docs/PLAN_SOUND_UX_2026-10-14.md,
-/// S5): where the picture's colour is, black bars and black grounds ignored, a vivid colour
+/// The colour of a tile (RGB565, w×h), for the Player's background:
+/// where the picture's colour is, black bars and black grounds ignored, a vivid colour
 /// before a grey one. RGB888; 0 when there is none — an all-black picture, or no picture.
 /// Pure (cover_tone.cpp), run once when a picture is published.
 uint32_t cover_tone(const uint16_t* px, int w, int h);

@@ -5,8 +5,7 @@ English names are long ("The United Kingdom Of Great Britain And Northern Irelan
 screen names them from Unicode CLDR instead: the short form where CLDR has one ("США", "USA"),
 unless that form is an abbreviation with a full stop ("Wlk. Bryt.") — a list reads better with
 the name written out. One column per language in ui.lang's order — uk, en, de, pl — and the
-codes are the Ukrainian table's; a name a language lacks is the English one, then the Ukrainian
-(docs/PLAN_PANEL_LANG_2026-10-12.md §9).
+codes are the Ukrainian table's; a name a language lacks is the English one, then the Ukrainian.
 
 Pinned to one CLDR release so the table only changes when someone means it to:
 

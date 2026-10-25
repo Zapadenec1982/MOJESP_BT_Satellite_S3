@@ -4,11 +4,13 @@
  *        dropdown, not chips) and an equalizer band's type (16.10.2026: a list, not a button
  *        that steps through the six — each step changed the response on the way).
  *
- * A dialog as Налаштування's language is: the title, the items as rows, the current one filled,
- * ticked and scrolled into sight, «Скасувати». The rows are a finger's 64 px (ui_m3_widgets.h,
- * 20.10.2026), so the list shows three of them and half of the fourth, through its name — a list
- * cut between two rows looked like all there is (the glass, 16.10.2026: «Джаз» last, nothing
- * under it) — and scrolls, from a row or between them. A row
+ * A dialog as Налаштування's language is: the title with «Скасувати» beside it, the items as rows,
+ * the current one filled, ticked and scrolled into sight. «Скасувати» sat under the list until
+ * 25.10.2026, a strip of 100 px — a row and a half of the list (the customer: «зїдає корисну
+ * площу»); in the title's row it costs nothing. The rows are a finger's 64 px (ui_m3_widgets.h,
+ * 20.10.2026). A short list gets a card its size; a long one shows four rows and half of the
+ * fifth, through its name — a list cut between two rows looked like all there is (the glass,
+ * 16.10.2026: «Джаз» last, nothing under it) — and scrolls, from a row or between them. A row
  * chooses and closes it; «Скасувати» or a tap beside it close it with nothing chosen. The knob
  * stays the volume while it is up (ui_shell_encoder).
  */
@@ -22,12 +24,15 @@ namespace {
 using i18n::S;
 using i18n::tr;
 
-constexpr int32_t PICK_W = 480, PICK_H = 388, PICK_ROW_H = 64, PICK_LIST_Y = 44;
-/// the list, between the title and «Скасувати» (m3w::dialog: 24-px sides; the card is 16 px
-/// taller than asked, which the 64-px button takes)
-constexpr int32_t PICK_LIST_H = PICK_H - 48 - PICK_LIST_Y - 48 - 12;
-static_assert(PICK_LIST_H > 3 + 3 * (PICK_ROW_H + 2) + PICK_ROW_H / 3 &&
-              PICK_LIST_H < 3 + 3 * (PICK_ROW_H + 2) + PICK_ROW_H * 2 / 3, "the fourth row is cut through its name");
+constexpr int32_t PICK_W = 480, PICK_H = 388, PICK_ROW_H = 64;
+constexpr int32_t PICK_PAD    = 24;        ///< m3w::dialog's card, on every side
+constexpr int32_t PICK_LIST_Y = 48;        ///< under the title's row and «Скасувати»'s 64 px centred on it
+constexpr int32_t PICK_FOOT   = 8;         ///< under the list, over the card's padding
+/// the list of a long one, from the title's row to the card's foot (m3w::dialog makes the card 16 px
+/// taller than asked)
+constexpr int32_t PICK_LIST_H = PICK_H + 16 - 2 * PICK_PAD - PICK_LIST_Y - PICK_FOOT;
+static_assert(PICK_LIST_H > 3 + 4 * (PICK_ROW_H + 2) + PICK_ROW_H / 3 &&
+              PICK_LIST_H < 3 + 4 * (PICK_ROW_H + 2) + PICK_ROW_H * 2 / 3, "the fifth row is cut through its name");
 
 struct Pick {
     m3w::Dialog d;
@@ -57,6 +62,11 @@ void ui_pick_build(lv_obj_t* scr) {
     pick = Pick{};
     pick.d = m3w::dialog(scr, PICK_W, PICK_H);
     lv_obj_add_flag(pick.d.card, LV_OBJ_FLAG_CLICKABLE);   // a tap on the card is not a tap beside it
+    // «Скасувати» in the title's row, its 64 px centred on the title's line (dialog_show puts the
+    // only button at the card's right end); the title stops short of it
+    const int32_t line = lv_font_get_line_height(m3::theme().t.title_m);
+    lv_obj_set_y(pick.d.no.obj, line / 2 - lv_obj_get_style_height(pick.d.no.obj, 0) / 2);
+    lv_obj_set_width(pick.d.title, PICK_W - 2 * PICK_PAD - lv_obj_get_style_width(pick.d.no.obj, 0) - 8);
     pick.list = m3w::box(pick.d.card, 0, PICK_LIST_Y, PICK_W - 48, PICK_LIST_H);
     lv_obj_add_flag(pick.list, LV_OBJ_FLAG_CLICKABLE);     // a finger between the rows scrolls it too
     lv_obj_add_flag(pick.list, LV_OBJ_FLAG_SCROLLABLE);
@@ -95,6 +105,12 @@ void ui_pick_show(const char* title, const char* const* items, int n, int curren
     }
     pick.current = current;
     pick.chosen = chosen;
+    // the card the size of a short list; a long one's is the most there is, the fifth row cut
+    const int32_t rows = 6 + pick.n * (PICK_ROW_H + 2) - 2;          // pad_all 3, pad_row 2
+    const int32_t list_h = rows < PICK_LIST_H ? rows : PICK_LIST_H;
+    lv_obj_set_height(pick.list, list_h);
+    lv_obj_set_height(pick.d.card, 2 * PICK_PAD + PICK_LIST_Y + list_h + PICK_FOOT);
+    lv_obj_center(pick.d.card);
     m3w::dialog_show(pick.d, title, "", "", tr(S::common_cancel));
     pick.shown = true;
     lv_obj_update_layout(pick.list);

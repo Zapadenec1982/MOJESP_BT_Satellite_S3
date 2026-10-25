@@ -2,7 +2,7 @@
  * @file radio_module.cpp
  * @brief Internet radio — HTTP in, the PCM ring out.
  *
- * The requirement is that it behaves like a radio (CONCEPT §"Інтернет-радіо"): no server in
+ * The requirement is that it behaves like a radio (docs/NETWORK.md «Інтернет-радіо»): no server in
  * the house, nothing to log into, and when the power comes back the last station plays. So
  * the station list, the tuning and the reconnecting all live here, and none of it depends on
  * anything else being up.
@@ -81,8 +81,8 @@ constexpr UBaseType_t RADIO_TASK_PRIORITY = ESP_TASK_MAIN_PRIO;
 constexpr uint32_t OUT_RATE = audio_core::PIPE_OUT_RATE;
 
 /// audio.source value that means "the network stream". From generated/state_enums.h and
-/// the table in CONCEPT §7a; the modules share the MANIFEST, not each other's headers,
-/// because a build may carry either one without the other.
+/// the table in CONCEPT «Значення `audio.source`»; the modules share the MANIFEST, not each
+/// other's headers, because a build may carry either one without the other.
 constexpr int32_t AUDIO_SRC_RADIO = modesp::gen::AUDIO_SOURCE_RADIO;
 
 /// Where the station list lives. Editable by hand, which is half the point of it being JSON.
@@ -139,9 +139,10 @@ constexpr int    READ_GIVE_UP = 8;
 /// A station reconnects without limit, because a radio that has to be restarted by hand is
 /// not a radio. A track is different: it has an end, so a failure that repeats is a failure
 /// that is not going to clear, and twenty attempts is already a minute of trying. The number
-/// is deliberately generous, because CONCEPT §8 measured this link losing a third to three
-/// quarters of its packets under stream load — the one thing that must not happen is a track
-/// stopping for good on a link that would have come back.
+/// is deliberately generous, because this link has been measured losing a third to three
+/// quarters of its packets under stream load (docs/NETWORK.md «Wi-Fi через ESP32-C6») — the
+/// one thing that must not happen is a track stopping for good on a link that would have
+/// come back.
 constexpr int    RESUME_TRIES = 20;
 
 /// 10 ms of fade at each end of a stream, which is all it takes to make a start or a stop
@@ -215,7 +216,7 @@ struct RadioTaskState {
     size_t   pcm_cap = PCM_BYTES;           ///< what `pcm` holds; grows, never shrinks
     // Working buffers, in PSRAM rather than as statics. As .bss they were twelve kilobytes
     // of INTERNAL memory, which on this board is the memory the co-processor's receive pool
-    // competes for — and CONCEPT 8 puts the confirmed failure threshold for this transport
+    // competes for — and CONCEPT «Мережа» puts the confirmed failure threshold for this transport
     // at 6.7 KB of free DMA-capable RAM. None of this is touched by an interrupt.
     uint8_t* net_chunk = nullptr;           ///< one socket read, reader task
     uint8_t* feed = nullptr;                ///< one decode call's input, decoder task
@@ -599,7 +600,7 @@ void copy_header(const char* v, size_t n, char* out, size_t out_sz) {
 /// documented one-call cure, esp_http_client_clear_response_buffer(), declared in
 /// esp_http_client.h with a comment describing exactly the stale-cache case that fires it.
 ///
-/// Parsing a response head is thirty lines, so this stays. CONCEPT §"Інтернет-радіо" asked
+/// Parsing a response head is thirty lines, so this stays. docs/NETWORK.md «Інтернет-радіо» asked
 /// for the GET without a wrapper, and that decision is still the right one — for one reason
 /// rather than three.
 ///
@@ -2319,7 +2320,7 @@ void RadioModule::on_update(uint32_t dt_ms) {
 
     // A play is counted with Radio Browser once per tune of a station that came from it —
     // what the service asks in return for no key and no account, and what keeps its
-    // "popular" lists true (decision 5, PLAN_RADIO_V2 §3). Only once the audio is playing.
+    // "popular" lists true. Only once the audio is playing.
     {
         const uint32_t gen = s.track_generation.load(std::memory_order_acquire);
         if (st == ST_PLAYING && gen != click_gen_) {

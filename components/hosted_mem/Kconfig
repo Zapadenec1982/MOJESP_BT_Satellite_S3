@@ -10,8 +10,7 @@ menu "ESP-Hosted frame copies (hosted_mem)"
             eh_host_port_dma_alloc(), which is internal DMA-capable SRAM. Up to 20 received
             frames (~33 KB) can be held at once, and when the allocation fails the frame is
             dropped without a log line. With this option those copies come from PSRAM; the
-            SDIO transfers themselves are untouched. See components/hosted_mem/hosted_mem.c
-            and docs/NET_LOSS_2026-09-23.md.
+            SDIO transfers themselves are untouched. See components/hosted_mem/hosted_mem.c.
 
             Turning it off restores esp_hosted's own allocation exactly; the drop counters
             stay available either way.

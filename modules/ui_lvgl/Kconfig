@@ -61,6 +61,6 @@ config UI_M3_TEST_SCREEN
         shows every component of src/ui_m3_widgets.h — buttons, chips, switch,
         slider, list rows, rail items, toast, the wavy line and the type roles — so
         the redesign's building blocks can be judged on the glass and by screenshot
-        before a real screen is drawn with them (docs/PLAN_UI_M3_2026-09-24.md, U0).
+        before a real screen is drawn with them.
 
 endmenu

@@ -1,6 +1,6 @@
 /**
  * @file test_out_gate.cpp
- * @brief HOST tests for the edges of the output (docs/AUDIO_PATH_REVIEW_2026-10-05.md, A01/A02):
+ * @brief HOST tests for the edges of the output:
  *        the FadeGate curve, a pause and a source change through the real DspChain, and a ring
  *        claimed from a producer whose music is still playing.
  *

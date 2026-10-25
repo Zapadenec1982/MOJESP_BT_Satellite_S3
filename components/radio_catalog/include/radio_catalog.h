@@ -1,7 +1,7 @@
 /**
  * @file radio_catalog.h
  * @brief The station catalog: what to ask Radio Browser, what its answer means, and the
- *        page the screen reads (docs/PLAN_RADIO_V2_2026-10-04.md, stage 20).
+ *        page the screen reads (stage 20).
  *
  * Pure: no IDF, no network, no filesystem. The radio module fetches and this decides the
  * rest — the request path, the parse, which rows this device can play, the repeats — which
@@ -112,8 +112,8 @@ struct CountryCount {
 int parse_countrycodes(const char* json, size_t len, void* scratch, size_t scratch_sz,
                        CountryCount* out, int max);
 
-/// The languages a name is kept in, in ui.lang's order: uk, en, de, pl
-/// (docs/PLAN_PANEL_LANG_2026-10-12.md). An index outside them is Ukrainian.
+/// The languages a name is kept in, in ui.lang's order: uk, en, de, pl.
+/// An index outside them is Ukrainian.
 constexpr int NAME_LANGS = 4;
 
 struct Genre {

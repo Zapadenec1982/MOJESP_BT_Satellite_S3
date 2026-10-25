@@ -192,7 +192,7 @@ const char* num(char* out, size_t cap, int32_t scaled, int decimals, bool plus) 
     const uint64_t a = (uint64_t)(v < 0 ? -v : v);
     const uint64_t whole = a / (uint64_t)POW10[decimals];
     const uint64_t frac  = a % (uint64_t)POW10[decimals];
-    const char* sign = v < 0 ? "-" : (plus ? "+" : "");
+    const char* sign = v < 0 ? "\xE2\x88\x92" : (plus ? "+" : "");   // U+2212, the minus
     if (decimals == 0) {
         snprintf(out, cap, "%s%llu", sign, (unsigned long long)whole);
     } else {
@@ -200,6 +200,65 @@ const char* num(char* out, size_t cap, int32_t scaled, int decimals, bool plus) 
                  decimals, (unsigned long long)frac);
     }
     return out;
+}
+
+size_t badge(char* out, size_t cap, const char* raw) {
+    if (!out || cap == 0) return 0;
+    out[0] = '\0';
+    if (!raw) return 0;
+    struct Unit {
+        const char* word;
+        S           id;
+    };
+    static constexpr Unit UNITS[] = {{"kHz", S::unit_khz}, {"Hz", S::unit_hz}, {"kbps", S::unit_kbps},
+                                     {"bit", S::unit_bit}, {"ch", S::unit_ch}};
+    size_t len = 0;
+    auto put = [&](const char* s, size_t n) { len += modesp::utf8_copy(out + len, cap - len, s, n); };
+    auto word = [&](const char* s, size_t n) {
+        if (len) put(" ", 1);
+        put(s, n);
+    };
+    const char* p = raw;
+    while (*p) {
+        const char* w = p;                                  // this word
+        while (*p && *p != ' ') p++;
+        const size_t wn = (size_t)(p - w);
+        const char* u = *p ? p + 1 : p;                     // the next
+        const char* q = u;
+        while (*q && *q != ' ') q++;
+        const size_t un = (size_t)(q - u);
+        const Unit* unit = nullptr;
+        for (const Unit& x : UNITS)
+            if (strlen(x.word) == un && memcmp(x.word, u, un) == 0) unit = &x;
+        // a number: [digits "/"] digits ["." digits] — "16/44.1"
+        auto digits = [&](size_t k) { while (k < wn && w[k] >= '0' && w[k] <= '9') k++; return k; };
+        size_t from = 0, to = digits(0), frac = 0, end = 0;
+        if (to > 0 && to < wn && w[to] == '/') { from = to + 1; to = digits(from); }
+        bool number = unit && to > from;
+        if (number && to < wn) {
+            end = digits(to + 1);
+            number = w[to] == '.' && end > to + 1 && end == wn;
+            frac = to + 1;
+        }
+        bool tenths = false;                                // a fraction that says something
+        for (size_t k = frac; frac && k < end; k++) tenths |= w[k] != '0';
+        if (!number) {
+            word(w, wn);
+            if (*p) p++;
+            continue;
+        }
+        p = *q ? q + 1 : q;
+        const bool stereo = unit->id == S::unit_ch && from == 0 && to == 1 && w[0] == '2' && !tenths;
+        if (stereo) continue;                               // the norm, and the room the artist needs
+        word(w, to);
+        if (tenths) {
+            const char sep = decimal_sep();
+            put(&sep, 1);
+            put(w + frac, end - frac);
+        }
+        word(tr(unit->id), strlen(tr(unit->id)));
+    }
+    return len;
 }
 
 }  // namespace i18n

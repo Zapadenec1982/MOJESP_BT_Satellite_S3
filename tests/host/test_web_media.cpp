@@ -2,7 +2,6 @@
  * @file test_web_media.cpp
  * @brief GET /api/library and GET /api/cover bodies (modules/ui_lvgl/include/web_media.h), and
  *        the cover rule the panel and the web share (components/cover/include/cover.h).
- *        docs/PLAN_WEBUI_2026-10-11.md §6, A4 and A1.
  */
 
 #include "doctest.h"

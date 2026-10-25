@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Generate the LVGL fonts the UI needs, into modules/ui_lvgl/src/fonts/.
 
-Material 3 (docs/PLAN_UI_M3_2026-09-24.md): Roboto for text and Material Symbols Rounded for
+Material 3: Roboto for text and Material Symbols Rounded for
 icons — the Material typeface and its own icon set. LVGL ships Montserrat without Cyrillic,
 and ships no icon set that draws an AirPlay mark, so both families are built here.
 

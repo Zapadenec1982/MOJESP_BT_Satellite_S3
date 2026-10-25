@@ -6,7 +6,7 @@
  * duplex on one controller (DAC + ADC in one clock domain); slave with din only =
  * capture from an external master (BT module). Pins, role, fs, slot width and MCLK
  * multiple come from board.json (I2SBusResource); DMA depth is a driver constant sized
- * for the Boya-flash cache stall (docs/CONCEPT.md §8а: TX ring ≥ 100 ms).
+ * for the Boya-flash cache stall (docs/CONCEPT.md «Обмеження плати»).
  */
 
 #pragma once

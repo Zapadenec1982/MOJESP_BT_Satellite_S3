@@ -27,8 +27,8 @@ CONFIG_MBEDTLS_SSL_KEEP_PEER_CERTIFICATE=n
 # Tier 1: TLS client only — the HTTP server is plain HTTP, no TLS server needed
 CONFIG_MBEDTLS_TLS_CLIENT_ONLY=y
 
-# Tier 2: TLS buffers 4 KB in/out (docs/CONCEPT.md §8а: internal DMA-SRAM is the scarce
-# resource on P4; 4096 is enough for MQTT and metadata fetches).
+# Tier 2: TLS buffers 4 KB in/out (docs/CONCEPT.md «Обмеження плати»: internal DMA-SRAM is
+# the scarce resource on P4; 4096 is enough for MQTT and metadata fetches).
 # The P4 board raises IN to 16384 — see boards/p4_player/sdkconfig.board, where the memory
 # that pays for it is.
 CONFIG_MBEDTLS_SSL_OUT_CONTENT_LEN=4096

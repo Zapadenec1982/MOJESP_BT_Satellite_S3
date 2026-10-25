@@ -2,7 +2,7 @@
 /**
  * @file bt_web.h
  * @brief The satellite's Bluetooth settings as the web reads and changes them: GET and POST
- *        /api/bt (docs/PLAN_WEBUI_2026-10-11.md §6, A5).
+ *        /api/bt.
  *
  * Pure — no HTTP, no lock — so what the web is sent and what it may send are settled by the
  * host tests (tests/host/test_bt_web.cpp); bt_http.inc only moves bytes. The web asks for the

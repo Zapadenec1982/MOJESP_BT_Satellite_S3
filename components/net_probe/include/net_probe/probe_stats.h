@@ -3,7 +3,7 @@
  * @brief What the UDP probe counts, kept free of IDF so tests/host can pin it.
  *
  * The questions it answers are the ones that decide whether an AirPlay 1 receiver can live
- * behind this link (docs/NET_LOSS_2026-09-23.md): how many packets never came, how many of
+ * behind this link: how many packets never came, how many of
  * the missing ones came in a row, and the longest stretch with nothing at all — a receiver
  * with a 2 s buffer survives scattered loss by asking again, and dies of a long hole.
  *

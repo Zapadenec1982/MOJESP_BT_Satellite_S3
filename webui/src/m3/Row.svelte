@@ -91,20 +91,23 @@
     display: flex;
     flex-direction: column;
   }
+  /* up to two lines, then «…»: one line cut German and Polish words at 390 px */
+  .t, .s {
+    overflow: hidden;
+    overflow-wrap: anywhere;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+  }
   .t {
     font-size: 16px;
     line-height: 22px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
   }
   .s {
     font-size: 14px;
     line-height: 20px;
     color: var(--on-surface-var);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
   }
   .chev { color: var(--on-surface-var); display: flex; flex: none; }
   .selected { background: var(--secondary-container); color: var(--on-secondary-container); }

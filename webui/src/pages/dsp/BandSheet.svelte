@@ -1,10 +1,12 @@
 <script>
-  // A band, opened from the equalizer's list (docs/PLAN_SOUND_UX_2026-10-14.md, appendix A): its
+  // A band, opened from the equalizer's list: its
   // type, chosen from a list of the six as the glass offers them and by the names REW and
   // Equalizer APO use (the customer, 16.10.2026: three of them here, six there, and none named
-  // the same), then its frequency, gain and width with − and +, «Видалити смугу» and «Готово». Each step is
-  // heard at once (`edit`); the steps are the panel's (screen_eq.cpp adjust): 1/12 octave, 0.5 dB,
-  // 0.1 of Q, a pass's slope along PASS_Q.
+  // the same), then its frequency, gain and width with − and +, and «Готово». «Увімкнена» on top, as
+  // the glass's band panel has it: off keeps the numbers (`turn`); a step on a band that is off
+  // switches it on, as touching its point does on both (`edit`). Each step is heard at once; the
+  // steps are the panel's (screen_eq.cpp adjust): 1/12 octave, 0.5 dB, 0.1 of Q, a pass's slope
+  // along PASS_Q.
   import { createEventDispatcher } from 'svelte';
   import { t, K, fmt, language } from '../../stores/i18n.js';
   import { decimal } from '../../lib/numbers.js';
@@ -12,6 +14,7 @@
   import { hasGain, isPass } from '../../lib/eqmath.js';
   import BottomSheet from '../../m3/BottomSheet.svelte';
   import Button from '../../m3/Button.svelte';
+  import Switch from '../../m3/Switch.svelte';
   import StepRow from './StepRow.svelte';
 
   export let band;
@@ -43,15 +46,20 @@
   // typed: lib/eq.js holds every number to the device's limits
   const typed = (which, v) => edit({ ...band, [which]: v });
 
-  $: fText = band.f >= 1000 ? `${decimal(band.f / 1000, 2, $language)} kHz` : `${band.f.toFixed(0)} Hz`;
-  $: gText = hasGain(band.type) ? `${band.gain > 0 ? '+' : ''}${decimal(band.gain, 1, $language)} dB` : '—';
+  $: fText = band.f >= 1000 ? `${decimal(band.f / 1000, 2, $language)} ${$t['unit.khz']}` : `${band.f.toFixed(0)} ${$t['unit.hz']}`;
+  $: gText = hasGain(band.type) ? `${band.gain > 0 ? '+' : ''}${decimal(band.gain, 1, $language)} ${$t['unit.db']}` : '—';
   // a named alignment is a slope, anything else a width (screen_eq.cpp q_text)
   $: named = isPass(band.type) && Math.abs(band.q - Q_LR12) < 0.02 ? 'LR 12'
     : isPass(band.type) && Math.abs(band.q - Q_BW12) < 0.02 ? 'BW 12' : '';
-  $: qLabel = isPass(band.type) ? $t['eq.slope'] : $t['eq.q_width'];
+  // the glass's caption (screen_eq.cpp q_text): a slope where it is one, a width everywhere else
+  $: qLabel = named ? $t['eq.slope'] : $t['eq.q_width'];
 </script>
 
 <BottomSheet title={fmt($t['eq.band_n'], { n })} on:close>
+  <div class="on">
+    <span class="tl">{$t['eq.band_on']}</span>
+    <Switch checked={band.on} label={$t['eq.band_on']} on:change={(e) => dispatch('turn', e.detail)} />
+  </div>
   <div class="type">
     <span class="tl">{$t['eq.type']}</span>
     <select class="pick" aria-label={$t['eq.type']} value={band.type}
@@ -67,13 +75,12 @@
   <StepRow label={qLabel} text={named || decimal(band.q, 2, $language)} raw={decimal(band.q, 2, $language)} decLabel={$t['eq.less']} incLabel={$t['eq.more_step']}
            on:dec={() => step('q', -1)} on:inc={() => step('q', 1)} on:set={(e) => typed('q', e.detail)} />
   <div class="acts">
-    <Button variant="text" danger on:click={() => dispatch('delete')}>{$t['eq.delete']}</Button>
     <Button on:click={() => dispatch('close')}>{$t['eq.done']}</Button>
   </div>
 </BottomSheet>
 
 <style>
-  .type { display: flex; align-items: center; gap: 16px; min-height: 48px; }
+  .on, .type { display: flex; align-items: center; gap: 16px; min-height: 48px; }
   .tl { flex: 1; font-size: 16px; color: var(--on-surface); }
   .pick {
     height: 40px;

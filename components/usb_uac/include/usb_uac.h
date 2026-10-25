@@ -2,7 +2,7 @@
  * @file usb_uac.h
  * @brief The panel as a USB sound card: USB Audio Class 2 on the P4's high-speed port.
  *
- * docs/CONCEPT.md §3а: the HS Type-C is wired as a device, so USB is a UAC2 device — 44.1, 48,
+ * docs/CONCEPT.md «USB»: the HS Type-C is wired as a device, so USB is a UAC2 device — 44.1, 48,
  * 88.2 and 96 kHz, 16 or 24 bits, asynchronous with a feedback endpoint so that the panel's clock
  * sets the pace and nothing resamples. UAC2 is in every desktop OS's own driver (Windows 10 1703+,
  * macOS, Linux).

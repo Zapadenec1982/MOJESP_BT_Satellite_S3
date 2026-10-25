@@ -1,5 +1,5 @@
 # Bench capture is opt-in and leaves the codec powered down until explicitly armed.
-option(MODESP_MIC_CAPTURE "Enable onboard ES7210 click capture over USB console" OFF)
+option(MODESP_MIC_CAPTURE "Enable onboard ES8311 click capture over USB console" OFF)
 # mic_input (the microphone as a measuring input: the port meter) is always built; the bench
 # capture only on request.
 set(_sources "src/mic_input.cpp")

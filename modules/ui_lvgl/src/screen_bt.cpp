@@ -338,7 +338,8 @@ lv_obj_t* build(lv_obj_t* parent, UiCtx& c) {
     g.kb = m3w::keyboard(g.sheet, 0, KB_Y, uig::CONT_W, uig::CONT_H - KB_Y, g.field);
     m3w::show(g.sheet, false);
 
-    g.dlg = m3w::dialog(root, 520, 230);
+    // on the screen, not the page: its shade covers the header and its ← too
+    g.dlg = m3w::dialog(lv_obj_get_screen(root), 520, 230);
     lv_obj_add_event_cb(g.dlg.yes.obj, dlg_yes_cb, LV_EVENT_CLICKED, nullptr);
     lv_obj_add_event_cb(g.dlg.no.obj, dlg_no_cb, LV_EVENT_CLICKED, nullptr);
     g.toast = m3w::toast(root);

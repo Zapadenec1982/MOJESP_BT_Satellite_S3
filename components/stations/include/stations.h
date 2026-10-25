@@ -3,7 +3,7 @@
  * @brief The radio station list, its presets, and the JSON they live in.
  *
  * A radio has to work as a radio: plug it in and the last station plays, with no server in
- * the house and nothing to log into (CONCEPT §"Інтернет-радіо"). That means the list of
+ * the house and nothing to log into (docs/NETWORK.md «Інтернет-радіо»). That means the list of
  * stations lives on the device, and this is it.
  *
  * Pure: no IDF, no filesystem, no network. Parsing and serialising are the parts worth

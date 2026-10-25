@@ -1,7 +1,7 @@
 /**
  * @file ui_web_media.h
  * @brief GET /api/library and GET /api/cover — the card's index and the Player's picture, for
- *        the web (docs/PLAN_WEBUI_2026-10-11.md §6, A4 and A1).
+ *        the web.
  */
 
 #pragma once

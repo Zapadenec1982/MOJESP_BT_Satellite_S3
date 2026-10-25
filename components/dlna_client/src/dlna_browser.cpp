@@ -19,7 +19,7 @@
 #include <new>
 
 // View::title (the servers' list) and View::status are messages of the web's catalog ("@<key>",
-// arguments behind MSG_ARG; docs/PLAN_PANEL_LANG_2026-10-12.md U8.5): the panel's DLNA page and
+// arguments behind MSG_ARG): the panel's DLNA page and
 // GET /api/dlna/browser show them in the panel's and the browser's language.
 #define MSG_ARG "\x1f"
 

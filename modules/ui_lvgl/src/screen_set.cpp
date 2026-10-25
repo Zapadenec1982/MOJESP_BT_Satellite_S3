@@ -4,7 +4,7 @@
  *        and the ways into the equalizer, the screen and the service readout.
  *
  * Four groups, each a card of rows (plan §2, U5; Зв'язок and Служби split 25.09.2026; Звук and the
- * screen's own page from S1 of docs/PLAN_SOUND_UX_2026-10-14.md, 14.10.2026):
+ * screen's own page from S1, 14.10.2026):
  *
  *   Звук      Тембр → its page (the sounds, Бас, Високі, the loudness and the equalizer:
  *             sound_sheet.cpp; the equalizer itself until S3), what plays on its second line;

@@ -3,7 +3,7 @@
  * @brief HOST tests for the EQ's SVF kernel and its design (components/audio_dsp):
  *        same response as the RBJ cookbook, the stereo loops equal to the one-sample
  *        definition bit for bit, and the noise floor at a low corner and a high rate —
- *        the case the Direct Form II kernel failed (docs/DSP_RESEARCH_2026-09-30.md §3.1).
+ *        the case the Direct Form II kernel failed.
  */
 
 #include <algorithm>

@@ -29,11 +29,10 @@
 static const char *TAG = "DLNA_CMR";
 
 /* p4-player: the list upstream ships opens with `http-get:*:*:*` — "send me anything" — and
-   then names WMA, AC3, Vorbis, Speex and MP4. This build registers three decoders and only
-   three (CONFIG_AUDIO_DECODER_MP3/FLAC/PCM_SUPPORT; CONCEPT §10а fixes the set), so that
-   list is a promise it cannot keep, and a broken one in the worst way: a control point that
-   believes it sends AAC, the stream opens, the decoder refuses, and the device sits there
-   silent with every log line looking healthy.
+   then names WMA, AC3, Vorbis, Speex and MP4. This build registers a fixed set of decoders
+   (CONCEPT «Прибиті залежності»), so that list is a promise it cannot keep, and a broken one in the worst way: a control
+   point that believes it sends AAC, the stream opens, the decoder refuses, and the device sits
+   there silent with every log line looking healthy.
    A renderer's sink list is also how Music Assistant decides what to transcode — tell it the
    truth and it converts on the server, where there is a CPU to do it with. The playlist types
    stay: modules/radio resolves .m3u and .pls itself. */

@@ -14,6 +14,7 @@
   import { go } from '../stores/router.js';
   import { apiPost } from '../lib/api.js';
   import { toastError } from '../stores/toast.js';
+  import { badge } from '../lib/numbers.js';
   import Icon from '../m3/Icon.svelte';
 
   // The panel's order (screen_src.cpp CARDS). The media servers ride the radio's stream, so they
@@ -61,7 +62,7 @@
       case 'usb': {
         // what the computer sends once it sends; otherwise whether there is one
         const on = ['ready', 'playing'].includes(s['usb_audio.state']);
-        return (isActive(c, np) && np.subtitle) || (on ? $t['srcsub.usb_on'] : $t['srcsub.usb_wait']);
+        return (isActive(c, np) && badge(np.subtitle, $t, lang)) || (on ? $t['srcsub.usb_on'] : $t['srcsub.usb_wait']);
       }
       default:
         return '';

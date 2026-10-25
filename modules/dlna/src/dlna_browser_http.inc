@@ -1,5 +1,5 @@
-// GET /api/dlna/browser — the local browser's snapshot, for the web's DLNA page (PLAN_WEBUI §2,
-// A7) and tools/dlna_acceptance.py. Commands use the ordinary SharedState mailbox
+// GET /api/dlna/browser — the local browser's snapshot, for the web's DLNA page
+// and tools/dlna_acceptance.py. Commands use the ordinary SharedState mailbox
 // (dlna.browse_cmd), exactly as the panel does, including revision validation.
 //
 // Behind the web's login: it lists what is on the household's media servers. The snapshot and

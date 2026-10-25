@@ -59,4 +59,8 @@
     flex: none;
   }
   .on { background: var(--secondary-container); color: var(--on-secondary-container); }
+  /* a phone: the five of Станції in one row in every language (Suche, Szukaj went off its edge) */
+  @media (max-width: 420px) {
+    .tab { padding: 0 10px; font-size: 14px; }
+  }
 </style>

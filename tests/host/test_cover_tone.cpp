@@ -1,7 +1,7 @@
 /**
  * @file test_cover_tone.cpp
  * @brief HOST tests for the colour of a cover tile and the Player's background made from it
- *        (components/cover, cover_tone and cover_backdrop; docs/PLAN_SOUND_UX_2026-10-14.md, S5):
+ *        (components/cover, cover_tone and cover_backdrop):
  *        black bars and black grounds are not a colour, a vivid subject beats a white ground, the
  *        larger of two colours wins, an all-black picture has no colour at all; the background
  *        keeps the hue, has one lightness for every picture and is never vivid.

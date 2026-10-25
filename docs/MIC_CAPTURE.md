@@ -1,98 +1,114 @@
-# Onboard microphone click diagnostics
+# Запис бортового мікрофона (діагностика клацань)
 
-> Since 03.10.2026 the same codec and port also serve the port meter (`audio.port_meas`,
-> docs/DSP_V2_DESIGN_2026-09-30.md §12.4) through `components/mic_capture/src/mic_input.cpp`,
-> which is always built and opens the microphone only for the length of a measurement. It reuses
-> the init sequence verified here (ES8311 path only). Do not arm this bench capture while a port
-> measurement runs: both drive I2S2 and the ES8311.
+Стендова функція: записує те, що чує мікрофон панелі, навколо старту відтворення — щоб почути й
+побачити клацання на перемиканні треку. Вона не міряє електричний вихід ЦАП і не доводить апаратну
+причину. Панель ставити біля зовнішньої колонки; бортовий динамік вимкнений.
 
-This bench feature captures what the panel's microphone hears. It does not measure
-the DAC's electrical output or prove a hardware cause. Put the panel near the actual
-external loudspeaker. The onboard speaker stays disabled. The earlier constant-output
-experiment is inconclusive: the user did not hear it before the crash.
+Той самий кодек і порт використовує вимірювання порту (`audio.port_meas`, [AUDIO.md](AUDIO.md), «Калібрування колонок: частота порту») через
+`components/mic_capture/src/mic_input.cpp`: він збирається завжди і відкриває мікрофон лише на час
+вимірювання. Обидва керують I2S2 і ES8311, і ніщо в прошивці не заважає їм зробити це одночасно —
+не взводити запис, поки йде вимірювання порту, і навпаки.
 
-## Build and wiring
+## Збірка
 
-Enable with `idf.py -DMODESP_MIC_CAPTURE=ON -DMODESP_AUDIO_DIAGNOSTIC_CONSTANT=OFF build`.
-The default is OFF; CMake caches an explicit ON until changed back. Normal playback
-is preserved. When enabled, a diagnostic task waits for USB commands; recording is
-not automatically started at boot. NVS and board.json need no changes.
+```
+idf.py -DMODESP_MIC_CAPTURE=ON -DMODESP_AUDIO_DIAGNOSTIC_CONSTANT=OFF build
+```
 
-Verified against the supplied Guition schematic and ESP-IDF5.5.5 P4 headers:
+Типово `MODESP_MIC_CAPTURE` вимкнено; CMake кешує явне `ON`, доки його не повернуть в `OFF`.
+`MODESP_AUDIO_DIAGNOSTIC_CONSTANT=OFF` скидає закешований діагностичний режим аудіоядра, у якому ЦАП
+отримує лише keepalive замість програми. Звичайне відтворення лишається. З увімкненою опцією задача
+`mic_capture` (ядро 0) чекає команд з USB-консолі; запис сам на старті не починається. NVS і
+`board.json` не змінюються.
 
-| Function | Connection |
+## Підключення
+
+| Функція | З'єднання |
 |---|---|
-| Analog microphone | ADC_MIC1_P / ADC_MIC1_N, ES8311 ADC (user confirmed codec) |
-| ADC SDOUT | GPIO48 (schematic net is misleadingly named ES7210_SDOUT) |
-| Codec MCLK / BCLK / LRCK | GPIO13 / GPIO12 / GPIO10 |
-| Shared HAL I2C0 SDA / SCL | GPIO7 / GPIO8 |
-| I2S allocation | 0 external DAC/ADC, 1 Bluetooth, 2 microphone |
+| Мікрофон | аналоговий, ADC_MIC1_P / ADC_MIC1_N → АЦП ES8311 |
+| SDOUT АЦП | GPIO48 (мережа на схемі називається `ES7210_SDOUT`; кодек — ES8311) |
+| MCLK / BCLK / LRCK кодека | GPIO13 / GPIO12 / GPIO10 |
+| I2C керування | спільна шина HAL `i2c_0`: SDA GPIO7, SCL GPIO8 |
+| I2S | I2S0 (`port_main`) і I2S1 (`port_bt`) належать аудіоядру ([AUDIO.md](AUDIO.md), «I2S-порти»); мікрофон — I2S2 |
 
-I2S2 is master RX, Philips stereo16 at nominal48kHz; only MIC1's left slot is
-retained. The codec is slave, MCLK256x. Explicit XTAL source avoids taking an APLL
-reference and leaves output rate switching available. PLL160 is unavailable on
-this board's silicon rev1.3. Fractional XTAL division gives the nominal average
-rate, not jitter-free clocks or calibration accuracy.
+I2S2 — майстер на прийом, Philips stereo 16 біт, номінально 48 кГц; лишається тільки лівий слот (MIC1).
+Кодек — раб, MCLK = 256 × fs. Джерело тактів — XTAL з дробовим дільником: на P4 v1.3 немає PLL160
+для I2S, а APLL лишається вільним для виходу, який перелаштовує частоту за джерелом. Дробовий дільник
+дає номінальну середню частоту, не чисті такти й не калібрувальну точність.
 
-The driver is pinned to Espressif esp_codec_dev1.4.0, the series used by the local
-IDF ES7210 example. Its source is C, with no P4v3-only binary dependency. The initial
-assumption of ES7210 from the net name was wrong: no ACK at0x40..43, and the user
-confirmed ES8311. The driver checks ES8311 at its documented0x18/19 addresses and
-requires read-only chip identity FD=0x83/FE=0x11 before configuration, as specified
-in the [Everest ES8311 datasheet, revision10](https://files.waveshare.com/wiki/common/ES8311.DS.pdf).
-Only ADC mode is enabled; no DAC reference is inserted into capture. The onboard
-NS4150 PA_CTRL11 is held low, and external amplifier GPIO34 remains owned by audio.
-The code also retains ES7210 support for a uniquely responding0x40..43 device;
-that path uses ACK detection, not chip-ID verification, and is unverified here.
-The full board codec/strap sheet has not been supplied. Hardware capture validates
-the microphone routing and serial framing. Gain is applied AFTER enable because
-ES7210 driver1.4.0 rewrites it during enable. Default gain18dB; commands accept0..30
-in3dB steps, rounded down to6dB steps for ES8311. Exported metadata records applied
-gain and codec. No software AGC, AEC or denoising; official driver filtering remains.
+## Кодек
 
-## Recording and download
+Драйвер — `espressif/esp_codec_dev` 1.4.0 (C, без бінарних залежностей під P4 v3). Виявлення:
 
-Use the project's ESP-IDF Python (pyserial installed). Close other COM12 readers.
-The tool opens with DTR and RTS disabled; it does not intentionally reboot the panel.
+1. Проба адрес ES7210 0x40..0x43. Якщо рівно одна відповідає — ES7210 (лише за ACK, без
+   перевірки ідентифікатора). На цій платі там ніхто не відповідає.
+2. Інакше ES8311 на 0x18 / 0x19: до будь-якого запису має прочитатися ідентифікатор
+   FD = 0x83, FE = 0x11 ([Everest ES8311 datasheet, rev. 10](https://files.waveshare.com/wiki/common/ES8311.DS.pdf)).
+3. Не рівно один кодек — запис відмовляється (`expected one supported microphone codec, found N`).
 
-```text
+Увімкнено лише АЦП, опорного сигналу ЦАП у записі немає. Перед роботою GPIO11 (PA_CTRL бортового
+NS4150) ставиться в LOW; GPIO34 (зовнішній підсилювач) належить аудіоядру і тут не чіпається.
+
+Підсилення — за замовчуванням 18 дБ, команди приймають 0..30 кроком 3; на ES8311 округлюється вниз до
+кроку 6 дБ. Застосовується **після** `enable`, бо драйвер 1.4.0 переписує підсилення під час
+`enable`. Нове значення діє з наступного запису. Програмних AGC, AEC і шумозаглушення немає;
+фільтрація драйвера лишається.
+
+## Запис і завантаження
+
+Потрібен Python IDF (у ньому є pyserial). Порт не має бути відкритий іншою програмою.
+
+```
 python tools/mic_capture.py status
 python tools/mic_capture.py capture --output build/mic-switch-01
 ```
 
-After `ARMED`, select another SD or DLNA track. The audio gate start freezes up to
-0.5s of rolling history and records1.5s afterwards, then shuts down the microphone
-codec and I2S2. The WAV is downloaded only after acquisition has stopped. There is
-no SD write or network transfer during capture. One192000-byte PSRAM buffer is
-allocated lazily and retained for reuse; I2S DMA and task stack use internal memory.
-One second of microphone startup is discarded. A45s session timeout, RX queue
-overflow, short read or read error invalidates the capture; missing samples must
-not be interpreted as an acoustic transient.
+`--port` — типово `COM12`; на Linux — `/dev/serial/by-id/usb-Espressif_USB_JTAG_serial_debug_unit_*-if00`.
+Інструмент виставляє DTR і RTS у False до відкриття порту; на Windows панель при цьому не
+перезавантажується. На Linux драйвер `cdc_acm` піднімає обидві лінії під час відкриття, а pyserial
+потім знімає DTR раніше за RTS — це імпульс скидання USB-Serial/JTAG, тож відкриття порту скидає P4.
 
-The USB transport carries numbered hex chunks and whole-file FNV-1a checksum.
-The tool accepts a WAV only after verifying order, length and checksum, and saves
-`.wav`, `.json` metadata and `.uart.log`. Use a new output basename per measurement.
-If a download fails, `dump` retries the still-frozen capture without recording again.
+Послідовність `capture`:
 
-```text
+1. `mic arm`: буфер 192000 байт у PSRAM (2 с моно 16 біт, виділяється при першому записі й
+   лишається), ініціалізація кодека й I2S2, 1 с прогріву відкидається, далі `ARMED`.
+2. Після `ARMED` — увімкнути інший трек. Мітку ставить аудіоядро, коли відкривається гейт джерела
+   з кільця (файл з SD, радіо/DLNA, AirPlay, USB). Запис зберігає до 0,5 с до мітки й 1,5 с після,
+   потім вимикає кодек і I2S2.
+3. Інструмент сам просить `mic dump`. WAV передається лише після зупинки запису: під час запису
+   немає ні запису на SD, ні мережевої передачі.
+
+Запис недійсний, якщо минуло 45 с від взводу, переповнилася черга I2S RX, читання коротке або з
+помилкою (`capture invalid: …`): пропущені семпли не можна читати як акустичний перехідний процес.
+DMA I2S і стек задачі — у внутрішній пам'яті.
+
+Передача — пронумеровані hex-рядки `@MIC_DATA` і FNV-1a по всьому файлу (`@MIC_END fnv1a=…`).
+Інструмент приймає WAV лише після перевірки порядку, довжини й контрольної суми і зберігає `.wav`,
+`.json` (метадані) і `.uart.log`; наявний `.wav` не перезаписує — нове ім'я на кожне вимірювання.
+Якщо завантаження не вдалося, `dump` повторює його із ще замороженого запису.
+
+```
 python tools/mic_capture.py capture --trigger-after 3 --output build/mic-ambient-01
 python tools/mic_capture.py dump --output build/mic-retry-01
 python tools/mic_capture.py gain --gain 12
 python tools/mic_capture.py cancel
 ```
 
-`--trigger-after` requests a manual marker after arming, useful for ambient sound or
-a gentle clap. A playback start can trigger earlier. Check reported peak and clipped
-sample count before comparing recordings. Do not tap the PCB to establish acoustic
-response: that introduces mechanical coupling not present in speaker playback.
+`--trigger-after N` (0,5…35 с після `ARMED`) ставить мітку вручну — для фонового звуку або тихого
+плеску; старт відтворення може поставити її раніше. Перед порівнянням записів дивитися `peak` і
+кількість обрізаних семплів у рядку `READY: peak=… clipped=…`. Не стукати по платі: це механічний
+зв'язок, якого немає при відтворенні через колонку. Невдалий `capture` надсилає `mic cancel`.
 
-Direct USB commands are `mic arm`, `mic status`, `mic trigger`, `mic dump`,
-`mic cancel`, `mic gain N`. The console is physical USB only; no unauthenticated
-HTTP microphone route is introduced. Gain changes apply to the next capture.
+Команди USB-консолі напряму: `mic arm`, `mic status`, `mic trigger`, `mic dump`, `mic cancel`,
+`mic gain N`. Консоль — лише фізичний USB; HTTP-маршруту до цього запису немає.
 
-`pre` is the WAV sample index of the trigger boundary. `marker_ms` is firmware
-uptime at the audio/manual marker; `armed_ms` is arming time, NOT WAV sample-zero
-time. The boundary is the next10ms microphone DMA completion, not sample-exact DAC
-alignment. Acoustic propagation and speaker/microphone filtering add further delay.
-This diagnostic adds load and must be compared with unarmed playback. Soak testing
-remains on hold at the user's request.
+## Метадані
+
+- `pre` — індекс семпла WAV на межі мітки.
+- `marker_ms` — uptime прошивки в момент мітки; `armed_ms` — момент взводу, **не** нульовий семпл WAV.
+- Межа — завершення наступного 10-мс блоку DMA мікрофона, не семпл-точне вирівнювання з ЦАП;
+  поширення звуку й фільтрація колонки та мікрофона додають затримку
+  (`trigger_alignment` у `.json`).
+- `gain` — застосоване підсилення, `codec` — виявлений кодек.
+
+Запис додає навантаження; порівнювати з відтворенням без взведеного запису.

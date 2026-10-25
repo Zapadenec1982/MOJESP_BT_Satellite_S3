@@ -2,7 +2,7 @@
 //
 // Included into radio_module.cpp's anonymous namespace (as dlna_module.cpp includes its
 // .inc files): it needs the task state `s`, save_stations() and cat_ask(), and nothing
-// outside this module needs it. docs/PLAN_WEBUI_2026-10-11.md §6, A2.
+// outside this module needs it.
 //
 // Who writes what. The list belongs to this module and is changed on the main task —
 // add_station(), the screen's preset store, and now an edit from the web. The handlers below

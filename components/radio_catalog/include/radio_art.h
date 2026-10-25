@@ -1,7 +1,6 @@
 /**
  * @file radio_art.h
- * @brief A cover for what a station is playing, found by its ICY title (stage 20г,
- *        docs/PLAN_RADIO_V2_2026-10-04.md §8).
+ * @brief A cover for what a station is playing, found by its ICY title (stage 20г).
  *
  * Stations send no artwork: the stream carries "StreamTitle='Artist - Title'" and nothing
  * else. Deezer's search answers over plain HTTP and serves its JPEGs over HTTP too, so a

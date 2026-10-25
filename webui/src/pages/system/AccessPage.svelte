@@ -1,5 +1,5 @@
 <script>
-  // Access (PLAN_WEBUI §2, System › Device): who may change the panel from a browser — GET /api/auth
+  // Access: who may change the panel from a browser — GET /api/auth
   // (public: on or off, and the user name) and POST /api/auth (behind the login). The rules are the
   // handler's (http_service.cpp, handle_post_auth): a new password needs the current one and at
   // least 4 characters; the name and the switch need only the login itself. The panel keeps a name

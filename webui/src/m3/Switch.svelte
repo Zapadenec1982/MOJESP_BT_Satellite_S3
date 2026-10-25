@@ -1,6 +1,6 @@
 <script>
   // M3 switch, 52×32: a 16 px knob off, a 24 px knob with a check on — the size the panel's
-  // switch means to have (its LVGL rendering is off, see PLAN_WEBUI §0, defect 9).
+  // switch means to have (its LVGL rendering is off).
   import { createEventDispatcher } from 'svelte';
   import Icon from './Icon.svelte';
 

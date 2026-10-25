@@ -3,7 +3,7 @@
  * @brief The station catalog: Топ · Країни · Жанри · Пошук beside Улюблені, the station list's
  *        own tab.
  *
- * Stages 20б and 20в (docs/PLAN_RADIO_V2_2026-10-04.md §4, "Екран"). The tabs are one page to
+ * Stages 20б and 20в. The tabs are one page to
  * the reader: Улюблені is the station list with its presets (screen_radio.cpp), the others are
  * this page, and the same row of tabs heads both. Топ is Ukraine's most played; Країни and Жанри
  * are lists that lead to stations, and Пошук is a line and a keyboard (ui_search_kb.h) that lead

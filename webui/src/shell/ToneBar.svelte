@@ -22,8 +22,8 @@
   $: db = (tone.db10 / 10).toLocaleString($language, { minimumFractionDigits: 1, maximumFractionDigits: 1 }).replace('-', '−');
   $: ch = tone.ch === LEFT ? $t['cal.ch_left'] : tone.ch === RIGHT ? $t['cal.ch_right'] : $t['cal.ch_both'];
   $: what = cal
-    ? [`${tone.hz} Hz`, `${db} dBFS`, ch].join(' · ')
-    : [`${tone.hz} Hz`, $t['cal.tone_chain']].join(' · ');
+    ? [`${tone.hz} ${$t['unit.hz']}`, `${db} ${$t['unit.dbfs']}`, ch].join(' · ')
+    : [`${tone.hz} ${$t['unit.hz']}`, $t['cal.tone_chain']].join(' · ');
   $: until = !cal ? '' : $calClock.exact ? fmt($t['cal.tone_left'], { s: left }) : fmt($t['cal.tone_max'], { s: CAL_MAX_S });
 
   async function stop() {

@@ -1,5 +1,5 @@
 <script>
-  // Service (PLAN_WEBUI §2, stage W5): the panel's service page (screen_svc.cpp) — three figures
+  // Service: the panel's service page (screen_svc.cpp) — three figures
   // and the groups under them, each number in the colour the panel's own thresholds give it
   // (lib/service.js, held to service_readout.h by a host test) — then calibration and the tools.
   // The figures are read every 2 s while the page is open: they reach no WebSocket delta.
@@ -103,11 +103,11 @@
   <div class="col">
     <Group caps caption={$t['svc.audio']}>
       <Reading label={$t['svc.underruns']} value={under} grade={svc.counter(under)} />
-      <Reading label={$t['svc.limiter']} value={`${svc.gainReduction(lim, sep)} dB`} grade={svc.limiter(lim)} />
-      <Reading label={$t['svc.bass_lim']} value={`${bassGr > 0.05 ? '−' : ''}${one(bassGr)} dB`} grade={svc.bassGr(bassGr)} />
+      <Reading label={$t['svc.limiter']} value={`${svc.gainReduction(lim, sep)} ${$t['unit.db']}`} grade={svc.limiter(lim)} />
+      <Reading label={$t['svc.bass_lim']} value={`${bassGr > 0.05 ? '−' : ''}${one(bassGr)} ${$t['unit.db']}`} grade={svc.bassGr(bassGr)} />
       <Reading label="DSP" value={`${one(f('audio.dsp_pct'))} %`} grade={svc.dspPct(f('audio.dsp_pct'))} />
       <Reading label={$t['svc.dsp_peak']} value={`${one(f('audio.dsp_max_pct'))} %`} grade={svc.dspMaxPct(f('audio.dsp_max_pct'))} />
-      <Reading label={$t['svc.eq_headroom']} value={`${one(f('audio.eq_headroom_db'))} dB`} />
+      <Reading label={$t['svc.eq_headroom']} value={`${one(f('audio.eq_headroom_db'))} ${$t['unit.db']}`} />
       <Reading label={$t['svc.clamps']} value={clamps} grade={svc.counter(clamps)} />
       <Reading label={$t['svc.faults']} value={faults} grade={svc.counter(faults)} />
     </Group>
@@ -136,7 +136,7 @@
                grade={!link && seen ? svc.WARN : svc.OK} />
       <Reading label={$t['svc.peer']} value={phone ? $t['svc.peer_on'] : $t['svc.none']} />
       <Reading label="RTT" value={link ? `${n('bt.rtt_ms')} ${$t['unit.ms']}` : '—'} grade={link ? svc.rttMs(n('bt.rtt_ms')) : svc.OK} />
-      <Reading label="UART ovf" value={n('bt.uart_ovf')} grade={svc.softCounter(n('bt.uart_ovf'))} />
+      <Reading label={$t['svc.uart_ovf']} value={n('bt.uart_ovf')} grade={svc.softCounter(n('bt.uart_ovf'))} />
       <Reading label={$t['svc.drops']} value={n('bt.rx_drops')} grade={svc.softCounter(n('bt.rx_drops'))} />
       <Reading label={$t['svc.gaps']} value={n('bt.seq_gaps')} grade={svc.softCounter(n('bt.seq_gaps'))} />
     </Group>

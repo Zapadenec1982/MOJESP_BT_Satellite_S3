@@ -1,5 +1,5 @@
 <script>
-  // Two languages (docs/PLAN_PANEL_LANG_2026-10-12.md §4, U8.6). The panel's, ui.lang: its screen
+  // Two languages. The panel's, ui.lang: its screen
   // speaks it, and so does every browser that has not picked one of its own. And this browser's:
   // "as the panel", or a language that stays here and changes nothing on the panel.
   import { onDestroy } from 'svelte';

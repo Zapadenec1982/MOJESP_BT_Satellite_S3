@@ -1,5 +1,5 @@
 <script>
-  // The speakers' port (PLAN_WEBUI §2, Service; docs/DSP_V2_CALIBRATION.md): found step by step —
+  // The speakers' port (docs/AUDIO.md «Калібрування колонок: частота порту»): found step by step —
   // by the panel's microphone or by hand — each step a line of text and a button that sets the tone
   // that step needs; the page's title says what it is for, Колонки what was found. No tone
   // controls outside the steps; the settings the port sets are Налаштування › Тонке налаштування
@@ -118,7 +118,7 @@
     <Step n="2" title={$t['cal.s_find']}>
       <svelte:fragment slot="text">{$t['cal.s_find_x']}</svelte:fragment>
       <div class="nudge">
-        <NumField caption={$t['cal.freq']} text={`${w.hz} Hz`} raw={w.hz}
+        <NumField caption={$t['cal.freq']} text={`${w.hz} ${$t['unit.hz']}`} raw={w.hz}
                   decLabel={$t['cal.lower']} incLabel={$t['cal.higher']}
                   on:dec={() => portHz(w.hz - 1)} on:inc={() => portHz(w.hz + 1)} on:set={(e) => portHz(e.detail)} />
       </div>

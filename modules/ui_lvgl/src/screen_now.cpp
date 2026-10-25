@@ -11,8 +11,7 @@
  *
  * Over the block, where the sound comes from — «BLUETOOTH» and the phone's name — and «Звук»,
  * the sheet with the sounds, Бас, Високі and the loudness; the codec beside the artist; and
- * behind it all the cover's colour, fading into the surface (docs/PLAN_SOUND_UX_2026-10-14.md,
- * S5, appendix A).
+ * behind it all the cover's colour, fading into the surface.
  *
  * The list button leads to the list of the source that is playing — the card's library, the
  * radio's stations, the DLNA browser — each a page of its own whose ← comes back here. A list
@@ -25,13 +24,13 @@
  * Bluetooth with no phone is not a dead end: the line under «Телефон не підключено» says what a
  * phone will find — «видно як «MODEsp»» — or that new phones do not see the panel, and then the
  * transport, which has nobody to command, gives way to the one thing the panel can do about it:
- * «Увімкнути видимість» (docs/UX_RESEARCH_2026-10-18.md: an action, not a state; the customer,
+ * «Увімкнути видимість» (an action, not a state; the customer,
  * 20.10.2026). The satellite cannot be asked to call a phone (LINK_PROTOCOL.md), so there is no
  * «connect».
  *
  * The knob's press is this page's play button, from any page (ui_now_play_pause): the knob has
- * one job everywhere — a turn is the volume, a press plays and pauses (customer, 18.10.2026,
- * docs/UX_RESEARCH_2026-10-18.md). For a day it rang this page's buttons in turn instead: a mode.
+ * one job everywhere — a turn is the volume, a press plays and pauses (customer, 18.10.2026).
+ * For a day it rang this page's buttons in turn instead: a mode.
  */
 
 #include "ui_common.h"
@@ -139,7 +138,7 @@ struct Now {
     // change detection
     char  title_txt[128]  = "";
     char  sub_txt[210]    = "";
-    char  fmt_txt[40]     = "";
+    char  fmt_txt[48]     = "";
     char  src_txt[24]     = "";
     char  dev_txt[32]     = "";
     char  pos_txt[12]     = "";
@@ -468,18 +467,32 @@ void place_meta() {
     if (badge) lv_obj_set_x(n.badge, n.sub_txt[0] ? w + 12 : 0);
 }
 
+/// The title, over the line under it: a title of one line sits on that line instead of leaving
+/// an empty line between them — the room goes above it, under the source's row.
+void set_title(const char* txt) {
+    if (!txt) txt = "";
+    if (strncmp(n.title_txt, txt, sizeof(n.title_txt) - 1) == 0) return;
+    uih::set_text(n.title, n.title_txt, sizeof(n.title_txt), txt);
+    const lv_font_t* f = m3::theme().t.headline;
+    const int32_t lh = lv_font_get_line_height(f);
+    lv_point_t sz;
+    lv_text_get_size(&sz, n.title_txt, f, 0, 0, COL_W, LV_TEXT_FLAG_NONE);
+    const bool one = sz.y <= lh;
+    lv_obj_set_y(n.title, one ? TITLE_Y + lh : TITLE_Y);
+    lv_obj_set_height(n.title, one ? lh : 2 * lh);
+}
+
 void set_sub(const char* txt) {
     if (strncmp(n.sub_txt, txt, sizeof(n.sub_txt) - 1) == 0) return;
     uih::set_text(n.sub, n.sub_txt, sizeof(n.sub_txt), txt);
     place_meta();
 }
 
-/// The codec badge: the text when there is one, nothing when there is not. Compacted first —
-/// the channel count is the norm and costs the room the artist needs.
+/// The codec badge: the text when there is one, nothing when there is not — in the language's
+/// units, and without the channel count where it is the norm (i18n::badge).
 void set_fmt(const char* fmt) {
-    char txt[40];
-    snprintf(txt, sizeof(txt), "%s", fmt);
-    if (char* p = strstr(txt, " 2 ch")) memmove(p, p + 5, strlen(p + 5) + 1);
+    char txt[48];
+    i18n::badge(txt, sizeof(txt), fmt);
     if (strncmp(n.fmt_txt, txt, sizeof(n.fmt_txt) - 1) == 0) return;
     uih::set_text(n.badge, n.fmt_txt, sizeof(n.fmt_txt), txt);
     uih::show(n.badge, txt[0] != '\0');
@@ -653,7 +666,7 @@ void refresh(lv_obj_t*, UiCtx& c) {
                         : strcmp(s.radio_state, "buffering") == 0    ? tr(S::now_buffering)
                         : strcmp(s.radio_state, "reconnecting") == 0 ? tr(S::now_reconnecting)
                         : playing ? "" : tr(S::now_stopped);
-        uih::set_text(n.title, n.title_txt, sizeof(n.title_txt), title);
+        set_title(title);
         set_sub(sub);
         set_fmt(s.radio_fmt);
         // The buffer line: full and moving while the station plays, flat and still when not.
@@ -675,8 +688,7 @@ void refresh(lv_obj_t*, UiCtx& c) {
             const int cur = q.cursor();
             if (cur >= 0 && q.name_at(cur, cur_name, sizeof(cur_name))) title = cur_name;
         }
-        uih::set_text(n.title, n.title_txt, sizeof(n.title_txt),
-                      title[0] ? title
+        set_title(title[0] ? title
                       // A phone that has just connected sends an empty TRACK_META and fills
                       // it in about ten seconds later (LINK_PROTOCOL.md), so "—" would sit
                       // there looking like a fault during the one moment the user is
@@ -742,14 +754,14 @@ void refresh(lv_obj_t*, UiCtx& c) {
         // What is left has no track and no transport: the tone generator, the analogue input,
         // USB — the computer is its own remote — and the output switched off.
         const bool is_usb = s.source == 7;
-        uih::set_text(n.title, n.title_txt, sizeof(n.title_txt),
-                      s.source == 1 ? tr(S::now_tone)
+        set_title(s.source == 1 ? tr(S::now_tone)
                     : s.source == 2 ? tr(S::now_aux)
                     : is_usb ? tr(s.usb_connected ? S::now_usb : S::now_usb_waiting)
                     : tr(S::now_off));
         char sub[96];
         if (s.source == 1)      snprintf(sub, sizeof(sub), "%ld %s", (long)s.tone_hz, tr(S::unit_hz));
-        else if (is_usb)        snprintf(sub, sizeof(sub), "%s", s.play_fmt[0] ? s.play_fmt : tr(S::now_usb_pick));
+        else if (is_usb && s.play_fmt[0]) i18n::badge(sub, sizeof(sub), s.play_fmt);
+        else if (is_usb)        snprintf(sub, sizeof(sub), "%s", tr(S::now_usb_pick));
         else if (s.in_rate > 0) snprintf(sub, sizeof(sub), "%ld %s", (long)s.in_rate, tr(S::unit_hz));
         else                    snprintf(sub, sizeof(sub), "%s", tr(S::now_pick));
         set_sub(sub);

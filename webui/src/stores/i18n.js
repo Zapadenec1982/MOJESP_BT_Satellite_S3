@@ -3,9 +3,11 @@ import uk from '../i18n/uk.json';
 import { fmt, msg } from '../lib/msg.js';
 import { LANGS, known, panelCode, chosen, migratedPick } from '../lib/lang.js';
 import { state } from './state.js';
+import { setErrorWords } from './toast.js';
+import { humanError } from '../lib/errors.js';
 
 /*
- * Interface strings in four languages (docs/PLAN_WEBUI_2026-10-11.md §3а).
+ * Interface strings in four languages.
  *
  * The catalogs are webui/src/i18n/<lang>.json, flat keys, the same set in each —
  * tools/tests/test_webui_i18n.py holds them to that. Ukrainian is in the bundle and lies under
@@ -83,6 +85,11 @@ export function pickLanguage(lang) {
 
 /** Marks a catalog key used from code (the i18n test looks for K() around a literal). */
 export const K = (key) => key;
+
+// The toasts' words for a failure: the panel's answers and the browser's said in
+// the page's language, never `{"error":"busy"}` or «Failed to fetch» (lib/errors.js).
+K('err.busy'); K('err.too_large'); K('err.bad_request'); K('err.not_found'); K('err.server'); K('err.code');
+setErrorWords((raw) => humanError(raw, get(t), fmt));
 
 /**
  * A count in words: `${base}.one|few|many|other` by the language's plural rules (Ukrainian and

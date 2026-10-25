@@ -1,4 +1,4 @@
-"""«Кросовер» (docs/PLAN_SOUND_UX_2026-10-14.md, S8): webui/src/lib/xover.js in Node.
+"""«Кросовер»: webui/src/lib/xover.js in Node.
 
 A scheme is offered only once the firmware says it plays it (audio.out_caps, out_caps.h); a
 firmware that says nothing has stereo; the bits are the firmware's.

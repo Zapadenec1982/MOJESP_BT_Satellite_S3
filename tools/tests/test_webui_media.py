@@ -1,6 +1,6 @@
 """The web's library and DLNA browser speak the firmware's language: webui/src/lib/media.js
 against components/dlna_client (the browser's commands and their packing) and the panel's
-library page (how a path becomes a row). PLAN_WEBUI W6.
+library page (how a path becomes a row).
 
 A command the web packs differently from dlna_client::encode() is a tap that opens the wrong row,
 or none; a row named differently from the panel's is a list that disagrees with the glass.

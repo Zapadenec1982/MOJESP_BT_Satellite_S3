@@ -7,7 +7,7 @@
  * should not know what a power rail, a bus width or a mount config is, and the next board
  * that keeps its files somewhere else should need a second driver, not a second module.
  *
- * Two facts shape it, both from docs/CONCEPT.md 3a:
+ * Two facts shape it, both from docs/CONCEPT.md «microSD»:
  *
  *   - The pin assignment came from a reference design, not from a schematic, so a failure is
  *     reported WITH the pins that were tried.
@@ -92,7 +92,7 @@ bool SdmmcCardDriver::mount() {
     // The controller belongs to ESP-Hosted. Letting the FAT layer init it logs "already
     // initialized" and looks harmless, but its deinit on any failure would tear the C6 link
     // down with it — the esp_hosted changelog lists that as a fixed bug for a reason
-    // (docs/AUDIT_ESPRESSIF_2026-09-17.md: CHANGELOG 2.12.11). Taking Wi-Fi down with a card
+    // (CHANGELOG 2.12.11). Taking Wi-Fi down with a card
     // that failed to mount is the worst possible trade, so this stays even when it looks
     // like an omission.
     host.init   = &sdmmc_host_init_noop;

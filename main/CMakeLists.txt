@@ -6,7 +6,7 @@ get_filename_component(_modesp_root "${CMAKE_CURRENT_LIST_DIR}/.." ABSOLUTE)
 include("${_modesp_root}/generated/modules.cmake")   # PRODUCT_MODULES
 
 idf_component_register(
-    # userdata_http.cpp: GET/POST /api/userdata (PLAN_WEBUI A6) — here, because the HTTP
+    # userdata_http.cpp: GET/POST /api/userdata — here, because the HTTP
     # server depends on user_store and so user_store cannot depend on the server.
     SRCS "main.cpp" "userdata_http.cpp"
     INCLUDE_DIRS "${_modesp_root}/generated"

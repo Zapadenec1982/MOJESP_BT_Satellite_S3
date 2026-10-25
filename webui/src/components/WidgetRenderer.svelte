@@ -1,4 +1,7 @@
 <script>
+  // The long tail's widgets («Інші параметри», lib/longtail.js): the generic ones a module's new key
+  // may come with. The framework's own (Wi-Fi, time, firmware, access, the AP) went 25.10.2026
+  // — their keys are the hand-written pages', so the tail never showed them.
   import ValueWidget from './widgets/ValueWidget.svelte';
   import SliderWidget from './widgets/SliderWidget.svelte';
   import NumberInput from './widgets/NumberInput.svelte';
@@ -8,17 +11,8 @@
   import TextInput from './widgets/TextInput.svelte';
   import PasswordInput from './widgets/PasswordInput.svelte';
   import ButtonWidget from './widgets/ButtonWidget.svelte';
-  import FirmwareUpload from './widgets/FirmwareUpload.svelte';
-  import WifiSave from './widgets/WifiSave.svelte';
   import MqttSave from './widgets/MqttSave.svelte';
-  import TimeSave from './widgets/TimeSave.svelte';
-  import DatetimeInput from './widgets/DatetimeInput.svelte';
   import SelectWidget from './widgets/SelectWidget.svelte';
-  import WifiScan from './widgets/WifiScan.svelte';
-  import ApSave from './widgets/ApSave.svelte';
-  import TimezoneSelect from './widgets/TimezoneSelect.svelte';
-  import AuthSave from './widgets/AuthSave.svelte';
-  import ActionsGrid from './widgets/ActionsGrid.svelte';
 
   export let widget;
   export let value;
@@ -33,17 +27,8 @@
     text_input: TextInput,
     password_input: PasswordInput,
     button: ButtonWidget,
-    firmware_upload: FirmwareUpload,
-    wifi_save: WifiSave,
     mqtt_save: MqttSave,
-    time_save: TimeSave,
-    datetime_input: DatetimeInput,
-    select: SelectWidget,
-    wifi_scan: WifiScan,
-    ap_save: ApSave,
-    timezone_select: TimezoneSelect,
-    auth_save: AuthSave,
-    actions_grid: ActionsGrid
+    select: SelectWidget
   };
 
   $: component = widgetMap[widget.widget] || ValueWidget;

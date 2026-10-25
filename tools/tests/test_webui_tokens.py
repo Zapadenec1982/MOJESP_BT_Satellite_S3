@@ -1,5 +1,5 @@
 """The web UI's colours are the panel's: m3_schemes.css is generated from ui_m3.cpp and must
-not fall behind it (docs/PLAN_WEBUI_2026-10-11.md §3)."""
+not fall behind it."""
 
 import re
 import sys

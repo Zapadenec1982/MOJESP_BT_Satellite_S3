@@ -1,4 +1,4 @@
-"""The web's Service page against the panel's (docs/PLAN_WEBUI_2026-10-11.md §2, Service).
+"""The web's Service page against the panel's.
 
 The thresholds in modules/ui_lvgl/include/service_readout.h are the soak's pass/fail criteria;
 the web shows the same numbers and must colour them the same. webui/src/lib/service.js is a port,
@@ -153,7 +153,7 @@ console.log(JSON.stringify(out));
         assert len(panel[key]) == len(web[key]) and not diff, f"{key}: panel vs web differ at {diff[:5]}"
 
 
-# ── calibration (docs/DSP_V2_CALIBRATION.md) ──
+# ── calibration (docs/AUDIO.md «Тест-тон», «Калібрування колонок: частота порту») ──
 
 def test_the_tone_keys_match_the_firmware():
     """The test tone as lib/calib.js names it: the manifest's defaults and the firmware's timeout.

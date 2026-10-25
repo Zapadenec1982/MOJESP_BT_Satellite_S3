@@ -34,7 +34,7 @@ struct Bond {
 };
 
 /// Who answered a pairing request. The question shows on the panel and in every open web tab
-/// at once (docs/PLAN_WEBUI_2026-10-11.md, decision 6); the first answer is the one sent.
+/// at once; the first answer is the one sent.
 enum class Source : uint8_t { NONE = 0, PANEL = 1, WEB = 2 };
 
 /// A pairing in progress, or the answer to the last one.

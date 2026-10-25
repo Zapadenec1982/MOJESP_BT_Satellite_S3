@@ -3,7 +3,7 @@
  * @brief Налаштування → Екран: the screen's brightness, the standby face's brightness while music
  *        plays, auto-standby and the colour scheme.
  *
- * Налаштування's «Екран» group until S1 (docs/PLAN_SOUND_UX_2026-10-14.md, 14.10.2026), when the
+ * Налаштування's «Екран» group until S1 (14.10.2026), when the
  * first column went to Звук and these four rows became a page of their own, touched as they were.
  * The rows are the full column's width now, so the two sliders are longer than they were.
  */

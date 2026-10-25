@@ -1,5 +1,5 @@
 <script>
-  // Time (PLAN_WEBUI §2, System › Device): the panel's clock — from the internet (NTP) or set
+  // Time: the panel's clock — from the internet (NTP) or set
   // by hand — and its time zone, over GET / POST /api/time.
   import { onMount } from 'svelte';
   import { t } from '../../stores/i18n.js';

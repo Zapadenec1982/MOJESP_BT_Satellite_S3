@@ -34,8 +34,8 @@ Sources of the preset curves:
     clear. Moderate on purpose, and checked by ear on the panel (2026-10-14).
   * "Рівно" is every band at 0 dB, so all ten are off (eq_build_preset).
 
-The order is the table's: the sounds offered first (docs/PLAN_SOUND_UX_2026-10-14.md, decision
-4; «Власний» before them is the user's own set, not a curve), then the presets offered until
+The order is the table's: the sounds offered first
+(«Власний» before them is the user's own set, not a curve), then the presets offered until
 then, kept so that a set saved as one of them still plays under its name.
 
   python tools/eq/fit_presets.py --eval               # how Q and the penalty trade off
@@ -72,7 +72,7 @@ SOUNDS = [
     ("hiphop", "Хіп-хоп",        list(OCT_F), [5, 4.5, 3, 1, -0.5, 0, 0.5, 1, 1.5, 2]),
 ]
 # Offered until 2026-10-14 and not since: kept, so that a set saved as one of them still plays
-# under its name (docs/PLAN_SOUND_UX_2026-10-14.md, S2).
+# under its name.
 KEPT = [
     ("loudness", "Тонкомпенсація", list(OCT_F), [4, 4, 4, 0, 0, 0, 0, 0, 0, 2]),
     ("night", "Ніч",            list(OCT_F), [-6, -6, -6, 0, 0, 0, 0, 0, -3, -3]),

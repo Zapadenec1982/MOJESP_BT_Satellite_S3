@@ -173,7 +173,7 @@ void describe(int c, const UiLvglModule::Snapshot& s, char* out, size_t n) {
         break;
     case USB:
         // What the computer sends, once it sends; otherwise whether there is one.
-        if (active && s.play_fmt[0]) snprintf(out, n, "%s", s.play_fmt);
+        if (active && s.play_fmt[0]) i18n::badge(out, n, s.play_fmt);
         else snprintf(out, n, "%s", tr(s.usb_connected ? S::srcsub_usb_on : S::srcsub_usb_wait));
         break;
     default: out[0] = '\0';

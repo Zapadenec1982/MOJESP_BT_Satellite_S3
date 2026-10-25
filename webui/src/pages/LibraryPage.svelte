@@ -5,7 +5,7 @@
 </script>
 
 <script>
-  // The card's library (W6, PLAN_WEBUI §2): every track on the card, as the panel's Library page
+  // The card's library: every track on the card, as the panel's Library page
   // lists them (screen_library.cpp) — the file name without its extension, its folder under it,
   // the track the queue is on marked. A filter narrows it by name or folder; a tap plays the
   // track (player.track + player.cmd=1, what the panel posts) and the Player opens, as on the glass.

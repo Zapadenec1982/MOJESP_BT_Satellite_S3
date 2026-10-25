@@ -1,4 +1,4 @@
-"""The web UI in four languages (docs/PLAN_WEBUI_2026-10-11.md §3а), and its icons.
+"""The web UI in four languages, and its icons.
 
 The previous dictionaries had drifted to 109 / 82 / 46 / 46 keys, and nine keys the sign-in
 form used were in none of them, so the page showed "undefined". These tests keep the four
@@ -71,7 +71,7 @@ def test_every_used_key_exists():
 
 
 def test_every_key_is_used():
-    # The panel reads the same catalogs (docs/PLAN_PANEL_LANG_2026-10-12.md): a key only the
+    # The panel reads the same catalogs: a key only the
     # glass uses is used.
     unused = sorted(set(catalogs()["uk"]) - used_keys() - gen_panel_strings.panel_keys())
     assert not unused, f"in the catalogs but nowhere in webui/src or the panel's code: {unused}"
@@ -91,7 +91,7 @@ def test_icons_are_in_the_font():
     assert not missing, f"icons used but not in icon_names.json: {missing}"
 
 
-# ── the firmware's messages (docs/PLAN_PANEL_LANG_2026-10-12.md, U8.5) ──
+# ── the firmware's messages ──
 
 def _node(script):
     exe = shutil.which("node")
@@ -124,7 +124,7 @@ console.log(JSON.stringify([
                    "@Moja muzyka", "@dlna", "Медіасервери", "XY {a}", "", ""]
 
 
-# ── which language the web speaks (docs/PLAN_PANEL_LANG_2026-10-12.md §4, U8.6) ──
+# ── which language the web speaks ──
 
 def test_the_web_follows_the_panel_unless_this_browser_picked():
     lib = (SRC / "lib" / "lang.js").as_uri()

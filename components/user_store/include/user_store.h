@@ -110,7 +110,7 @@ public:
     /// from a LATER schema is returned as written; begin() treats it as "leave this alone".
     static int marker_version(const char* dir);
 
-    /// A file restored from a backup (POST /api/userdata, PLAN_WEBUI A6) is not written over
+    /// A file restored from a backup (POST /api/userdata) is not written over
     /// the one in use: the module that owns it holds its own copy in memory and would write
     /// that back. It is put beside it as `<name>.restore`, the device restarts, and begin()
     /// puts it in place before any module has read anything.

@@ -4,7 +4,6 @@
  *
  * Pure — no HTTP, no filesystem — so what the web is sent and what it may send are settled by
  * the host tests (tests/host/test_eq_store.cpp), and modules/audio only moves bytes.
- * docs/PLAN_WEBUI_2026-10-11.md §6, A3.
  *
  * GET:  {"rev":N,"fs":48000,"preset":"rock","presets":["custom",…],
  *        "bands":[{"type":"peak","f":1000,"gain":0,"q":1,"on":true},…]}

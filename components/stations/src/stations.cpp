@@ -229,7 +229,7 @@ size_t serialize(const StationList& list, char* out, size_t out_sz) {
 void defaults(StationList& out) {
     out = StationList{};
     // Long-lived public streams, plain HTTP where the station offers it — one TLS session
-    // held open for hours is the expensive part of a network radio (CONCEPT §8), and these
+    // held open for hours is the expensive part of a network radio (CONCEPT «Мережа»), and these
     // do not need one.
     out.add("SomaFM Groove Salad", "http://ice1.somafm.com/groovesalad-128-mp3");
     out.add("SomaFM Drone Zone",   "http://ice1.somafm.com/dronezone-128-mp3");

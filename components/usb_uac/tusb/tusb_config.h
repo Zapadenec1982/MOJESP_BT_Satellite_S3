@@ -24,7 +24,8 @@ extern "C" {
 
 // Slave mode (the default): the core copies packets out of the controller's FIFO in the ISR,
 // straight into the audio FIFO (CFG_TUD_EDPT_DEDICATED_HWFIFO). No DMA, so no cache maintenance
-// and no DMA-capable buffers — internal DMA SRAM is the panel's scarcest resource (CONCEPT §8а).
+// and no DMA-capable buffers — internal DMA SRAM is the panel's scarcest resource
+// (CONCEPT «Обмеження плати»).
 #define CFG_TUSB_MEM_SECTION
 #define CFG_TUSB_MEM_ALIGN      __attribute__((aligned(4)))
 
@@ -36,8 +37,9 @@ extern "C" {
 #define CFG_TUD_AUDIO_ENABLE_EP_OUT         1
 #define CFG_TUD_AUDIO_ENABLE_FEEDBACK_EP    1
 
-/// The ceiling the audio path holds (96 kHz, docs/CONCEPT.md §3), in the widest slot offered:
-/// 24 bits in a 4-byte subslot. 13 frames × 8 bytes = 104 bytes per microframe.
+/// The ceiling the audio path holds (96 kHz, docs/CONCEPT.md «Вихідний такт іде за джерелом»),
+/// in the widest slot offered: 24 bits in a 4-byte subslot. 13 frames × 8 bytes = 104 bytes per
+/// microframe.
 #define USB_UAC_MAX_RATE                    96000
 #define USB_UAC_CHANNELS                    2
 #define USB_UAC_MAX_SUBSLOT                 4

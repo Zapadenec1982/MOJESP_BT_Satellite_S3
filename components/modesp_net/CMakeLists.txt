@@ -14,7 +14,7 @@ set(net_reqs modesp_core modesp_services modesp_hal
              esp_wifi esp_netif esp_http_server esp_event nvs_flash app_update espressif__mdns)
 # Targets without native Wi-Fi (ESP32-P4): the esp_wifi component only provides the headers and
 # Kconfig; the implementation is esp_wifi_remote, which drives the ESP-Hosted co-processor over
-# SDIO (docs/CONCEPT.md §8). Gated on the target so other boards keep the native stack.
+# SDIO (docs/CONCEPT.md «Мережа»). Gated on the target so other boards keep the native stack.
 if(IDF_TARGET STREQUAL "esp32p4")
     list(APPEND net_reqs esp_wifi_remote)
 endif()

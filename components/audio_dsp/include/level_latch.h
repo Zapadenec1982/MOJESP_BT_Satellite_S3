@@ -1,7 +1,7 @@
 /**
  * @file level_latch.h
  * @brief The volume and «Максимум», from the main loop to the audio task: the last value
- *        written, never a queue (docs/PLAN_SOUND_UX_2026-10-14.md, S4).
+ *        written, never a queue.
  *
  * The volume used to travel as a command, and the command queue drops what does not fit: a
  * volume dropped stayed lost until the next change, while the main loop believed it sent

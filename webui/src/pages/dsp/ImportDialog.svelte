@@ -1,5 +1,5 @@
 <script>
-  // «Імпорт фільтрів» (docs/PLAN_SOUND_UX_2026-10-14.md, S7): Equalizer APO or REW text, pasted or
+  // «Імпорт фільтрів»: Equalizer APO or REW text, pasted or
   // from a file, read as it is typed — what will come in and what will not, said before anything
   // is sent. `import` with the bands; the page makes them «Власний».
   import { createEventDispatcher } from 'svelte';

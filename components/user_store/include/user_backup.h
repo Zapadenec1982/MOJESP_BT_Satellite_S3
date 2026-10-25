@@ -1,7 +1,7 @@
 /**
  * @file user_backup.h
  * @brief The user's files as one JSON document, and back — the pure half of
- *        GET / POST /api/userdata (docs/PLAN_WEBUI_2026-10-11.md, A6).
+ *        GET / POST /api/userdata.
  *
  * What tools/user_data.py does over esptool with a reboot into the loader, a button in the web
  * does: the station list, the EQ and "Свій", the remote devices and the track to resume, in a

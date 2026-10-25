@@ -2,9 +2,9 @@
 # audio core as a source. Decoding is esp_audio_codec's "simple decoder": one interface for
 # MP3, FLAC, WAV and M4A, so the container never reaches this code.
 #
-# Most MP3 and FLAC is 44.1 kHz while the whole chain runs at 48 kHz (CONCEPT 3), so the
-# resampler that exists for Bluetooth is on the main path here too — at a fixed ratio, which
-# is simpler than the asynchronous case it was written for.
+# The output clock follows the session's first track (docs/AUDIO.md «Частота виходу і сесії»);
+# a later track at another rate goes through the fixed-ratio converter on the resampler written
+# for Bluetooth, which is simpler here than the asynchronous case it was written for.
 idf_component_register(
     SRCS "src/player_module.cpp"
     INCLUDE_DIRS "include"

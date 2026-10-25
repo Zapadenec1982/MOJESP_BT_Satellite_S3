@@ -430,8 +430,8 @@ void MqttService::mqtt_event_handler(void* args, esp_event_base_t base,
         case MQTT_EVENT_DATA:
             // A command is an act, not a state. A retained one is replayed by the broker at every
             // connect: after each power-on, or a Wi-Fi drop, it would act again — a retained
-            // volume past the player's "no louder than N % after power-on" among them
-            // (docs/PLAN_SOUND_UX_2026-10-14.md, S4). So it is not taken.
+            // volume past the player's "no louder than N % after power-on" among them.
+            // So it is not taken.
             if (event->retain) {
                 ESP_LOGW(TAG, "retained command ignored: %.*s", event->topic_len, event->topic);
                 break;

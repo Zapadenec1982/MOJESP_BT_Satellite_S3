@@ -1,7 +1,7 @@
 /**
  * @file test_dlna_browser_json.cpp
  * @brief GET /api/dlna/browser's body (components/dlna_client/include/browser_json.h) — what the
- *        web's DLNA page is shown of the browser the panel drives (PLAN_WEBUI §6, A7).
+ *        web's DLNA page is shown of the browser the panel drives.
  */
 
 #include "doctest.h"

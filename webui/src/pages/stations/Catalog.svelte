@@ -1,6 +1,6 @@
 <script>
   // The Radio Browser catalog — Top · Countries · Genres · Search — what data/www/radio.html was,
-  // inside the Stations page (PLAN_WEBUI §2). The browser asks Radio Browser itself; the panel
+  // inside the Stations page. The browser asks Radio Browser itself; the panel
   // gets a station's name, stream and uuid through radio.web_* (modules/radio/src/catalog.cpp),
   // with the action last: play, keep in the list, keep in preset N. Loaded only when opened.
   import { onDestroy } from 'svelte';

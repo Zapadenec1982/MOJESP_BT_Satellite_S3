@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Build the web UI's icon font: the panel's Material Symbols Rounded, cut to the icons the web uses.
 
-The web wears the panel's icons (docs/PLAN_WEBUI_2026-10-11.md §3): the same variable font,
+The web wears the panel's icons: the same variable font,
 fetched and pinned by symbols.lock exactly as build_fonts.py does for the panel, pinned to
 weight 400, GRAD 0 and optical size 24 like the panel's faces. FILL stays a live axis, so one
 font draws both the outlined and the filled face (`font-variation-settings: 'FILL' 1`).

@@ -19,60 +19,60 @@ const char TEXT_UK[] =
     "Очікування Wi-Fi\0"  // airplay.st_wifi
     "Завантаження…\0"  // app.loading
     "Автопідключення\0"  // bt.auto
-    "останній\0"  // bt.bond_last
-    "підключений\0"  // bt.bond_now
+    "Останній\0"  // bt.bond_last
+    "Підключений\0"  // bt.bond_now
     "Кодеки\0"  // bt.codecs
     "Кодеки зміняться з наступного підключення телефона\0"  // bt.codecs_later
-    "підключено\0"  // bt.connected
+    "Підключено\0"  // bt.connected
     "Від'єдную телефон\0"  // bt.dropping
-    "Сателіт не відповідає\0"  // bt.err_no_satellite
+    "Модуль Bluetooth не відповідає\0"  // bt.err_no_satellite
     "Забути\0"  // bt.forget
     "Забути всі\0"  // bt.forget_all
     "Кожен доведеться спарити заново. Підключений зараз буде від'єднано.\0"  // bt.forget_all_body
     "Забути всі телефони?\0"  // bt.forget_all_q
     "Щоб підключитись знову, телефон доведеться спарити заново.\0"  // bt.forget_body
     "Забути «{name}»?\0"  // bt.forget_q
-    "прихований: чекаю на спарений телефон\0"  // bt.hidden_wait
+    "Прихований: чекає на спарений телефон\0"  // bt.hidden_wait
     "Ім'я\0"  // bt.name
     "Ім'я не може бути порожнім\0"  // bt.name_empty
     "Bluetooth — одразу, AirPlay і DLNA — після перезапуску\0"  // bt.name_lag
     "Щонайбільше 32 символи\0"  // bt.name_long
     "Ім'я, яке бачать телефони\0"  // bt.name_title
     "Спарених телефонів немає.\0"  // bt.no_phones
-    "вимкнено\0"  // bt.off
-    "увімкнено\0"  // bt.on
+    "Вимкнено\0"  // bt.off
+    "Увімкнено\0"  // bt.on
     "Спарені телефони\0"  // bt.paired
     "Не підключено\0"  // bt.phone_none
     "Bluetooth вимкнено\0"  // bt.radio_off
     "Зберегти\0"  // bt.save
     "Налаштування\0"  // bt.settings
-    "Цей сателіт Bluetooth не приймає налаштувань з панелі — потрібна його прошивка з протоколом 1.8. Від'єднати телефон можна й зараз.\0"  // bt.settings_old
-    "Налаштування з'являться, щойно сателіт Bluetooth відповість.\0"  // bt.settings_wait
+    "Цей модуль Bluetooth не приймає налаштувань з панелі — потрібна його прошивка з протоколом 1.8. Від'єднати телефон можна й зараз.\0"  // bt.settings_old
+    "Налаштування з'являться, щойно модуль Bluetooth відповість.\0"  // bt.settings_wait
     "Видимість\0"  // bt.visible
-    "лише спарені телефони\0"  // bt.visible_off
-    "для нових телефонів\0"  // bt.visible_on
-    "чекаю на телефон\0"  // bt.wait_phone
-    "сумнівно, ~{hz} Гц: перевірте пальцем\0"  // cal.m_doubtful
-    "знайдено: {hz} Гц\0"  // cal.m_found
-    "перервано: джерело чи мікрофон\0"  // cal.m_interrupted
-    "мікрофон не відкрився\0"  // cal.m_mic_open
-    "мікрофон не читається\0"  // cal.m_mic_read
-    "провалу нема: закрита чи далеко\0"  // cal.m_no_dip
-    "не вистачило пам'яті на вимір\0"  // cal.m_no_memory
-    "мікрофон не чує тону\0"  // cal.m_no_tone
-    "знайдено {hz} Гц — поза 30…80\0"  // cal.m_outside
-    "вимір: {hz} Гц ({k} з {n})\0"  // cal.m_progress
-    "тиша: слухаю кімнату\0"  // cal.m_silence
-    "перервано\0"  // cal.m_stopped
+    "Лише спарені телефони\0"  // bt.visible_off
+    "Для нових телефонів\0"  // bt.visible_on
+    "Чекає на телефон\0"  // bt.wait_phone
+    "Сумнівно, ~{hz} Гц: перевірте пальцем\0"  // cal.m_doubtful
+    "Знайдено: {hz} Гц\0"  // cal.m_found
+    "Перервано: джерело чи мікрофон\0"  // cal.m_interrupted
+    "Мікрофон не відкрився\0"  // cal.m_mic_open
+    "Мікрофон не читається\0"  // cal.m_mic_read
+    "Провалу нема: закрита чи далеко\0"  // cal.m_no_dip
+    "Не вистачило пам'яті на вимір\0"  // cal.m_no_memory
+    "Мікрофон не чує тону\0"  // cal.m_no_tone
+    "Знайдено {hz} Гц — поза 30…80\0"  // cal.m_outside
+    "Вимір: {hz} Гц ({k} з {n})\0"  // cal.m_progress
+    "Вимір шуму кімнати\0"  // cal.m_silence
+    "Перервано\0"  // cal.m_stopped
     "Каталог недоступний. Улюблені грають як і раніше.\0"  // cat.down
     "В улюблені\0"  // cat.keep
-    "Зберегти в улюблені — або одразу в пресет:\0"  // cat.keep_or_preset
+    "Зберегти в улюблені — або одразу на кнопку:\0"  // cat.keep_or_preset
     "без втрат\0"  // cat.lossless
     "Жанрів немає: на панелі немає файлу radio_genres.json\0"  // cat.no_genres_file
     "Нічого не знайдено\0"  // cat.nothing
     "{n} за добу\0"  // cat.per_day
-    "від 128\0"  // cat.q_128.short
-    "від 192\0"  // cat.q_192.short
+    "Від 128\0"  // cat.q_128.short
+    "Від 192\0"  // cat.q_192.short
     "Усі\0"  // cat.q_all
     "Без втрат\0"  // cat.q_flac.short
     "Шукати\0"  // cat.search
@@ -83,7 +83,7 @@ const char TEXT_UK[] =
     "Голоси\0"  // cat.sort_votes
     "Уже в улюблених\0"  // cat.toast_already
     "Додано в улюблені\0"  // cat.toast_kept
-    "У пресеті {n}\0"  // cat.toast_preset
+    "На кнопці {n}\0"  // cat.toast_preset
     "Введіть назву станції\0"  // cat.type_name
     "Скасувати\0"  // common.cancel
     "Недостатньо пам'яті\0"  // common.no_memory
@@ -109,6 +109,7 @@ const char TEXT_UK[] =
     "Формат не підтримується\0"  // dlna.unsupported
     "Смуга {n}\0"  // eq.band_n
     "Увімкнена\0"  // eq.band_on
+    "Увімкнено\0"  // eq.enabled
     "Частота\0"  // eq.freq
     "Підсилення\0"  // eq.gain
     "Тонкомпенсація\0"  // eq.loudness
@@ -136,6 +137,7 @@ const char TEXT_UK[] =
     "Ска\0"  // eq.preset.ska
     "М'який звук\0"  // eq.preset.soft
     "Софт-рок\0"  // eq.preset.soft_rock
+    "Ширина (Q)\0"  // eq.q_width
     "«Власний» скинуто\0"  // eq.reset_done
     "Скинути «Власний»\0"  // eq.reset_mine
     "Спад\0"  // eq.slope
@@ -148,25 +150,25 @@ const char TEXT_UK[] =
     "Peak\0"  // eq.type.peak
     "пробіл\0"  // kb.space
     "Картка порожня або не читається\0"  // lib.empty
-    "видно як «{name}»\0"  // manage.visible_as
+    "Видно як «{name}»\0"  // manage.visible_as
     "Плеєр\0"  // nav.player
     "Налаштування\0"  // nav.settings
     "Джерело\0"  // nav.source
-    "оберіть приймач на телефоні\0"  // now.airplay_pick
+    "Оберіть приймач на телефоні\0"  // now.airplay_pick
     "Очікую пристрій\0"  // now.airplay_waiting
     "Аналоговий вхід\0"  // now.aux
-    "буферизація…\0"  // now.buffering
-    "підключення…\0"  // now.connecting
+    "Буферизація…\0"  // now.buffering
+    "Підключення…\0"  // now.connecting
     "Мережевий трек\0"  // now.dlna_track
     "Увімкнути видимість\0"  // now.make_visible
     "Телефон не підключено\0"  // now.no_device
     "Вихід вимкнено\0"  // now.off
     "Оберіть, що слухати\0"  // now.pick
-    "перепідключення…\0"  // now.reconnecting
-    "зупинено\0"  // now.stopped
+    "Перепідключення…\0"  // now.reconnecting
+    "Зупинено\0"  // now.stopped
     "Тестовий тон\0"  // now.tone
     "Звук із комп'ютера\0"  // now.usb
-    "оберіть приймач як вихід звуку на комп'ютері\0"  // now.usb_pick
+    "Оберіть приймач як вихід звуку на комп'ютері\0"  // now.usb_pick
     "Очікую комп'ютер\0"  // now.usb_waiting
     "Еквалайзер\0"  // page.eq
     "Мова\0"  // page.language
@@ -188,7 +190,7 @@ const char TEXT_UK[] =
     "Відхилити\0"  // pair.reject
     "Спарювання відхилено\0"  // pair.rejected
     "Відхилено у вебі.\0"  // pair.rejected_web
-    "Відхиляю…\0"  // pair.rejecting
+    "Відхилення…\0"  // pair.rejecting
     "Час на відповідь вийшов\0"  // pair.timeout
     "Спарювання Bluetooth\0"  // pair.title
     "Бас\0"  // sound.bass
@@ -202,15 +204,19 @@ const char TEXT_UK[] =
     "Закриті колонки\0"  // spk.closed
     "Л\0"  // spk.l
     "Лівіше · {n}\0"  // spk.left
-    "Порт задано вручну — {hz} Hz\0"  // spk.port_manual
-    "Порт виміряно — {hz} Hz\0"  // spk.port_measured
-    "Частоту порту ще не визначено\0"  // spk.port_none
-    "Колонки з отвором\0"  // spk.ported
+    "У кутку\0"  // spk.place_corner
+    "Вільно\0"  // spk.place_free
+    "Біля стіни\0"  // spk.place_wall
+    "Розміщення\0"  // spk.placement
+    "Фазоінвертор {hz} Гц · вручну\0"  // spk.port_manual
+    "Фазоінвертор {hz} Гц · виміряно\0"  // spk.port_measured
+    "Частоту фазоінвертора ще не визначено\0"  // spk.port_none
+    "Колонки з фазоінвертором\0"  // spk.ported
     "П\0"  // spk.r
     "Правіше · {n}\0"  // spk.right
     "Налаштувати — у вебінтерфейсі\0"  // spk.setup_web
     "Колонки\0"  // spk.title
-    "Колонки не налаштовано\0"  // spk.unset
+    "Тип колонок не обрано\0"  // spk.unset
     "AirPlay\0"  // src.airplay
     "AUX\0"  // src.aux
     "Bluetooth\0"  // src.bt
@@ -219,19 +225,19 @@ const char TEXT_UK[] =
     "Радіо\0"  // src.radio
     "Медіасервери\0"  // src.servers
     "USB\0"  // src.usb
-    "чекає на iPhone чи Mac\0"  // srcsub.airplay_wait
-    "картки немає або порожня\0"  // srcsub.card_none
-    "телефон не підключено\0"  // srcsub.phone_off
-    "телефон підключено\0"  // srcsub.phone_on
-    "станцій немає\0"  // srcsub.radio_none
-    "у домашній мережі\0"  // srcsub.servers
-    "комп'ютер підключено\0"  // srcsub.usb_on
-    "чекає на комп'ютер\0"  // srcsub.usb_wait
+    "Чекає на iPhone чи Mac\0"  // srcsub.airplay_wait
+    "Картки немає або порожня\0"  // srcsub.card_none
+    "Телефон не підключено\0"  // srcsub.phone_off
+    "Телефон підключено\0"  // srcsub.phone_on
+    "Станцій немає\0"  // srcsub.radio_none
+    "У домашній мережі\0"  // srcsub.servers
+    "Комп'ютер підключено\0"  // srcsub.usb_on
+    "Чекає на комп'ютер\0"  // srcsub.usb_wait
     "Усі станції · {n}\0"  // st.all
     "Список повний: 64 станції\0"  // st.err_full
     "Станцій немає\0"  // st.none
     "Порожньо\0"  // st.preset_empty
-    "пресет {n}\0"  // st.preset_n
+    "кнопка {n}\0"  // st.preset_n
     "Зберегти сюди\0"  // st.preset_store
     "Країни\0"  // st.tab_countries
     "Улюблені\0"  // st.tab_fav
@@ -239,48 +245,49 @@ const char TEXT_UK[] =
     "Пошук\0"  // st.tab_search
     "Топ\0"  // st.tab_top
     "Старт\0"  // svc.boot
-    "просідання\0"  // svc.boot_brownout
-    "глибокий сон\0"  // svc.boot_deep_sleep
+    "Просідання\0"  // svc.boot_brownout
+    "Глибокий сон\0"  // svc.boot_deep_sleep
     "WDT переривань\0"  // svc.boot_int_wdt
-    "паніка\0"  // svc.boot_panic
-    "живлення\0"  // svc.boot_power_on
-    "програмний\0"  // svc.boot_software
+    "Паніка\0"  // svc.boot_panic
+    "Живлення\0"  // svc.boot_power_on
+    "Програмний\0"  // svc.boot_software
     "WDT задачі\0"  // svc.boot_task_wdt
-    "невідомо\0"  // svc.boot_unknown
+    "Невідомо\0"  // svc.boot_unknown
     "Втрати\0"  // svc.drops
     "Вільно\0"  // svc.free
     "Розриви\0"  // svc.gaps
     "Внутрішня\0"  // svc.internal
     "Найб. блок\0"  // svc.largest
     "Лімітер\0"  // svc.limiter
-    "Лінк\0"  // svc.link
-    "втрачено\0"  // svc.link_lost
-    "є\0"  // svc.link_up
+    "Зв'язок\0"  // svc.link
+    "Втрачено\0"  // svc.link_lost
+    "Є\0"  // svc.link_up
     "Мінімум\0"  // svc.min
-    "немає\0"  // svc.none
+    "Немає\0"  // svc.none
     "Пристрій\0"  // svc.peer
-    "підключено\0"  // svc.peer_on
-    "норма\0"  // svc.safe_off
+    "Підключено\0"  // svc.peer_on
+    "Норма\0"  // svc.safe_off
     "АКТИВНИЙ\0"  // svc.safe_on
     "Безп. режим\0"  // svc.safe.short
     "Стек main\0"  // svc.stack
-    "Без поступу\0"  // svc.stalled
-    "Недоливи\0"  // svc.underruns
-    "Аптайм\0"  // svc.uptime
+    "Завислі\0"  // svc.stalled
+    "Переповнення UART\0"  // svc.uart_ovf
+    "Пропуски звуку\0"  // svc.underruns
+    "Час роботи\0"  // svc.uptime
     "AirPlay 1 · сумісність із Windows\0"  // sys.airplay_1
     "Режим AirPlay\0"  // sys.airplay_mode
     "помилка перемикання\0"  // sys.ap_switch_failed
     "перемикання…\0"  // sys.ap_switching
     "Яскравість\0"  // sys.brightness
-    "Сателіта немає\0"  // sys.bt_none
+    "Модуля Bluetooth немає\0"  // sys.bt_none
     "Телефон не підключено\0"  // sys.bt_ready
     "Пристрій\0"  // sys.device
     "Вимкнено\0"  // sys.eq_off
     "Зв'язок\0"  // sys.links
     "{n} хв\0"  // sys.minutes
-    "ніколи\0"  // sys.never
-    "не оголошується в мережі\0"  // sys.not_announced
-    "немає в цій збірці\0"  // sys.not_built
+    "Ніколи\0"  // sys.never
+    "Не оголошується в мережі\0"  // sys.not_announced
+    "Немає в цій збірці\0"  // sys.not_built
     "Бурштин\0"  // sys.scheme_amber
     "Синя\0"  // sys.scheme_blue
     "Зелена\0"  // sys.scheme_green
@@ -296,10 +303,14 @@ const char TEXT_UK[] =
     "Власна точка доступу «{name}»\0"  // sys.wifi_own_ap
     "Скасувати\0"  // undo.action
     "Б\0"  // unit.b
+    "біт\0"  // unit.bit
+    "кан.\0"  // unit.ch
     "д\0"  // unit.day
     "дБ\0"  // unit.db
     "Гц\0"  // unit.hz
     "КБ\0"  // unit.kb
+    "кбіт/с\0"  // unit.kbps
+    "кГц\0"  // unit.khz
     "МБ\0"  // unit.mb
     "мс\0"  // unit.ms
     "Точка доступу «{name}»\0"  // wifi.ap_title
@@ -344,7 +355,7 @@ const char TEXT_UK[] =
     "Кросовер не потрібен\0"  // xover.stereo_title
     "Стерео + сабвуфер\0"  // xover.sub
     "Кросовер\0"  // xover.title
-    "ще не підтримується\0"  // xover.unsupported
+    "Ще не підтримується\0"  // xover.unsupported
     "AIRPLAY\0"  // src.airplay ↑
     "BLUETOOTH\0"  // src.bt ↑
     "КАРТКА\0"  // src.card ↑
@@ -357,7 +368,7 @@ const char TEXT_UK[] =
     "ПАМ'ЯТЬ\0"  // svc.memory ↑
     "ВНУТР. RAM\0"  // svc.ram ↑
     "ЗАПУСК\0"  // svc.run ↑
-    "СУПУТНИК\0"  // svc.sat ↑
+    "МОДУЛЬ BLUETOOTH\0"  // svc.sat ↑
     "{n} країна\0"  // cat.countries.one
     "{n} країни\0"  // cat.countries.few
     "{n} країн\0"  // cat.countries.many
@@ -378,17 +389,17 @@ const char TEXT_UK[] =
     "{n} треки на картці\0"  // lib.on_card.few
     "{n} треків на картці\0"  // lib.on_card.many
     "{n} трека на картці\0"  // lib.on_card.other
-    "у списку {n} станція\0"  // srcsub.stations.one
-    "у списку {n} станції\0"  // srcsub.stations.few
-    "у списку {n} станцій\0"  // srcsub.stations.many
-    "у списку {n} станції\0"  // srcsub.stations.other
+    "У списку {n} станція\0"  // srcsub.stations.one
+    "У списку {n} станції\0"  // srcsub.stations.few
+    "У списку {n} станцій\0"  // srcsub.stations.many
+    "У списку {n} станції\0"  // srcsub.stations.other
     "{n} трек\0"  // srcsub.tracks.one
     "{n} треки\0"  // srcsub.tracks.few
     "{n} треків\0"  // srcsub.tracks.many
     "{n} трека\0";  // srcsub.tracks.other
-const uint16_t S_UK[] = {0, 34, 73, 109, 143, 177, 204, 232, 263, 280, 303, 316, 412, 433, 466, 507, 520, 540, 665, 703, 812, 837, 907, 915, 963, 1045, 1086, 1132, 1180, 1197, 1216, 1248, 1274, 1301, 1318, 1343, 1571, 1675, 1694, 1735, 1772, 1803, 1867, 1895, 1952, 1993, 2034, 2092, 2146, 2184, 2232, 2267, 2305, 2324, 2415, 2435, 2513, 2531, 2614, 2649, 2667, 2678, 2689, 2696, 2714, 2727, 2753, 2761, 2780, 2793, 2806, 2835, 2868, 2890, 2931, 2950, 2987, 3011, 3076, 3104, 3135, 3160, 3221, 3281, 3326, 3345, 3398, 3457, 3535, 3573, 3600, 3671, 3689, 3711, 3746, 3825, 3870, 3885, 3904, 3919, 3940, 3969, 3989, 4010, 4025, 4034, 4049, 4072, 4095, 4106, 4125, 4139, 4148, 4170, 4185, 4214, 4236, 4262, 4269, 4284, 4291, 4302, 4309, 4316, 4337, 4353, 4387, 4421, 4430, 4437, 4447, 4458, 4467, 4477, 4483, 4488, 4501, 4560, 4587, 4598, 4623, 4638, 4690, 4720, 4750, 4776, 4802, 4830, 4868, 4909, 4937, 4973, 5007, 5024, 5048, 5082, 5164, 5195, 5216, 5225, 5246, 5249, 5262, 5277, 5283, 5370, 5419, 5440, 5504, 5539, 5554, 5673, 5702, 5748, 5763, 5782, 5822, 5854, 5874, 5918, 5949, 5956, 5994, 6034, 6047, 6060, 6079, 6092, 6103, 6133, 6136, 6156, 6203, 6241, 6296, 6329, 6332, 6354, 6411, 6426, 6469, 6477, 6481, 6491, 6504, 6509, 6520, 6545, 6549, 6581, 6627, 6668, 6704, 6730, 6764, 6803, 6837, 6866, 6911, 6937, 6954, 6971, 6997, 7010, 7027, 7038, 7049, 7056, 7067, 7088, 7112, 7137, 7150, 7167, 7188, 7205, 7222, 7235, 7248, 7263, 7282, 7301, 7316, 7325, 7342, 7345, 7360, 7371, 7388, 7409, 7420, 7437, 7458, 7472, 7494, 7511, 7524, 7571, 7590, 7628, 7654, 7675, 7703, 7744, 7761, 7778, 7792, 7801, 7814, 7860, 7894, 7909, 7918, 7931, 7946, 7957, 7968, 7981, 7996, 8005, 8022, 8033, 8059, 8109, 8128, 8131, 8134, 8139, 8144, 8149, 8154, 8159, 8196, 8266, 8287, 8313, 8331, 8344, 8538, 8563, 8584, 8626, 8650, 8711, 8751, 8791, 8866, 8941, 8974, 9007, 9033, 9070, 9087, 9116, 9179, 9192, 9255, 9313, 9344, 9373, 9387, 9400, 9459, 9494, 9532, 9564, 9608, 9638, 9656, 9673, 9686, 9725, 9757, 9774};
-const uint16_t SU_UK[] = {9811, 9819, 9829, 9842, 9847, 9858, 9862, 9873, 9888, 9906, 9920, 9936, 9949};
-const uint16_t P_UK[] = {9966, 9983, 10000, 10015, 10032, 10045, 10060, 10077, 10092, 10111, 10130, 10149, 10168, 10183, 10200, 10219, 10236, 10267, 10300, 10335, 10368, 10403, 10438, 10473, 10508, 10521, 10536, 10553};
+const uint16_t S_UK[] = {0, 34, 73, 109, 143, 177, 204, 232, 263, 280, 303, 316, 412, 433, 466, 515, 528, 548, 673, 711, 820, 845, 915, 923, 971, 1053, 1094, 1140, 1188, 1205, 1224, 1256, 1282, 1309, 1326, 1351, 1577, 1679, 1698, 1739, 1776, 1807, 1871, 1899, 1956, 1997, 2038, 2096, 2150, 2188, 2236, 2271, 2306, 2325, 2416, 2436, 2516, 2534, 2617, 2652, 2670, 2681, 2692, 2699, 2717, 2730, 2756, 2764, 2783, 2796, 2809, 2838, 2871, 2893, 2934, 2953, 2990, 3014, 3079, 3107, 3138, 3163, 3224, 3284, 3329, 3348, 3401, 3460, 3538, 3576, 3603, 3674, 3692, 3714, 3749, 3828, 3873, 3888, 3907, 3926, 3941, 3962, 3991, 4011, 4032, 4047, 4056, 4071, 4094, 4117, 4128, 4147, 4161, 4170, 4192, 4207, 4236, 4258, 4284, 4291, 4306, 4313, 4324, 4331, 4338, 4359, 4375, 4392, 4426, 4460, 4469, 4476, 4486, 4497, 4506, 4516, 4522, 4527, 4540, 4599, 4626, 4637, 4662, 4677, 4729, 4759, 4789, 4815, 4841, 4869, 4907, 4948, 4976, 5012, 5046, 5063, 5087, 5121, 5203, 5234, 5255, 5264, 5285, 5288, 5301, 5316, 5322, 5409, 5458, 5479, 5543, 5578, 5593, 5712, 5741, 5787, 5802, 5821, 5861, 5893, 5917, 5961, 5992, 5999, 6037, 6077, 6090, 6103, 6122, 6135, 6146, 6176, 6179, 6199, 6213, 6226, 6246, 6267, 6318, 6373, 6444, 6491, 6494, 6516, 6573, 6588, 6628, 6636, 6640, 6650, 6663, 6668, 6679, 6704, 6708, 6740, 6786, 6827, 6863, 6889, 6923, 6962, 6996, 7025, 7070, 7096, 7113, 7130, 7156, 7169, 7186, 7197, 7208, 7215, 7226, 7247, 7271, 7296, 7309, 7326, 7347, 7364, 7381, 7394, 7407, 7422, 7441, 7460, 7475, 7489, 7506, 7509, 7524, 7535, 7552, 7573, 7584, 7601, 7622, 7636, 7651, 7681, 7709, 7729, 7776, 7795, 7833, 7859, 7880, 7914, 7955, 7972, 7989, 8003, 8012, 8025, 8071, 8105, 8120, 8129, 8142, 8157, 8168, 8179, 8192, 8207, 8216, 8233, 8244, 8270, 8320, 8339, 8342, 8349, 8357, 8360, 8365, 8370, 8375, 8387, 8394, 8399, 8404, 8441, 8511, 8532, 8558, 8576, 8589, 8783, 8808, 8829, 8871, 8895, 8956, 8996, 9036, 9111, 9186, 9219, 9252, 9278, 9315, 9332, 9361, 9424, 9437, 9500, 9558, 9589, 9618, 9632, 9645, 9704, 9739, 9777, 9809, 9853, 9883, 9901, 9918, 9931, 9970, 10002, 10019};
+const uint16_t SU_UK[] = {10056, 10064, 10074, 10087, 10092, 10103, 10107, 10118, 10133, 10151, 10165, 10181, 10194};
+const uint16_t P_UK[] = {10217, 10234, 10251, 10266, 10283, 10296, 10311, 10328, 10343, 10362, 10381, 10400, 10419, 10434, 10451, 10470, 10487, 10518, 10551, 10586, 10619, 10654, 10689, 10724, 10759, 10772, 10787, 10804};
 
 // ── en ──
 
@@ -401,60 +412,60 @@ const char TEXT_EN[] =
     "Waiting for Wi-Fi\0"  // airplay.st_wifi
     "Loading…\0"  // app.loading
     "Auto-reconnect\0"  // bt.auto
-    "last\0"  // bt.bond_last
-    "connected\0"  // bt.bond_now
+    "Last\0"  // bt.bond_last
+    "Connected\0"  // bt.bond_now
     "Codecs\0"  // bt.codecs
     "The codecs change from the phone's next connection\0"  // bt.codecs_later
-    "connected\0"  // bt.connected
+    "Connected\0"  // bt.connected
     "Disconnecting the phone\0"  // bt.dropping
-    "The satellite does not answer\0"  // bt.err_no_satellite
+    "The Bluetooth module does not answer\0"  // bt.err_no_satellite
     "Forget\0"  // bt.forget
     "Forget all\0"  // bt.forget_all
     "Each will have to pair again. The one connected now will be disconnected.\0"  // bt.forget_all_body
     "Forget every phone?\0"  // bt.forget_all_q
     "To connect again, the phone will have to pair again.\0"  // bt.forget_body
     "Forget “{name}”?\0"  // bt.forget_q
-    "hidden: waiting for a paired phone\0"  // bt.hidden_wait
+    "Hidden: waiting for a paired phone\0"  // bt.hidden_wait
     "Name\0"  // bt.name
     "The name cannot be empty\0"  // bt.name_empty
     "Bluetooth now, AirPlay and DLNA after a restart\0"  // bt.name_lag
     "At most 32 characters\0"  // bt.name_long
     "The name phones see\0"  // bt.name_title
     "No paired phones.\0"  // bt.no_phones
-    "off\0"  // bt.off
-    "on\0"  // bt.on
+    "Off\0"  // bt.off
+    "On\0"  // bt.on
     "Paired phones\0"  // bt.paired
     "Not connected\0"  // bt.phone_none
     "Bluetooth is off\0"  // bt.radio_off
     "Save\0"  // bt.save
     "Settings\0"  // bt.settings
-    "This Bluetooth satellite takes no settings from the panel — it needs firmware with protocol 1.8. A phone can be disconnected now all the same.\0"  // bt.settings_old
-    "The settings appear as soon as the Bluetooth satellite answers.\0"  // bt.settings_wait
+    "This Bluetooth module takes no settings from the panel — it needs firmware with protocol 1.8. A phone can be disconnected now all the same.\0"  // bt.settings_old
+    "The settings appear as soon as the Bluetooth module answers.\0"  // bt.settings_wait
     "Visibility\0"  // bt.visible
-    "paired phones only\0"  // bt.visible_off
-    "to new phones\0"  // bt.visible_on
-    "waiting for a phone\0"  // bt.wait_phone
-    "doubtful, ~{hz} Hz: check with a finger\0"  // cal.m_doubtful
-    "found: {hz} Hz\0"  // cal.m_found
-    "interrupted: the source or the microphone\0"  // cal.m_interrupted
-    "the microphone did not open\0"  // cal.m_mic_open
-    "the microphone cannot be read\0"  // cal.m_mic_read
-    "no dip: a closed speaker, or too far\0"  // cal.m_no_dip
-    "not enough memory to measure\0"  // cal.m_no_memory
-    "the microphone cannot hear the tone\0"  // cal.m_no_tone
-    "found {hz} Hz — outside 30…80\0"  // cal.m_outside
-    "measuring: {hz} Hz ({k} of {n})\0"  // cal.m_progress
-    "silence: listening to the room\0"  // cal.m_silence
-    "stopped\0"  // cal.m_stopped
+    "Paired phones only\0"  // bt.visible_off
+    "To new phones\0"  // bt.visible_on
+    "Waiting for a phone\0"  // bt.wait_phone
+    "Doubtful, ~{hz} Hz: check with a finger\0"  // cal.m_doubtful
+    "Found: {hz} Hz\0"  // cal.m_found
+    "Interrupted: the source or the microphone\0"  // cal.m_interrupted
+    "The microphone did not open\0"  // cal.m_mic_open
+    "The microphone cannot be read\0"  // cal.m_mic_read
+    "No dip: a closed speaker, or too far\0"  // cal.m_no_dip
+    "Not enough memory to measure\0"  // cal.m_no_memory
+    "The microphone cannot hear the tone\0"  // cal.m_no_tone
+    "Found {hz} Hz — outside 30…80\0"  // cal.m_outside
+    "Measuring: {hz} Hz ({k} of {n})\0"  // cal.m_progress
+    "Silence: listening to the room\0"  // cal.m_silence
+    "Stopped\0"  // cal.m_stopped
     "The catalogue is unavailable. Favourites play as before.\0"  // cat.down
     "To favourites\0"  // cat.keep
-    "Save to favourites — or straight into a preset:\0"  // cat.keep_or_preset
+    "Save to favourites — or straight onto a button:\0"  // cat.keep_or_preset
     "lossless\0"  // cat.lossless
     "No genres: the panel has no radio_genres.json\0"  // cat.no_genres_file
     "Nothing found\0"  // cat.nothing
     "{n} a day\0"  // cat.per_day
-    "from 128\0"  // cat.q_128.short
-    "from 192\0"  // cat.q_192.short
+    "From 128\0"  // cat.q_128.short
+    "From 192\0"  // cat.q_192.short
     "All\0"  // cat.q_all
     "Lossless\0"  // cat.q_flac.short
     "Search\0"  // cat.search
@@ -465,7 +476,7 @@ const char TEXT_EN[] =
     "Votes\0"  // cat.sort_votes
     "Already in favourites\0"  // cat.toast_already
     "Added to favourites\0"  // cat.toast_kept
-    "In preset {n}\0"  // cat.toast_preset
+    "On button {n}\0"  // cat.toast_preset
     "Type a station name\0"  // cat.type_name
     "Cancel\0"  // common.cancel
     "Not enough memory\0"  // common.no_memory
@@ -491,6 +502,7 @@ const char TEXT_EN[] =
     "Format not supported\0"  // dlna.unsupported
     "Band {n}\0"  // eq.band_n
     "On\0"  // eq.band_on
+    "On\0"  // eq.enabled
     "Frequency\0"  // eq.freq
     "Gain\0"  // eq.gain
     "Loudness\0"  // eq.loudness
@@ -518,6 +530,7 @@ const char TEXT_EN[] =
     "Ska\0"  // eq.preset.ska
     "Soft\0"  // eq.preset.soft
     "Soft rock\0"  // eq.preset.soft_rock
+    "Width (Q)\0"  // eq.q_width
     "“Custom” reset\0"  // eq.reset_done
     "Reset “Custom”\0"  // eq.reset_mine
     "Slope\0"  // eq.slope
@@ -530,25 +543,25 @@ const char TEXT_EN[] =
     "Peak\0"  // eq.type.peak
     "space\0"  // kb.space
     "The card is empty or cannot be read\0"  // lib.empty
-    "visible as “{name}”\0"  // manage.visible_as
+    "Visible as “{name}”\0"  // manage.visible_as
     "Player\0"  // nav.player
     "Settings\0"  // nav.settings
     "Source\0"  // nav.source
-    "choose this speaker on your phone\0"  // now.airplay_pick
+    "Choose this speaker on your phone\0"  // now.airplay_pick
     "Waiting for a device\0"  // now.airplay_waiting
     "Analogue input\0"  // now.aux
-    "buffering…\0"  // now.buffering
-    "connecting…\0"  // now.connecting
+    "Buffering…\0"  // now.buffering
+    "Connecting…\0"  // now.connecting
     "Network track\0"  // now.dlna_track
     "Turn on visibility\0"  // now.make_visible
     "No phone connected\0"  // now.no_device
     "Output off\0"  // now.off
     "Choose what to play\0"  // now.pick
-    "reconnecting…\0"  // now.reconnecting
-    "stopped\0"  // now.stopped
+    "Reconnecting…\0"  // now.reconnecting
+    "Stopped\0"  // now.stopped
     "Test tone\0"  // now.tone
     "Sound from a computer\0"  // now.usb
-    "choose this speaker as the computer's output\0"  // now.usb_pick
+    "Choose this speaker as the computer's output\0"  // now.usb_pick
     "Waiting for a computer\0"  // now.usb_waiting
     "Equalizer\0"  // page.eq
     "Language\0"  // page.language
@@ -584,15 +597,19 @@ const char TEXT_EN[] =
     "Sealed speakers\0"  // spk.closed
     "L\0"  // spk.l
     "Left · {n}\0"  // spk.left
-    "Port set by hand — {hz} Hz\0"  // spk.port_manual
-    "Port measured — {hz} Hz\0"  // spk.port_measured
+    "In a corner\0"  // spk.place_corner
+    "Free-standing\0"  // spk.place_free
+    "Near a wall\0"  // spk.place_wall
+    "Placement\0"  // spk.placement
+    "Port {hz} Hz · by hand\0"  // spk.port_manual
+    "Port {hz} Hz · measured\0"  // spk.port_measured
     "Port frequency not found yet\0"  // spk.port_none
     "Ported speakers\0"  // spk.ported
     "R\0"  // spk.r
     "Right · {n}\0"  // spk.right
     "Set them up in the web interface\0"  // spk.setup_web
     "Speakers\0"  // spk.title
-    "Speakers not set up\0"  // spk.unset
+    "Speaker type not chosen\0"  // spk.unset
     "AirPlay\0"  // src.airplay
     "AUX\0"  // src.aux
     "Bluetooth\0"  // src.bt
@@ -601,19 +618,19 @@ const char TEXT_EN[] =
     "Radio\0"  // src.radio
     "Media servers\0"  // src.servers
     "USB\0"  // src.usb
-    "waiting for an iPhone or a Mac\0"  // srcsub.airplay_wait
-    "no card, or an empty one\0"  // srcsub.card_none
-    "no phone connected\0"  // srcsub.phone_off
-    "phone connected\0"  // srcsub.phone_on
-    "no stations\0"  // srcsub.radio_none
-    "on the home network\0"  // srcsub.servers
-    "computer connected\0"  // srcsub.usb_on
-    "waiting for a computer\0"  // srcsub.usb_wait
+    "Waiting for an iPhone or a Mac\0"  // srcsub.airplay_wait
+    "No card, or an empty one\0"  // srcsub.card_none
+    "No phone connected\0"  // srcsub.phone_off
+    "Phone connected\0"  // srcsub.phone_on
+    "No stations\0"  // srcsub.radio_none
+    "On the home network\0"  // srcsub.servers
+    "Computer connected\0"  // srcsub.usb_on
+    "Waiting for a computer\0"  // srcsub.usb_wait
     "All stations · {n}\0"  // st.all
     "The list is full: 64 stations\0"  // st.err_full
     "No stations\0"  // st.none
     "Empty\0"  // st.preset_empty
-    "preset {n}\0"  // st.preset_n
+    "button {n}\0"  // st.preset_n
     "Store here\0"  // st.preset_store
     "Countries\0"  // st.tab_countries
     "Favourites\0"  // st.tab_fav
@@ -621,14 +638,14 @@ const char TEXT_EN[] =
     "Search\0"  // st.tab_search
     "Top\0"  // st.tab_top
     "Last start\0"  // svc.boot
-    "brownout\0"  // svc.boot_brownout
-    "deep sleep\0"  // svc.boot_deep_sleep
-    "interrupt WDT\0"  // svc.boot_int_wdt
-    "panic\0"  // svc.boot_panic
-    "power-on\0"  // svc.boot_power_on
-    "software\0"  // svc.boot_software
-    "task WDT\0"  // svc.boot_task_wdt
-    "unknown\0"  // svc.boot_unknown
+    "Brownout\0"  // svc.boot_brownout
+    "Deep sleep\0"  // svc.boot_deep_sleep
+    "Interrupt WDT\0"  // svc.boot_int_wdt
+    "Panic\0"  // svc.boot_panic
+    "Power-on\0"  // svc.boot_power_on
+    "Software\0"  // svc.boot_software
+    "Task WDT\0"  // svc.boot_task_wdt
+    "Unknown\0"  // svc.boot_unknown
     "Drops\0"  // svc.drops
     "Free\0"  // svc.free
     "Gaps\0"  // svc.gaps
@@ -636,33 +653,34 @@ const char TEXT_EN[] =
     "Largest block\0"  // svc.largest
     "Limiter\0"  // svc.limiter
     "Link\0"  // svc.link
-    "lost\0"  // svc.link_lost
-    "up\0"  // svc.link_up
+    "Lost\0"  // svc.link_lost
+    "Up\0"  // svc.link_up
     "Minimum\0"  // svc.min
-    "none\0"  // svc.none
+    "None\0"  // svc.none
     "Device\0"  // svc.peer
-    "connected\0"  // svc.peer_on
-    "normal\0"  // svc.safe_off
+    "Connected\0"  // svc.peer_on
+    "Normal\0"  // svc.safe_off
     "ACTIVE\0"  // svc.safe_on
     "Safe mode\0"  // svc.safe.short
     "main stack\0"  // svc.stack
     "Stalled\0"  // svc.stalled
-    "Underruns\0"  // svc.underruns
+    "UART overflows\0"  // svc.uart_ovf
+    "Dropouts\0"  // svc.underruns
     "Uptime\0"  // svc.uptime
     "AirPlay 1 · Windows compatible\0"  // sys.airplay_1
     "AirPlay mode\0"  // sys.airplay_mode
     "switch failed\0"  // sys.ap_switch_failed
     "switching…\0"  // sys.ap_switching
     "Brightness\0"  // sys.brightness
-    "No satellite\0"  // sys.bt_none
+    "No Bluetooth module\0"  // sys.bt_none
     "No phone connected\0"  // sys.bt_ready
     "Device\0"  // sys.device
     "Off\0"  // sys.eq_off
     "Connections\0"  // sys.links
     "{n} min\0"  // sys.minutes
-    "never\0"  // sys.never
-    "not announced on the network\0"  // sys.not_announced
-    "not in this build\0"  // sys.not_built
+    "Never\0"  // sys.never
+    "Not announced on the network\0"  // sys.not_announced
+    "Not in this build\0"  // sys.not_built
     "Amber\0"  // sys.scheme_amber
     "Blue\0"  // sys.scheme_blue
     "Green\0"  // sys.scheme_green
@@ -678,10 +696,14 @@ const char TEXT_EN[] =
     "Own access point “{name}”\0"  // sys.wifi_own_ap
     "Undo\0"  // undo.action
     "B\0"  // unit.b
+    "bit\0"  // unit.bit
+    "ch\0"  // unit.ch
     "d\0"  // unit.day
     "dB\0"  // unit.db
     "Hz\0"  // unit.hz
     "KB\0"  // unit.kb
+    "kbit/s\0"  // unit.kbps
+    "kHz\0"  // unit.khz
     "MB\0"  // unit.mb
     "ms\0"  // unit.ms
     "Access point “{name}”\0"  // wifi.ap_title
@@ -726,7 +748,7 @@ const char TEXT_EN[] =
     "No crossover needed\0"  // xover.stereo_title
     "Stereo + subwoofer\0"  // xover.sub
     "Crossover\0"  // xover.title
-    "not supported yet\0"  // xover.unsupported
+    "Not supported yet\0"  // xover.unsupported
     "AIRPLAY\0"  // src.airplay ↑
     "BLUETOOTH\0"  // src.bt ↑
     "CARD\0"  // src.card ↑
@@ -739,7 +761,7 @@ const char TEXT_EN[] =
     "MEMORY\0"  // svc.memory ↑
     "INTERNAL RAM\0"  // svc.ram ↑
     "RUN\0"  // svc.run ↑
-    "SATELLITE\0"  // svc.sat ↑
+    "BLUETOOTH MODULE\0"  // svc.sat ↑
     "{n} country\0"  // cat.countries.one
     "{n} countries\0"  // cat.countries.few
     "{n} countries\0"  // cat.countries.many
@@ -768,9 +790,9 @@ const char TEXT_EN[] =
     "{n} tracks\0"  // srcsub.tracks.few
     "{n} tracks\0"  // srcsub.tracks.many
     "{n} tracks\0";  // srcsub.tracks.other
-const uint16_t S_EN[] = {0, 13, 32, 49, 66, 87, 105, 116, 131, 136, 146, 153, 204, 214, 238, 268, 275, 286, 360, 380, 433, 454, 489, 494, 519, 567, 589, 609, 627, 631, 634, 648, 662, 679, 684, 693, 838, 902, 913, 932, 946, 966, 1006, 1021, 1063, 1091, 1121, 1158, 1187, 1223, 1257, 1289, 1320, 1328, 1385, 1399, 1449, 1458, 1504, 1518, 1528, 1537, 1546, 1550, 1559, 1566, 1579, 1585, 1593, 1601, 1607, 1629, 1649, 1663, 1683, 1690, 1708, 1728, 1766, 1780, 1803, 1817, 1835, 1867, 1896, 1906, 1940, 1970, 2023, 2049, 2067, 2100, 2117, 2130, 2160, 2210, 2231, 2240, 2243, 2253, 2258, 2267, 2276, 2292, 2302, 2307, 2314, 2320, 2331, 2336, 2347, 2355, 2360, 2371, 2376, 2385, 2395, 2407, 2413, 2419, 2423, 2430, 2435, 2439, 2444, 2454, 2473, 2492, 2498, 2503, 2513, 2524, 2533, 2543, 2549, 2554, 2560, 2596, 2620, 2627, 2636, 2643, 2677, 2698, 2713, 2726, 2740, 2754, 2773, 2792, 2803, 2823, 2839, 2847, 2857, 2879, 2924, 2947, 2957, 2966, 2974, 2977, 2985, 2994, 3000, 3057, 3083, 3091, 3135, 3150, 3155, 3228, 3253, 3286, 3292, 3299, 3316, 3347, 3360, 3383, 3401, 3406, 3427, 3449, 3456, 3463, 3468, 3476, 3483, 3499, 3501, 3513, 3542, 3568, 3597, 3613, 3615, 3628, 3661, 3670, 3690, 3698, 3702, 3712, 3717, 3722, 3728, 3742, 3746, 3777, 3802, 3821, 3837, 3849, 3869, 3888, 3911, 3931, 3961, 3973, 3979, 3990, 4001, 4011, 4022, 4029, 4036, 4040, 4051, 4060, 4071, 4085, 4091, 4100, 4109, 4118, 4126, 4132, 4137, 4142, 4151, 4165, 4173, 4178, 4183, 4186, 4194, 4199, 4206, 4216, 4223, 4230, 4240, 4251, 4259, 4269, 4276, 4308, 4321, 4335, 4348, 4359, 4372, 4391, 4398, 4402, 4414, 4422, 4428, 4457, 4475, 4481, 4486, 4492, 4496, 4504, 4511, 4520, 4531, 4537, 4549, 4554, 4568, 4598, 4603, 4605, 4607, 4610, 4613, 4616, 4619, 4622, 4648, 4699, 4709, 4723, 4743, 4750, 4861, 4882, 4890, 4920, 4936, 4965, 4980, 5002, 5043, 5084, 5102, 5120, 5134, 5160, 5165, 5191, 5234, 5243, 5270, 5304, 5332, 5346, 5359, 5372, 5402, 5420, 5435, 5455, 5476, 5486, 5496, 5507, 5514, 5534, 5553, 5563};
-const uint16_t SU_EN[] = {5581, 5589, 5599, 5604, 5609, 5615, 5619, 5625, 5635, 5645, 5652, 5665, 5669};
-const uint16_t P_EN[] = {5679, 5691, 5705, 5719, 5733, 5743, 5754, 5765, 5776, 5788, 5801, 5814, 5827, 5836, 5846, 5856, 5866, 5888, 5911, 5934, 5957, 5981, 6006, 6031, 6056, 6066, 6077, 6088};
+const uint16_t S_EN[] = {0, 13, 32, 49, 66, 87, 105, 116, 131, 136, 146, 153, 204, 214, 238, 275, 282, 293, 367, 387, 440, 461, 496, 501, 526, 574, 596, 616, 634, 638, 641, 655, 669, 686, 691, 700, 842, 903, 914, 933, 947, 967, 1007, 1022, 1064, 1092, 1122, 1159, 1188, 1224, 1258, 1290, 1321, 1329, 1386, 1400, 1450, 1459, 1505, 1519, 1529, 1538, 1547, 1551, 1560, 1567, 1580, 1586, 1594, 1602, 1608, 1630, 1650, 1664, 1684, 1691, 1709, 1729, 1767, 1781, 1804, 1818, 1836, 1868, 1897, 1907, 1941, 1971, 2024, 2050, 2068, 2101, 2118, 2131, 2161, 2211, 2232, 2241, 2244, 2247, 2257, 2262, 2271, 2280, 2296, 2306, 2311, 2318, 2324, 2335, 2340, 2351, 2359, 2364, 2375, 2380, 2389, 2399, 2411, 2417, 2423, 2427, 2434, 2439, 2443, 2448, 2458, 2468, 2487, 2506, 2512, 2517, 2527, 2538, 2547, 2557, 2563, 2568, 2574, 2610, 2634, 2641, 2650, 2657, 2691, 2712, 2727, 2740, 2754, 2768, 2787, 2806, 2817, 2837, 2853, 2861, 2871, 2893, 2938, 2961, 2971, 2980, 2988, 2991, 2999, 3008, 3014, 3071, 3097, 3105, 3149, 3164, 3169, 3242, 3267, 3300, 3306, 3313, 3330, 3361, 3374, 3397, 3415, 3420, 3441, 3463, 3470, 3477, 3482, 3490, 3497, 3513, 3515, 3527, 3539, 3553, 3565, 3575, 3599, 3624, 3653, 3669, 3671, 3684, 3717, 3726, 3750, 3758, 3762, 3772, 3777, 3782, 3788, 3802, 3806, 3837, 3862, 3881, 3897, 3909, 3929, 3948, 3971, 3991, 4021, 4033, 4039, 4050, 4061, 4071, 4082, 4089, 4096, 4100, 4111, 4120, 4131, 4145, 4151, 4160, 4169, 4178, 4186, 4192, 4197, 4202, 4211, 4225, 4233, 4238, 4243, 4246, 4254, 4259, 4266, 4276, 4283, 4290, 4300, 4311, 4319, 4334, 4343, 4350, 4382, 4395, 4409, 4422, 4433, 4453, 4472, 4479, 4483, 4495, 4503, 4509, 4538, 4556, 4562, 4567, 4573, 4577, 4585, 4592, 4601, 4612, 4618, 4630, 4635, 4649, 4679, 4684, 4686, 4690, 4693, 4695, 4698, 4701, 4704, 4711, 4715, 4718, 4721, 4747, 4798, 4808, 4822, 4842, 4849, 4960, 4981, 4989, 5019, 5035, 5064, 5079, 5101, 5142, 5183, 5201, 5219, 5233, 5259, 5264, 5290, 5333, 5342, 5369, 5403, 5431, 5445, 5458, 5471, 5501, 5519, 5534, 5554, 5575, 5585, 5595, 5606, 5613, 5633, 5652, 5662};
+const uint16_t SU_EN[] = {5680, 5688, 5698, 5703, 5708, 5714, 5718, 5724, 5734, 5744, 5751, 5764, 5768};
+const uint16_t P_EN[] = {5785, 5797, 5811, 5825, 5839, 5849, 5860, 5871, 5882, 5894, 5907, 5920, 5933, 5942, 5952, 5962, 5972, 5994, 6017, 6040, 6063, 6087, 6112, 6137, 6162, 6172, 6183, 6194};
 
 // ── de ──
 
@@ -783,51 +805,51 @@ const char TEXT_DE[] =
     "Wartet auf WLAN\0"  // airplay.st_wifi
     "Wird geladen…\0"  // app.loading
     "Automatisch verbinden\0"  // bt.auto
-    "zuletzt\0"  // bt.bond_last
-    "verbunden\0"  // bt.bond_now
+    "Zuletzt\0"  // bt.bond_last
+    "Verbunden\0"  // bt.bond_now
     "Codecs\0"  // bt.codecs
     "Die Codecs gelten ab der nächsten Verbindung des Telefons\0"  // bt.codecs_later
-    "verbunden\0"  // bt.connected
+    "Verbunden\0"  // bt.connected
     "Telefon wird getrennt\0"  // bt.dropping
-    "Der Satellit antwortet nicht\0"  // bt.err_no_satellite
+    "Das Bluetooth-Modul antwortet nicht\0"  // bt.err_no_satellite
     "Vergessen\0"  // bt.forget
     "Alle vergessen\0"  // bt.forget_all
     "Jedes muss neu gekoppelt werden. Das jetzt verbundene wird getrennt.\0"  // bt.forget_all_body
     "Alle Telefone vergessen?\0"  // bt.forget_all_q
     "Um sich wieder zu verbinden, muss das Telefon neu gekoppelt werden.\0"  // bt.forget_body
     "„{name}“ vergessen?\0"  // bt.forget_q
-    "verborgen: wartet auf ein gekoppeltes Telefon\0"  // bt.hidden_wait
+    "Verborgen: wartet auf ein gekoppeltes Telefon\0"  // bt.hidden_wait
     "Name\0"  // bt.name
     "Der Name darf nicht leer sein\0"  // bt.name_empty
     "Bluetooth sofort, AirPlay und DLNA nach einem Neustart\0"  // bt.name_lag
     "Höchstens 32 Zeichen\0"  // bt.name_long
     "Der Name, den Telefone sehen\0"  // bt.name_title
     "Keine gekoppelten Telefone.\0"  // bt.no_phones
-    "aus\0"  // bt.off
-    "an\0"  // bt.on
+    "Aus\0"  // bt.off
+    "An\0"  // bt.on
     "Gekoppelte Telefone\0"  // bt.paired
     "Nicht verbunden\0"  // bt.phone_none
     "Bluetooth ist aus\0"  // bt.radio_off
     "Speichern\0"  // bt.save
     "Einstellungen\0"  // bt.settings
-    "Dieser Bluetooth-Satellit nimmt keine Einstellungen vom Panel an — er braucht eine Firmware mit Protokoll 1.8. Ein Telefon lässt sich trotzdem schon trennen.\0"  // bt.settings_old
-    "Die Einstellungen erscheinen, sobald der Bluetooth-Satellit antwortet.\0"  // bt.settings_wait
+    "Dieses Bluetooth-Modul nimmt keine Einstellungen vom Panel an — es braucht eine Firmware mit Protokoll 1.8. Ein Telefon lässt sich trotzdem schon trennen.\0"  // bt.settings_old
+    "Die Einstellungen erscheinen, sobald das Bluetooth-Modul antwortet.\0"  // bt.settings_wait
     "Sichtbarkeit\0"  // bt.visible
-    "nur gekoppelte Telefone\0"  // bt.visible_off
-    "für neue Telefone\0"  // bt.visible_on
-    "wartet auf ein Telefon\0"  // bt.wait_phone
-    "unsicher, ~{hz} Hz: mit dem Finger prüfen\0"  // cal.m_doubtful
-    "gefunden: {hz} Hz\0"  // cal.m_found
-    "unterbrochen: Quelle oder Mikrofon\0"  // cal.m_interrupted
-    "das Mikrofon ließ sich nicht öffnen\0"  // cal.m_mic_open
-    "das Mikrofon liefert nichts\0"  // cal.m_mic_read
-    "kein Einbruch: geschlossen oder zu weit\0"  // cal.m_no_dip
-    "nicht genug Speicher für die Messung\0"  // cal.m_no_memory
-    "das Mikrofon hört den Ton nicht\0"  // cal.m_no_tone
+    "Nur gekoppelte Telefone\0"  // bt.visible_off
+    "Für neue Telefone\0"  // bt.visible_on
+    "Wartet auf ein Telefon\0"  // bt.wait_phone
+    "Unsicher, ~{hz} Hz: mit dem Finger prüfen\0"  // cal.m_doubtful
+    "Gefunden: {hz} Hz\0"  // cal.m_found
+    "Unterbrochen: Quelle oder Mikrofon\0"  // cal.m_interrupted
+    "Das Mikrofon ließ sich nicht öffnen\0"  // cal.m_mic_open
+    "Das Mikrofon liefert nichts\0"  // cal.m_mic_read
+    "Kein Einbruch: geschlossen oder zu weit\0"  // cal.m_no_dip
+    "Nicht genug Speicher für die Messung\0"  // cal.m_no_memory
+    "Das Mikrofon hört den Ton nicht\0"  // cal.m_no_tone
     "{hz} Hz gefunden — außerhalb 30…80\0"  // cal.m_outside
     "Messung: {hz} Hz ({k} von {n})\0"  // cal.m_progress
     "Stille: der Raum wird abgehört\0"  // cal.m_silence
-    "abgebrochen\0"  // cal.m_stopped
+    "Abgebrochen\0"  // cal.m_stopped
     "Der Katalog ist nicht verfügbar. Favoriten spielen wie bisher.\0"  // cat.down
     "Zu Favoriten\0"  // cat.keep
     "Zu den Favoriten — oder gleich auf einen Speicherplatz:\0"  // cat.keep_or_preset
@@ -835,8 +857,8 @@ const char TEXT_DE[] =
     "Keine Genres: auf dem Panel fehlt radio_genres.json\0"  // cat.no_genres_file
     "Nichts gefunden\0"  // cat.nothing
     "{n} pro Tag\0"  // cat.per_day
-    "ab 128\0"  // cat.q_128.short
-    "ab 192\0"  // cat.q_192.short
+    "Ab 128\0"  // cat.q_128.short
+    "Ab 192\0"  // cat.q_192.short
     "Alle\0"  // cat.q_all
     "Verlustfrei\0"  // cat.q_flac.short
     "Suchen\0"  // cat.search
@@ -873,6 +895,7 @@ const char TEXT_DE[] =
     "Format nicht unterstützt\0"  // dlna.unsupported
     "Band {n}\0"  // eq.band_n
     "Aktiv\0"  // eq.band_on
+    "Ein\0"  // eq.enabled
     "Frequenz\0"  // eq.freq
     "Verstärkung\0"  // eq.gain
     "Loudness\0"  // eq.loudness
@@ -900,6 +923,7 @@ const char TEXT_DE[] =
     "Ska\0"  // eq.preset.ska
     "Sanft\0"  // eq.preset.soft
     "Soft Rock\0"  // eq.preset.soft_rock
+    "Breite (Q)\0"  // eq.q_width
     "„Eigener“ zurückgesetzt\0"  // eq.reset_done
     "„Eigener“ zurücksetzen\0"  // eq.reset_mine
     "Flanke\0"  // eq.slope
@@ -912,25 +936,25 @@ const char TEXT_DE[] =
     "Peak\0"  // eq.type.peak
     "Leertaste\0"  // kb.space
     "Die Karte ist leer oder nicht lesbar\0"  // lib.empty
-    "als „{name}“\0"  // manage.visible_as
+    "Als „{name}“\0"  // manage.visible_as
     "Player\0"  // nav.player
     "Einstellungen\0"  // nav.settings
     "Quelle\0"  // nav.source
-    "wählen Sie diesen Lautsprecher am Telefon\0"  // now.airplay_pick
+    "Wählen Sie diesen Lautsprecher am Telefon\0"  // now.airplay_pick
     "Warte auf ein Gerät\0"  // now.airplay_waiting
     "Analogeingang\0"  // now.aux
-    "puffere…\0"  // now.buffering
-    "verbinde…\0"  // now.connecting
+    "Puffern…\0"  // now.buffering
+    "Verbinden…\0"  // now.connecting
     "Netzwerktitel\0"  // now.dlna_track
     "Sichtbarkeit einschalten\0"  // now.make_visible
     "Kein Telefon verbunden\0"  // now.no_device
     "Ausgang aus\0"  // now.off
     "Wählen Sie, was laufen soll\0"  // now.pick
-    "verbinde neu…\0"  // now.reconnecting
-    "gestoppt\0"  // now.stopped
+    "Erneut verbinden…\0"  // now.reconnecting
+    "Gestoppt\0"  // now.stopped
     "Testton\0"  // now.tone
     "Ton vom Computer\0"  // now.usb
-    "am Computer als Ausgabe wählen\0"  // now.usb_pick
+    "Am Computer als Ausgabe wählen\0"  // now.usb_pick
     "Warte auf einen Computer\0"  // now.usb_waiting
     "Equalizer\0"  // page.eq
     "Sprache\0"  // page.language
@@ -966,15 +990,19 @@ const char TEXT_DE[] =
     "Geschlossene Lautsprecher\0"  // spk.closed
     "L\0"  // spk.l
     "Links · {n}\0"  // spk.left
-    "Port von Hand gesetzt — {hz} Hz\0"  // spk.port_manual
-    "Port gemessen — {hz} Hz\0"  // spk.port_measured
+    "In der Ecke\0"  // spk.place_corner
+    "Freistehend\0"  // spk.place_free
+    "An der Wand\0"  // spk.place_wall
+    "Aufstellung\0"  // spk.placement
+    "Port {hz} Hz · von Hand\0"  // spk.port_manual
+    "Port {hz} Hz · gemessen\0"  // spk.port_measured
     "Portfrequenz noch nicht bestimmt\0"  // spk.port_none
-    "Lautsprecher mit Öffnung\0"  // spk.ported
+    "Bassreflex-Lautsprecher\0"  // spk.ported
     "R\0"  // spk.r
     "Rechts · {n}\0"  // spk.right
     "Einrichten in der Weboberfläche\0"  // spk.setup_web
     "Lautsprecher\0"  // spk.title
-    "Lautsprecher nicht eingerichtet\0"  // spk.unset
+    "Lautsprechertyp nicht gewählt\0"  // spk.unset
     "AirPlay\0"  // src.airplay
     "AUX\0"  // src.aux
     "Bluetooth\0"  // src.bt
@@ -983,14 +1011,14 @@ const char TEXT_DE[] =
     "Radio\0"  // src.radio
     "Medienserver\0"  // src.servers
     "USB\0"  // src.usb
-    "wartet auf iPhone oder Mac\0"  // srcsub.airplay_wait
-    "keine Karte oder leer\0"  // srcsub.card_none
-    "kein Telefon verbunden\0"  // srcsub.phone_off
+    "Wartet auf iPhone oder Mac\0"  // srcsub.airplay_wait
+    "Keine Karte oder leer\0"  // srcsub.card_none
+    "Kein Telefon verbunden\0"  // srcsub.phone_off
     "Telefon verbunden\0"  // srcsub.phone_on
-    "keine Sender\0"  // srcsub.radio_none
-    "im Heimnetz\0"  // srcsub.servers
+    "Keine Sender\0"  // srcsub.radio_none
+    "Im Heimnetz\0"  // srcsub.servers
     "Computer verbunden\0"  // srcsub.usb_on
-    "wartet auf einen Computer\0"  // srcsub.usb_wait
+    "Wartet auf einen Computer\0"  // srcsub.usb_wait
     "Alle Sender · {n}\0"  // st.all
     "Die Liste ist voll: 64 Sender\0"  // st.err_full
     "Keine Sender\0"  // st.none
@@ -1010,7 +1038,7 @@ const char TEXT_DE[] =
     "Einschalten\0"  // svc.boot_power_on
     "Software\0"  // svc.boot_software
     "Task-WDT\0"  // svc.boot_task_wdt
-    "unbekannt\0"  // svc.boot_unknown
+    "Unbekannt\0"  // svc.boot_unknown
     "Verluste\0"  // svc.drops
     "Frei\0"  // svc.free
     "Lücken\0"  // svc.gaps
@@ -1018,33 +1046,34 @@ const char TEXT_DE[] =
     "Größter Block\0"  // svc.largest
     "Limiter\0"  // svc.limiter
     "Verbindung\0"  // svc.link
-    "verloren\0"  // svc.link_lost
-    "steht\0"  // svc.link_up
+    "Verloren\0"  // svc.link_lost
+    "Steht\0"  // svc.link_up
     "Minimum\0"  // svc.min
-    "keiner\0"  // svc.none
+    "Keiner\0"  // svc.none
     "Gerät\0"  // svc.peer
-    "verbunden\0"  // svc.peer_on
-    "normal\0"  // svc.safe_off
+    "Verbunden\0"  // svc.peer_on
+    "Normal\0"  // svc.safe_off
     "AKTIV\0"  // svc.safe_on
     "Abgesichert\0"  // svc.safe.short
     "main-Stack\0"  // svc.stack
     "Hängt\0"  // svc.stalled
-    "Unterläufe\0"  // svc.underruns
+    "UART-Überläufe\0"  // svc.uart_ovf
+    "Aussetzer\0"  // svc.underruns
     "Betriebszeit\0"  // svc.uptime
     "AirPlay 1 · Windows-kompatibel\0"  // sys.airplay_1
     "AirPlay-Modus\0"  // sys.airplay_mode
     "Umschalten fehlgeschlagen\0"  // sys.ap_switch_failed
     "wird umgeschaltet…\0"  // sys.ap_switching
     "Helligkeit\0"  // sys.brightness
-    "Kein Satellit\0"  // sys.bt_none
+    "Kein Bluetooth-Modul\0"  // sys.bt_none
     "Kein Telefon verbunden\0"  // sys.bt_ready
     "Gerät\0"  // sys.device
     "Aus\0"  // sys.eq_off
     "Verbindungen\0"  // sys.links
     "{n} Min.\0"  // sys.minutes
-    "nie\0"  // sys.never
-    "nicht im Netzwerk sichtbar\0"  // sys.not_announced
-    "nicht in diesem Build\0"  // sys.not_built
+    "Nie\0"  // sys.never
+    "Nicht im Netzwerk sichtbar\0"  // sys.not_announced
+    "Nicht in diesem Build\0"  // sys.not_built
     "Bernstein\0"  // sys.scheme_amber
     "Blau\0"  // sys.scheme_blue
     "Grün\0"  // sys.scheme_green
@@ -1060,10 +1089,14 @@ const char TEXT_DE[] =
     "Eigener Zugangspunkt „{name}“\0"  // sys.wifi_own_ap
     "Rückgängig\0"  // undo.action
     "B\0"  // unit.b
+    "bit\0"  // unit.bit
+    "Kan.\0"  // unit.ch
     "T\0"  // unit.day
     "dB\0"  // unit.db
     "Hz\0"  // unit.hz
     "KB\0"  // unit.kb
+    "kbit/s\0"  // unit.kbps
+    "kHz\0"  // unit.khz
     "MB\0"  // unit.mb
     "ms\0"  // unit.ms
     "Zugangspunkt „{name}“\0"  // wifi.ap_title
@@ -1108,7 +1141,7 @@ const char TEXT_DE[] =
     "Keine Frequenzweiche nötig\0"  // xover.stereo_title
     "Stereo + Subwoofer\0"  // xover.sub
     "Frequenzweiche\0"  // xover.title
-    "noch nicht unterstützt\0"  // xover.unsupported
+    "Noch nicht unterstützt\0"  // xover.unsupported
     "AIRPLAY\0"  // src.airplay ↑
     "BLUETOOTH\0"  // src.bt ↑
     "KARTE\0"  // src.card ↑
@@ -1121,7 +1154,7 @@ const char TEXT_DE[] =
     "SPEICHER\0"  // svc.memory ↑
     "INTERNER RAM\0"  // svc.ram ↑
     "BETRIEB\0"  // svc.run ↑
-    "SATELLIT\0"  // svc.sat ↑
+    "BLUETOOTH-MODUL\0"  // svc.sat ↑
     "{n} Land\0"  // cat.countries.one
     "{n} Länder\0"  // cat.countries.few
     "{n} Länder\0"  // cat.countries.many
@@ -1150,9 +1183,9 @@ const char TEXT_DE[] =
     "{n} Titel\0"  // srcsub.tracks.few
     "{n} Titel\0"  // srcsub.tracks.many
     "{n} Titel\0";  // srcsub.tracks.other
-const uint16_t S_DE[] = {0, 18, 46, 67, 89, 118, 134, 150, 172, 180, 190, 197, 256, 266, 288, 317, 327, 342, 411, 436, 504, 528, 574, 579, 609, 664, 686, 715, 743, 747, 750, 770, 786, 804, 814, 828, 989, 1060, 1073, 1097, 1116, 1139, 1182, 1200, 1235, 1273, 1301, 1341, 1379, 1412, 1452, 1483, 1515, 1527, 1591, 1604, 1662, 1674, 1726, 1742, 1754, 1761, 1768, 1773, 1785, 1792, 1803, 1809, 1817, 1827, 1835, 1858, 1888, 1910, 1942, 1952, 1973, 1993, 2033, 2056, 2078, 2091, 2112, 2146, 2178, 2190, 2227, 2261, 2315, 2347, 2369, 2420, 2436, 2448, 2485, 2531, 2557, 2566, 2572, 2581, 2594, 2603, 2617, 2633, 2641, 2646, 2654, 2660, 2673, 2681, 2692, 2700, 2705, 2718, 2723, 2732, 2742, 2754, 2760, 2766, 2770, 2777, 2782, 2786, 2792, 2802, 2831, 2859, 2866, 2870, 2880, 2891, 2900, 2910, 2916, 2921, 2931, 2968, 2985, 2992, 3006, 3013, 3056, 3077, 3091, 3102, 3114, 3128, 3153, 3176, 3188, 3217, 3233, 3242, 3250, 3267, 3299, 3324, 3334, 3342, 3353, 3356, 3364, 3371, 3376, 3428, 3461, 3471, 3522, 3546, 3557, 3644, 3671, 3715, 3723, 3732, 3751, 3769, 3787, 3825, 3844, 3849, 3871, 3893, 3900, 3907, 3920, 3928, 3934, 3960, 3962, 3975, 4009, 4035, 4068, 4094, 4096, 4110, 4143, 4156, 4188, 4196, 4200, 4210, 4216, 4221, 4227, 4240, 4244, 4271, 4293, 4316, 4334, 4347, 4359, 4378, 4404, 4423, 4453, 4466, 4471, 4489, 4504, 4512, 4522, 4529, 4535, 4539, 4553, 4567, 4578, 4592, 4598, 4610, 4619, 4628, 4638, 4647, 4652, 4660, 4667, 4683, 4691, 4702, 4711, 4717, 4725, 4732, 4739, 4749, 4756, 4762, 4774, 4785, 4792, 4804, 4817, 4849, 4863, 4889, 4910, 4921, 4935, 4958, 4965, 4969, 4982, 4991, 4995, 5022, 5044, 5054, 5059, 5065, 5069, 5076, 5087, 5095, 5105, 5111, 5124, 5135, 5151, 5185, 5198, 5200, 5202, 5205, 5208, 5211, 5214, 5217, 5243, 5288, 5298, 5311, 5331, 5341, 5481, 5505, 5515, 5545, 5568, 5602, 5621, 5648, 5697, 5746, 5771, 5794, 5810, 5837, 5843, 5870, 5913, 5922, 5957, 5999, 6024, 6045, 6054, 6070, 6099, 6123, 6141, 6164, 6195, 6209, 6219, 6234, 6241, 6269, 6288, 6303};
-const uint16_t SU_DE[] = {6327, 6335, 6345, 6351, 6356, 6362, 6366, 6372, 6382, 6398, 6407, 6420, 6428};
-const uint16_t P_DE[] = {6437, 6446, 6458, 6470, 6482, 6492, 6503, 6514, 6525, 6536, 6547, 6558, 6569, 6580, 6592, 6604, 6616, 6640, 6664, 6688, 6712, 6736, 6760, 6784, 6808, 6818, 6828, 6838};
+const uint16_t S_DE[] = {0, 18, 46, 67, 89, 118, 134, 150, 172, 180, 190, 197, 256, 266, 288, 324, 334, 349, 418, 443, 511, 535, 581, 586, 616, 671, 693, 722, 750, 754, 757, 777, 793, 811, 821, 835, 993, 1061, 1074, 1098, 1117, 1140, 1183, 1201, 1236, 1274, 1302, 1342, 1380, 1413, 1453, 1484, 1516, 1528, 1592, 1605, 1663, 1675, 1727, 1743, 1755, 1762, 1769, 1774, 1786, 1793, 1804, 1810, 1818, 1828, 1836, 1859, 1889, 1911, 1943, 1953, 1974, 1994, 2034, 2057, 2079, 2092, 2113, 2147, 2179, 2191, 2228, 2262, 2316, 2348, 2370, 2421, 2437, 2449, 2486, 2532, 2558, 2567, 2573, 2577, 2586, 2599, 2608, 2622, 2638, 2646, 2651, 2659, 2665, 2678, 2686, 2697, 2705, 2710, 2723, 2728, 2737, 2747, 2759, 2765, 2771, 2775, 2782, 2787, 2791, 2797, 2807, 2818, 2847, 2875, 2882, 2886, 2896, 2907, 2916, 2926, 2932, 2937, 2947, 2984, 3001, 3008, 3022, 3029, 3072, 3093, 3107, 3118, 3131, 3145, 3170, 3193, 3205, 3234, 3254, 3263, 3271, 3288, 3320, 3345, 3355, 3363, 3374, 3377, 3385, 3392, 3397, 3449, 3482, 3492, 3543, 3567, 3578, 3665, 3692, 3736, 3744, 3753, 3772, 3790, 3808, 3846, 3865, 3870, 3892, 3914, 3921, 3928, 3941, 3949, 3955, 3981, 3983, 3996, 4008, 4020, 4032, 4044, 4069, 4094, 4127, 4151, 4153, 4167, 4200, 4213, 4244, 4252, 4256, 4266, 4272, 4277, 4283, 4296, 4300, 4327, 4349, 4372, 4390, 4403, 4415, 4434, 4460, 4479, 4509, 4522, 4527, 4545, 4560, 4568, 4578, 4585, 4591, 4595, 4609, 4623, 4634, 4648, 4654, 4666, 4675, 4684, 4694, 4703, 4708, 4716, 4723, 4739, 4747, 4758, 4767, 4773, 4781, 4788, 4795, 4805, 4812, 4818, 4830, 4841, 4848, 4865, 4875, 4888, 4920, 4934, 4960, 4981, 4992, 5013, 5036, 5043, 5047, 5060, 5069, 5073, 5100, 5122, 5132, 5137, 5143, 5147, 5154, 5165, 5173, 5183, 5189, 5202, 5213, 5229, 5263, 5276, 5278, 5282, 5287, 5289, 5292, 5295, 5298, 5305, 5309, 5312, 5315, 5341, 5386, 5396, 5409, 5429, 5439, 5579, 5603, 5613, 5643, 5666, 5700, 5719, 5746, 5795, 5844, 5869, 5892, 5908, 5935, 5941, 5968, 6011, 6020, 6055, 6097, 6122, 6143, 6152, 6168, 6197, 6221, 6239, 6262, 6293, 6307, 6317, 6332, 6339, 6367, 6386, 6401};
+const uint16_t SU_DE[] = {6425, 6433, 6443, 6449, 6454, 6460, 6464, 6470, 6480, 6496, 6505, 6518, 6526};
+const uint16_t P_DE[] = {6542, 6551, 6563, 6575, 6587, 6597, 6608, 6619, 6630, 6641, 6652, 6663, 6674, 6685, 6697, 6709, 6721, 6745, 6769, 6793, 6817, 6841, 6865, 6889, 6913, 6923, 6933, 6943};
 
 // ── pl ──
 
@@ -1165,60 +1198,60 @@ const char TEXT_PL[] =
     "Oczekiwanie na Wi-Fi\0"  // airplay.st_wifi
     "Ładowanie…\0"  // app.loading
     "Automatyczne łączenie\0"  // bt.auto
-    "ostatni\0"  // bt.bond_last
-    "połączony\0"  // bt.bond_now
+    "Ostatni\0"  // bt.bond_last
+    "Połączony\0"  // bt.bond_now
     "Kodeki\0"  // bt.codecs
     "Kodeki zmienią się przy następnym połączeniu telefonu\0"  // bt.codecs_later
-    "połączono\0"  // bt.connected
+    "Połączono\0"  // bt.connected
     "Rozłączam telefon\0"  // bt.dropping
-    "Satelita nie odpowiada\0"  // bt.err_no_satellite
+    "Moduł Bluetooth nie odpowiada\0"  // bt.err_no_satellite
     "Zapomnij\0"  // bt.forget
     "Zapomnij wszystkie\0"  // bt.forget_all
     "Każdy trzeba będzie sparować od nowa. Połączony teraz zostanie rozłączony.\0"  // bt.forget_all_body
     "Zapomnieć wszystkie telefony?\0"  // bt.forget_all_q
     "Aby połączyć się ponownie, telefon trzeba będzie sparować od nowa.\0"  // bt.forget_body
     "Zapomnieć „{name}”?\0"  // bt.forget_q
-    "ukryty: czekam na sparowany telefon\0"  // bt.hidden_wait
+    "Ukryty: czeka na sparowany telefon\0"  // bt.hidden_wait
     "Nazwa\0"  // bt.name
     "Nazwa nie może być pusta\0"  // bt.name_empty
     "Bluetooth od razu, AirPlay i DLNA po ponownym uruchomieniu\0"  // bt.name_lag
     "Najwyżej 32 znaki\0"  // bt.name_long
     "Nazwa widoczna dla telefonów\0"  // bt.name_title
     "Brak sparowanych telefonów.\0"  // bt.no_phones
-    "wyłączono\0"  // bt.off
-    "włączono\0"  // bt.on
+    "Wyłączono\0"  // bt.off
+    "Włączono\0"  // bt.on
     "Sparowane telefony\0"  // bt.paired
     "Nie połączono\0"  // bt.phone_none
     "Bluetooth wyłączony\0"  // bt.radio_off
     "Zapisz\0"  // bt.save
     "Ustawienia\0"  // bt.settings
-    "Ten satelita Bluetooth nie przyjmuje ustawień z panelu — potrzebuje oprogramowania z protokołem 1.8. Telefon można rozłączyć już teraz.\0"  // bt.settings_old
-    "Ustawienia pojawią się, gdy tylko satelita Bluetooth odpowie.\0"  // bt.settings_wait
+    "Ten moduł Bluetooth nie przyjmuje ustawień z panelu — potrzebuje oprogramowania z protokołem 1.8. Telefon można rozłączyć już teraz.\0"  // bt.settings_old
+    "Ustawienia pojawią się, gdy tylko moduł Bluetooth odpowie.\0"  // bt.settings_wait
     "Widoczność\0"  // bt.visible
-    "tylko sparowane telefony\0"  // bt.visible_off
-    "dla nowych telefonów\0"  // bt.visible_on
-    "czekam na telefon\0"  // bt.wait_phone
-    "wątpliwe, ~{hz} Hz: sprawdź palcem\0"  // cal.m_doubtful
-    "znaleziono: {hz} Hz\0"  // cal.m_found
-    "przerwano: źródło lub mikrofon\0"  // cal.m_interrupted
-    "mikrofon się nie otworzył\0"  // cal.m_mic_open
-    "nie da się odczytać mikrofonu\0"  // cal.m_mic_read
-    "brak spadku: zamknięta lub za daleko\0"  // cal.m_no_dip
-    "za mało pamięci na pomiar\0"  // cal.m_no_memory
-    "mikrofon nie słyszy tonu\0"  // cal.m_no_tone
-    "znaleziono {hz} Hz — poza 30…80\0"  // cal.m_outside
-    "pomiar: {hz} Hz ({k} z {n})\0"  // cal.m_progress
-    "cisza: słucham pomieszczenia\0"  // cal.m_silence
-    "przerwano\0"  // cal.m_stopped
+    "Tylko sparowane telefony\0"  // bt.visible_off
+    "Dla nowych telefonów\0"  // bt.visible_on
+    "Czeka na telefon\0"  // bt.wait_phone
+    "Wątpliwe, ~{hz} Hz: sprawdź palcem\0"  // cal.m_doubtful
+    "Znaleziono: {hz} Hz\0"  // cal.m_found
+    "Przerwano: źródło lub mikrofon\0"  // cal.m_interrupted
+    "Mikrofon się nie otworzył\0"  // cal.m_mic_open
+    "Nie da się odczytać mikrofonu\0"  // cal.m_mic_read
+    "Brak spadku: zamknięta lub za daleko\0"  // cal.m_no_dip
+    "Za mało pamięci na pomiar\0"  // cal.m_no_memory
+    "Mikrofon nie słyszy tonu\0"  // cal.m_no_tone
+    "Znaleziono {hz} Hz — poza 30…80\0"  // cal.m_outside
+    "Pomiar: {hz} Hz ({k} z {n})\0"  // cal.m_progress
+    "Pomiar szumu pomieszczenia\0"  // cal.m_silence
+    "Przerwano\0"  // cal.m_stopped
     "Katalog jest niedostępny. Ulubione grają jak dotąd.\0"  // cat.down
     "Do ulubionych\0"  // cat.keep
-    "Zapisz w ulubionych — albo od razu w presecie:\0"  // cat.keep_or_preset
+    "Zapisz w ulubionych — albo od razu na przycisk:\0"  // cat.keep_or_preset
     "bezstratnie\0"  // cat.lossless
     "Brak gatunków: na panelu nie ma pliku radio_genres.json\0"  // cat.no_genres_file
     "Nic nie znaleziono\0"  // cat.nothing
     "{n} dziennie\0"  // cat.per_day
-    "od 128\0"  // cat.q_128.short
-    "od 192\0"  // cat.q_192.short
+    "Od 128\0"  // cat.q_128.short
+    "Od 192\0"  // cat.q_192.short
     "Wszystkie\0"  // cat.q_all
     "Bezstratne\0"  // cat.q_flac.short
     "Szukaj\0"  // cat.search
@@ -1229,7 +1262,7 @@ const char TEXT_PL[] =
     "Głosy\0"  // cat.sort_votes
     "Już w ulubionych\0"  // cat.toast_already
     "Dodano do ulubionych\0"  // cat.toast_kept
-    "W presecie {n}\0"  // cat.toast_preset
+    "Na przycisku {n}\0"  // cat.toast_preset
     "Wpisz nazwę stacji\0"  // cat.type_name
     "Anuluj\0"  // common.cancel
     "Za mało pamięci\0"  // common.no_memory
@@ -1255,6 +1288,7 @@ const char TEXT_PL[] =
     "Format nieobsługiwany\0"  // dlna.unsupported
     "Pasmo {n}\0"  // eq.band_n
     "Włączone\0"  // eq.band_on
+    "Włączony\0"  // eq.enabled
     "Częstotliwość\0"  // eq.freq
     "Wzmocnienie\0"  // eq.gain
     "Loudness\0"  // eq.loudness
@@ -1282,6 +1316,7 @@ const char TEXT_PL[] =
     "Ska\0"  // eq.preset.ska
     "Łagodny\0"  // eq.preset.soft
     "Soft rock\0"  // eq.preset.soft_rock
+    "Szerokość (Q)\0"  // eq.q_width
     "Zresetowano „Własny”\0"  // eq.reset_done
     "Zresetuj „Własny”\0"  // eq.reset_mine
     "Nachylenie\0"  // eq.slope
@@ -1294,25 +1329,25 @@ const char TEXT_PL[] =
     "Peak\0"  // eq.type.peak
     "spacja\0"  // kb.space
     "Karta jest pusta lub nieczytelna\0"  // lib.empty
-    "jako „{name}”\0"  // manage.visible_as
+    "Jako „{name}”\0"  // manage.visible_as
     "Odtwarzacz\0"  // nav.player
     "Ustawienia\0"  // nav.settings
     "Źródło\0"  // nav.source
-    "wybierz ten głośnik w telefonie\0"  // now.airplay_pick
+    "Wybierz ten głośnik w telefonie\0"  // now.airplay_pick
     "Czekam na urządzenie\0"  // now.airplay_waiting
     "Wejście analogowe\0"  // now.aux
-    "buforowanie…\0"  // now.buffering
-    "łączenie…\0"  // now.connecting
+    "Buforowanie…\0"  // now.buffering
+    "Łączenie…\0"  // now.connecting
     "Utwór z sieci\0"  // now.dlna_track
     "Włącz widoczność\0"  // now.make_visible
     "Brak połączonego telefonu\0"  // now.no_device
     "Wyjście wyłączone\0"  // now.off
     "Wybierz, czego słuchać\0"  // now.pick
-    "ponowne łączenie…\0"  // now.reconnecting
-    "zatrzymano\0"  // now.stopped
+    "Ponowne łączenie…\0"  // now.reconnecting
+    "Zatrzymano\0"  // now.stopped
     "Ton testowy\0"  // now.tone
     "Dźwięk z komputera\0"  // now.usb
-    "wybierz ten głośnik jako wyjście w komputerze\0"  // now.usb_pick
+    "Wybierz ten głośnik jako wyjście w komputerze\0"  // now.usb_pick
     "Czekam na komputer\0"  // now.usb_waiting
     "Korektor\0"  // page.eq
     "Język\0"  // page.language
@@ -1334,7 +1369,7 @@ const char TEXT_PL[] =
     "Odrzuć\0"  // pair.reject
     "Parowanie odrzucone\0"  // pair.rejected
     "Odrzucono w przeglądarce.\0"  // pair.rejected_web
-    "Odrzucam…\0"  // pair.rejecting
+    "Odrzucanie…\0"  // pair.rejecting
     "Czas na odpowiedź minął\0"  // pair.timeout
     "Parowanie Bluetooth\0"  // pair.title
     "Bas\0"  // sound.bass
@@ -1348,15 +1383,19 @@ const char TEXT_PL[] =
     "Kolumny zamknięte\0"  // spk.closed
     "L\0"  // spk.l
     "W lewo · {n}\0"  // spk.left
-    "Port ustawiony ręcznie — {hz} Hz\0"  // spk.port_manual
-    "Port zmierzony — {hz} Hz\0"  // spk.port_measured
-    "Częstotliwość portu jeszcze nieznana\0"  // spk.port_none
-    "Kolumny z otworem\0"  // spk.ported
+    "W rogu\0"  // spk.place_corner
+    "Wolnostojące\0"  // spk.place_free
+    "Przy ścianie\0"  // spk.place_wall
+    "Ustawienie\0"  // spk.placement
+    "Bas-refleks {hz} Hz · ręcznie\0"  // spk.port_manual
+    "Bas-refleks {hz} Hz · zmierzono\0"  // spk.port_measured
+    "Częstotliwość bas-refleksu nieznana\0"  // spk.port_none
+    "Kolumny z bas-refleksem\0"  // spk.ported
     "P\0"  // spk.r
     "W prawo · {n}\0"  // spk.right
     "Konfiguracja — w interfejsie WWW\0"  // spk.setup_web
     "Kolumny\0"  // spk.title
-    "Kolumny nieskonfigurowane\0"  // spk.unset
+    "Nie wybrano typu kolumn\0"  // spk.unset
     "AirPlay\0"  // src.airplay
     "AUX\0"  // src.aux
     "Bluetooth\0"  // src.bt
@@ -1365,19 +1404,19 @@ const char TEXT_PL[] =
     "Radio\0"  // src.radio
     "Serwery\0"  // src.servers
     "USB\0"  // src.usb
-    "czeka na iPhone’a lub Maca\0"  // srcsub.airplay_wait
-    "brak karty lub jest pusta\0"  // srcsub.card_none
-    "brak połączonego telefonu\0"  // srcsub.phone_off
-    "telefon połączony\0"  // srcsub.phone_on
-    "brak stacji\0"  // srcsub.radio_none
-    "w sieci domowej\0"  // srcsub.servers
-    "komputer połączony\0"  // srcsub.usb_on
-    "czeka na komputer\0"  // srcsub.usb_wait
+    "Czeka na iPhone’a lub Maca\0"  // srcsub.airplay_wait
+    "Brak karty lub jest pusta\0"  // srcsub.card_none
+    "Telefon niepołączony\0"  // srcsub.phone_off
+    "Telefon połączony\0"  // srcsub.phone_on
+    "Brak stacji\0"  // srcsub.radio_none
+    "W sieci domowej\0"  // srcsub.servers
+    "Komputer połączony\0"  // srcsub.usb_on
+    "Czeka na komputer\0"  // srcsub.usb_wait
     "Wszystkie stacje · {n}\0"  // st.all
     "Lista jest pełna: 64 stacje\0"  // st.err_full
     "Brak stacji\0"  // st.none
     "Pusty\0"  // st.preset_empty
-    "preset {n}\0"  // st.preset_n
+    "przycisk {n}\0"  // st.preset_n
     "Zapisz tutaj\0"  // st.preset_store
     "Kraje\0"  // st.tab_countries
     "Ulubione\0"  // st.tab_fav
@@ -1385,14 +1424,14 @@ const char TEXT_PL[] =
     "Szukaj\0"  // st.tab_search
     "Top\0"  // st.tab_top
     "Ostatni start\0"  // svc.boot
-    "spadek napięcia\0"  // svc.boot_brownout
-    "głęboki sen\0"  // svc.boot_deep_sleep
+    "Spadek napięcia\0"  // svc.boot_brownout
+    "Głęboki sen\0"  // svc.boot_deep_sleep
     "WDT przerwań\0"  // svc.boot_int_wdt
-    "panika\0"  // svc.boot_panic
-    "zasilanie\0"  // svc.boot_power_on
-    "programowy\0"  // svc.boot_software
+    "Panika\0"  // svc.boot_panic
+    "Zasilanie\0"  // svc.boot_power_on
+    "Programowy\0"  // svc.boot_software
     "WDT zadania\0"  // svc.boot_task_wdt
-    "nieznany\0"  // svc.boot_unknown
+    "Nieznany\0"  // svc.boot_unknown
     "Utraty\0"  // svc.drops
     "Wolne\0"  // svc.free
     "Przerwy\0"  // svc.gaps
@@ -1400,33 +1439,34 @@ const char TEXT_PL[] =
     "Największy blok\0"  // svc.largest
     "Limiter\0"  // svc.limiter
     "Łącze\0"  // svc.link
-    "utracone\0"  // svc.link_lost
-    "jest\0"  // svc.link_up
+    "Utracone\0"  // svc.link_lost
+    "Jest\0"  // svc.link_up
     "Minimum\0"  // svc.min
-    "brak\0"  // svc.none
+    "Brak\0"  // svc.none
     "Urządzenie\0"  // svc.peer
-    "połączone\0"  // svc.peer_on
-    "normalny\0"  // svc.safe_off
+    "Połączone\0"  // svc.peer_on
+    "Normalny\0"  // svc.safe_off
     "AKTYWNY\0"  // svc.safe_on
     "Tryb awaryjny\0"  // svc.safe.short
     "Stos main\0"  // svc.stack
     "Zawieszone\0"  // svc.stalled
-    "Niedobory\0"  // svc.underruns
+    "Przepełnienia UART\0"  // svc.uart_ovf
+    "Przerwy w dźwięku\0"  // svc.underruns
     "Czas pracy\0"  // svc.uptime
     "AirPlay 1 · zgodność z Windows\0"  // sys.airplay_1
     "Tryb AirPlay\0"  // sys.airplay_mode
     "błąd przełączania\0"  // sys.ap_switch_failed
     "przełączanie…\0"  // sys.ap_switching
     "Jasność\0"  // sys.brightness
-    "Brak satelity\0"  // sys.bt_none
+    "Brak modułu Bluetooth\0"  // sys.bt_none
     "Brak połączonego telefonu\0"  // sys.bt_ready
     "Urządzenie\0"  // sys.device
     "Wyłączony\0"  // sys.eq_off
     "Łączność\0"  // sys.links
     "{n} min\0"  // sys.minutes
-    "nigdy\0"  // sys.never
-    "nie ogłasza się w sieci\0"  // sys.not_announced
-    "brak w tej kompilacji\0"  // sys.not_built
+    "Nigdy\0"  // sys.never
+    "Nie ogłasza się w sieci\0"  // sys.not_announced
+    "Brak w tej kompilacji\0"  // sys.not_built
     "Bursztyn\0"  // sys.scheme_amber
     "Niebieski\0"  // sys.scheme_blue
     "Zielony\0"  // sys.scheme_green
@@ -1442,10 +1482,14 @@ const char TEXT_PL[] =
     "Własny punkt dostępu „{name}”\0"  // sys.wifi_own_ap
     "Cofnij\0"  // undo.action
     "B\0"  // unit.b
+    "bit\0"  // unit.bit
+    "kan.\0"  // unit.ch
     "d\0"  // unit.day
     "dB\0"  // unit.db
     "Hz\0"  // unit.hz
     "KB\0"  // unit.kb
+    "kbit/s\0"  // unit.kbps
+    "kHz\0"  // unit.khz
     "MB\0"  // unit.mb
     "ms\0"  // unit.ms
     "Punkt dostępu „{name}”\0"  // wifi.ap_title
@@ -1490,7 +1534,7 @@ const char TEXT_PL[] =
     "Zwrotnica nie jest potrzebna\0"  // xover.stereo_title
     "Stereo + subwoofer\0"  // xover.sub
     "Zwrotnica\0"  // xover.title
-    "jeszcze nieobsługiwane\0"  // xover.unsupported
+    "Jeszcze nieobsługiwane\0"  // xover.unsupported
     "AIRPLAY\0"  // src.airplay ↑
     "BLUETOOTH\0"  // src.bt ↑
     "KARTA\0"  // src.card ↑
@@ -1503,7 +1547,7 @@ const char TEXT_PL[] =
     "PAMIĘĆ\0"  // svc.memory ↑
     "RAM WEWN.\0"  // svc.ram ↑
     "PRACA\0"  // svc.run ↑
-    "SATELITA\0"  // svc.sat ↑
+    "MODUŁ BLUETOOTH\0"  // svc.sat ↑
     "{n} kraj\0"  // cat.countries.one
     "{n} kraje\0"  // cat.countries.few
     "{n} krajów\0"  // cat.countries.many
@@ -1532,9 +1576,9 @@ const char TEXT_PL[] =
     "{n} utwory\0"  // srcsub.tracks.few
     "{n} utworów\0"  // srcsub.tracks.many
     "{n} utworu\0";  // srcsub.tracks.other
-const uint16_t S_PL[] = {0, 17, 49, 70, 91, 117, 138, 152, 176, 184, 196, 203, 262, 274, 294, 317, 326, 345, 427, 458, 531, 556, 592, 598, 625, 684, 703, 733, 762, 774, 785, 804, 820, 842, 849, 860, 1005, 1069, 1082, 1107, 1129, 1147, 1184, 1204, 1238, 1266, 1298, 1336, 1364, 1390, 1426, 1454, 1484, 1494, 1549, 1563, 1612, 1624, 1681, 1700, 1713, 1720, 1727, 1737, 1748, 1755, 1768, 1774, 1784, 1793, 1800, 1818, 1839, 1854, 1874, 1881, 1899, 1917, 1963, 1982, 2002, 2023, 2060, 2092, 2117, 2127, 2161, 2201, 2248, 2278, 2294, 2335, 2355, 2368, 2395, 2439, 2462, 2472, 2483, 2500, 2512, 2521, 2531, 2545, 2555, 2560, 2568, 2577, 2589, 2599, 2610, 2618, 2623, 2634, 2642, 2651, 2664, 2682, 2686, 2694, 2698, 2705, 2710, 2714, 2723, 2733, 2759, 2782, 2793, 2797, 2807, 2818, 2827, 2837, 2843, 2848, 2855, 2888, 2906, 2917, 2928, 2938, 2972, 2994, 3013, 3028, 3042, 3057, 3078, 3106, 3127, 3152, 3174, 3185, 3197, 3218, 3267, 3286, 3295, 3302, 3313, 3316, 3323, 3330, 3336, 3398, 3430, 3439, 3485, 3511, 3517, 3597, 3622, 3653, 3661, 3669, 3689, 3716, 3728, 3755, 3775, 3779, 3805, 3822, 3829, 3837, 3844, 3851, 3859, 3878, 3880, 3894, 3930, 3957, 3997, 4015, 4017, 4032, 4067, 4075, 4101, 4109, 4113, 4123, 4129, 4134, 4140, 4148, 4152, 4181, 4207, 4235, 4255, 4267, 4284, 4305, 4323, 4347, 4376, 4388, 4394, 4405, 4418, 4424, 4433, 4441, 4448, 4452, 4466, 4483, 4497, 4511, 4518, 4528, 4539, 4551, 4560, 4567, 4573, 4581, 4593, 4610, 4618, 4626, 4635, 4640, 4648, 4653, 4665, 4677, 4686, 4694, 4708, 4718, 4729, 4739, 4750, 4784, 4797, 4819, 4837, 4847, 4861, 4889, 4901, 4913, 4926, 4934, 4940, 4966, 4988, 4997, 5007, 5015, 5024, 5031, 5037, 5045, 5059, 5068, 5078, 5088, 5104, 5140, 5147, 5149, 5151, 5154, 5157, 5160, 5163, 5166, 5194, 5235, 5247, 5261, 5281, 5290, 5394, 5419, 5428, 5457, 5474, 5507, 5537, 5561, 5615, 5669, 5690, 5708, 5724, 5751, 5759, 5782, 5820, 5827, 5866, 5895, 5918, 5950, 5966, 5976, 6010, 6031, 6047, 6064, 6095, 6111, 6121, 6131, 6138, 6167, 6186, 6196};
-const uint16_t SU_PL[] = {6220, 6228, 6238, 6244, 6249, 6255, 6259, 6265, 6275, 6289, 6298, 6308, 6314};
-const uint16_t P_PL[] = {6323, 6332, 6342, 6354, 6364, 6376, 6388, 6402, 6414, 6425, 6436, 6447, 6458, 6468, 6479, 6492, 6503, 6524, 6545, 6568, 6589, 6611, 6633, 6655, 6677, 6688, 6699, 6712};
+const uint16_t S_PL[] = {0, 17, 49, 70, 91, 117, 138, 152, 176, 184, 196, 203, 262, 274, 294, 325, 334, 353, 435, 466, 539, 564, 599, 605, 632, 691, 710, 740, 769, 781, 792, 811, 827, 849, 856, 867, 1010, 1072, 1085, 1110, 1132, 1149, 1186, 1206, 1240, 1268, 1300, 1338, 1366, 1392, 1428, 1456, 1483, 1493, 1548, 1562, 1612, 1624, 1681, 1700, 1713, 1720, 1727, 1737, 1748, 1755, 1768, 1774, 1784, 1793, 1800, 1818, 1839, 1856, 1876, 1883, 1901, 1919, 1965, 1984, 2004, 2025, 2062, 2094, 2119, 2129, 2163, 2203, 2250, 2280, 2296, 2337, 2357, 2370, 2397, 2441, 2464, 2474, 2485, 2496, 2513, 2525, 2534, 2544, 2558, 2568, 2573, 2581, 2590, 2602, 2612, 2623, 2631, 2636, 2647, 2655, 2664, 2677, 2695, 2699, 2707, 2711, 2718, 2723, 2727, 2736, 2746, 2762, 2788, 2811, 2822, 2826, 2836, 2847, 2856, 2866, 2872, 2877, 2884, 2917, 2935, 2946, 2957, 2967, 3001, 3023, 3042, 3057, 3071, 3086, 3107, 3135, 3156, 3181, 3203, 3214, 3226, 3247, 3296, 3315, 3324, 3331, 3342, 3345, 3352, 3359, 3365, 3427, 3459, 3468, 3514, 3540, 3546, 3626, 3651, 3682, 3690, 3698, 3718, 3745, 3759, 3786, 3806, 3810, 3836, 3853, 3860, 3868, 3875, 3882, 3890, 3909, 3911, 3925, 3932, 3946, 3960, 3971, 4003, 4036, 4075, 4099, 4101, 4116, 4151, 4159, 4183, 4191, 4195, 4205, 4211, 4216, 4222, 4230, 4234, 4263, 4289, 4312, 4332, 4344, 4361, 4382, 4400, 4424, 4453, 4465, 4471, 4484, 4497, 4503, 4512, 4520, 4527, 4531, 4545, 4562, 4576, 4590, 4597, 4607, 4618, 4630, 4639, 4646, 4652, 4660, 4672, 4689, 4697, 4705, 4714, 4719, 4727, 4732, 4744, 4756, 4765, 4773, 4787, 4797, 4808, 4828, 4848, 4859, 4893, 4906, 4928, 4946, 4956, 4979, 5007, 5019, 5031, 5044, 5052, 5058, 5084, 5106, 5115, 5125, 5133, 5142, 5149, 5155, 5163, 5177, 5186, 5196, 5206, 5222, 5258, 5265, 5267, 5271, 5276, 5278, 5281, 5284, 5287, 5294, 5298, 5301, 5304, 5332, 5373, 5385, 5399, 5419, 5428, 5532, 5557, 5566, 5595, 5612, 5645, 5675, 5699, 5753, 5807, 5828, 5846, 5862, 5889, 5897, 5920, 5958, 5965, 6004, 6033, 6056, 6088, 6104, 6114, 6148, 6169, 6185, 6202, 6233, 6249, 6259, 6269, 6276, 6305, 6324, 6334};
+const uint16_t SU_PL[] = {6358, 6366, 6376, 6382, 6387, 6393, 6397, 6403, 6413, 6427, 6436, 6446, 6452};
+const uint16_t P_PL[] = {6469, 6478, 6488, 6500, 6510, 6522, 6534, 6548, 6560, 6571, 6582, 6593, 6604, 6614, 6625, 6638, 6649, 6670, 6691, 6714, 6735, 6757, 6779, 6801, 6823, 6834, 6845, 6858};
 
 }  // namespace
 

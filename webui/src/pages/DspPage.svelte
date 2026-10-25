@@ -1,5 +1,5 @@
 <script>
-  // Налаштування › Звук › Еквалайзер (docs/PLAN_SOUND_UX_2026-10-14.md, S7 and appendix A): the
+  // Налаштування › Звук › Еквалайзер: the
   // equalizer for enthusiasts. The switch; the sounds as a dropdown (SoundPick; chips until the
   // customer's 15.10.2026); the curve with a point per band that is on; the bands as a list, each
   // opened in a sheet; «Скинути «Власний»» for «Власний» alone — a genre never changes: an edit
@@ -20,7 +20,7 @@
   import { soundName } from '../lib/sounds.js';
   import { port } from '../lib/speakers.js';
   import { createEq } from '../lib/eq.js';
-  import { shownBands, addBand, deleteBand, resetBands, MAX_BANDS } from '../lib/eqband.js';
+  import { addBand, resetBands, MAX_BANDS } from '../lib/eqband.js';
   import { hasGain } from '../lib/eqmath.js';
   import { formatFilters } from '../lib/eqfile.js';
   import { systemBands } from '../lib/syscurve.js';
@@ -59,8 +59,10 @@
   // the panel edited it: take its version (unless an edit of ours is on its way)
   $: if (d) eq.follow(s['audio.eq_rev']);
   $: mine = d?.preset === 'custom';
-  $: listed = shownBands(bands);
-  $: full = listed.length >= MAX_BANDS;
+  // every band by its place, on or off, as the glass has them
+  $: listed = bands.map((b, i) => ({ i, b }));
+  $: full = bands.length >= MAX_BANDS;
+  $: anyOn = bands.some((b) => b.on);
 
   const eqEnabled = createSettingSender('audio.eq_enabled', { debounceMs: 0 });
 
@@ -76,7 +78,7 @@
 
   // ── a band in its sheet ──
   let open = -1;
-  $: if (open >= 0 && !bands[open]?.on) open = -1;        // deleted, here or on the panel
+  $: if (open >= 0 && !bands[open]) open = -1;            // a shorter set came from the panel
   let sel = 0;
   $: if (open >= 0) sel = open;
   function add() {
@@ -85,19 +87,13 @@
     byHand(r.bands);
     open = r.i;
   }
-  // a deleted band comes back from the snackbar, with the preset it was deleted from
-  function remove(i) {
-    open = -1;
-    const was = { preset: d.preset, bands: bands.slice() };
-    byHand(deleteBand(bands, i));
-    toastAction($t['eq.band_deleted'], $t['sound.undo'],
-      () => (was.preset !== 'custom' ? eq.choose(was.preset) : eq.setBands(was.bands)));
-  }
+  // «Увімкнена» in the sheet: on or off, its numbers kept — the switch is its own way back
+  const turn = (i, on) => setBand(i, { ...bands[i], on });
 
   // ── a point moved on the plot can be put back from a snackbar (stores/toast.js): where it was,
   //    and the sound it was then — «Скасувати» chooses a genre the drag made «Власний» again ──
-  $: fText = (f) => (f >= 1000 ? `${decimal(f / 1000, 2, $language)} kHz` : `${f.toFixed(0)} Hz`);
-  $: gText = (b) => (hasGain(b.type) ? `${b.gain > 0 ? '+' : ''}${decimal(b.gain, 1, $language)} dB` : '—');
+  $: fText = (f) => (f >= 1000 ? `${decimal(f / 1000, 2, $language)} ${$t['unit.khz']}` : `${f.toFixed(0)} ${$t['unit.hz']}`);
+  $: gText = (b) => (hasGain(b.type) ? `${b.gain > 0 ? '+' : ''}${decimal(b.gain, 1, $language)} ${$t['unit.db']}` : '—');
   let grabbed = null;
   function grab(i) {
     grabbed = { i, from: { band: { ...bands[i] }, preset: d.preset } };
@@ -159,6 +155,7 @@
   $: stages = showSystem ? systemBands({
     bass: s['audio.bass_db'] ?? 0,
     treble: s['audio.treble_db'] ?? 0,
+    place: s['audio.placement'] ?? 0,
     loudDb,
     hpHz: s['audio.hp_hz'] ?? 40,
     portHz: p.hz,
@@ -243,28 +240,28 @@
 
   <div class="list" class:dim={!eqOn}>
     {#each listed as x (x.i)}
-      <button type="button" class="band" on:click={() => (open = x.i)}>
+      <button type="button" class="band" class:off={!x.b.on} on:click={() => (open = x.i)}>
         <span class="n">{x.i + 1}</span>
         <span class="what"><span>{$t[TYPE_KEYS[x.b.type]]}</span><span class="f">{fText(x.b.f)}</span></span>
-        <span class="g">{gText(x.b)}</span>
+        <span class="g">{x.b.on ? gText(x.b) : $t['eq.off']}</span>
         <Icon name="chevron_right" size={20} />
       </button>
     {:else}
       <p class="empty">{$t['eq.no_bands']}</p>
     {/each}
-    <button type="button" class="add" disabled={full} on:click={add}>{$t['eq.add']}</button>
+    {#if !full}<button type="button" class="add" on:click={add}>{$t['eq.add']}</button>{/if}
   </div>
 
   {#if mine}
     <div class="foot">
-      <Button variant="text" disabled={!listed.length} on:click={reset}>{$t['eq.reset_mine']}</Button>
+      <Button variant="text" disabled={!anyOn} on:click={reset}>{$t['eq.reset_mine']}</Button>
     </div>
   {/if}
 
 
   {#if open >= 0 && bands[open]}
     <BandSheet band={bands[open]} n={open + 1}
-               on:edit={(e) => setBand(open, e.detail)} on:delete={() => remove(open)} on:close={() => (open = -1)} />
+               on:edit={(e) => setBand(open, e.detail)} on:turn={(e) => turn(open, e.detail)} on:close={() => (open = -1)} />
   {/if}
   {#if importing}
     <ImportDialog on:import={imported} on:close={() => (importing = false)} />
@@ -350,6 +347,10 @@
   .what { flex: 1; min-width: 0; display: flex; flex-direction: column; font-size: 16px; }
   .what .f { font-size: 13px; color: var(--on-surface-var); }
   .g { font-size: 16px; font-variant-numeric: tabular-nums; }
+  /* a band that is off: its number hollow and its words faint, as its point on the plot */
+  .band.off .n { background: none; box-shadow: inset 0 0 0 2px var(--outline); color: var(--outline); }
+  .band.off .what, .band.off .g { color: var(--outline); }
+  .band.off .what .f { color: var(--outline); }
   .empty { padding: 16px 16px 4px; font-size: 14px; line-height: 20px; color: var(--on-surface-var); }
   .add {
     width: 100%;

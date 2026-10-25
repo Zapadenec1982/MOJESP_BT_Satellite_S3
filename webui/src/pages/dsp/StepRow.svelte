@@ -1,5 +1,5 @@
 <script>
-  // One number of a band in its sheet (docs/PLAN_SOUND_UX_2026-10-14.md, appendix A): the name, the
+  // One number of a band in its sheet: the name, the
   // value, − and + — the steps are the quick way — and the value itself a field, the exact way:
   // "1.2k" and a decimal comma are read too (as dsp/NumField does on the calibration page).
   import { createEventDispatcher } from 'svelte';

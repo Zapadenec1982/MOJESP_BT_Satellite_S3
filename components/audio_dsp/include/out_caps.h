@@ -2,10 +2,9 @@
  * @file out_caps.h
  * @brief The output schemes a firmware can play — `audio.out_caps`, as bits.
  *
- * docs/PLAN_SOUND_UX_2026-10-14.md, S8: «Кросовер» shows a scheme as working only once the
+ * «Кросовер» shows a scheme as working only once the
  * firmware says it plays it; until then it is «ще не підтримується». A scheme is said here after
- * it has been built and checked (the four-channel DAC plan, P4_Four_Channel_DAC_DSP.md §3.6, §8),
- * never ahead of it. This board has one stereo pair, so it says stereo and nothing else.
+ * it has been built and checked, never ahead of it. This board has one stereo pair, so it says stereo and nothing else.
  */
 
 #pragma once

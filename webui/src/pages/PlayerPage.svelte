@@ -1,16 +1,17 @@
 <script>
-  // Player (docs/PLAN_SOUND_UX_2026-10-14.md, S5, appendix A): a remote, not a second player
+  // Player: a remote, not a second player
   // (customer, 11.10.2026). Where the sound comes from; the cover, big; what plays, its codec; the
   // transport with a big pause; a thin volume that shows its number while it moves; one «Звук»
   // button for the sheet with the sounds, Бас, Високі and the loudness (S3). Below, what can be done
   // about the source that plays. The faces, texts and commands are the panel's (stores/now.js after
   // screen_now.cpp), and so is the background: the shell tints the page with ui.cover_rgb.
   import { onDestroy } from 'svelte';
-  import { now } from '../stores/now.js';
+  import { now, subLine } from '../stores/now.js';
   import { state, setStateKey } from '../stores/state.js';
   import { t, fmt, msg, plural, language, K } from '../stores/i18n.js';
   import { href } from '../stores/router.js';
   import { command } from '../lib/cmd.js';
+  import { badge } from '../lib/numbers.js';
   import { apiPost, apiBlob } from '../lib/api.js';
   import { createSettingSender } from '../lib/settings.js';
   import { toastSuccess, toastError } from '../stores/toast.js';
@@ -26,7 +27,7 @@
 
   $: np = $now;
   $: title = np.title ?? $t[np.titleKey];
-  $: sub = np.subtitle ?? (np.subtitleKey ? $t[np.subtitleKey] : '');
+  $: sub = subLine(np, $t, $language);
   $: s = $state;
 
   // ── position between the panel's deltas (every 1.5 s): count on while playing. The anchor moves
@@ -154,7 +155,7 @@
       {#if sub || np.format}
         <span class="s">
           {#if sub}<span class="who">{sub}</span>{/if}
-          {#if np.format}<span class="badge">{np.format}</span>{/if}
+          {#if np.format}<span class="badge">{badge(np.format, $t, $language)}</span>{/if}
         </span>
       {/if}
     </div>
@@ -241,7 +242,7 @@
       </Group>
     {:else if np.kind === 'bt'}
       <Group caption={$t['src.bt']}>
-        <Row icon="smartphone" title={s['bt.peer'] || $t['srcsub.phone_off']} subtitle={s['bt.peer'] ? np.format : ''} />
+        <Row icon="smartphone" title={s['bt.peer'] || $t['srcsub.phone_off']} subtitle={s['bt.peer'] ? badge(np.format, $t, $language) : ''} />
       </Group>
     {:else if np.kind === 'airplay'}
       <Group caption={$t['src.airplay']}>

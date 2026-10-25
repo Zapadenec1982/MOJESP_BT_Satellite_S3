@@ -1,5 +1,5 @@
 <script>
-  // Wi-Fi (PLAN_WEBUI §2, System › Links): the panel's Wi-Fi page (screen_wifi.cpp) — the network
+  // Wi-Fi: the panel's Wi-Fi page (screen_wifi.cpp) — the network
   // it is on, the networks it hears, joining one, forgetting it — plus the access point it falls
   // back to (GET / POST /api/wifi/ap, applied on the next start).
   //

@@ -4,7 +4,7 @@
  *
  * The values are the customer's design package (artifact «Медіаплеєр P4», round 3,
  * «P4 Player M3», 24.09.2026), copied role for role. Three dark schemes; the light one the
- * mock also carries was declined (docs/PLAN_UI_M3_2026-09-24.md §7).
+ * mock also carries was declined.
  *
  * A screen never spells a colour or a font: it names a ROLE here. That is what makes the
  * scheme switch in Settings — and, in U6, a scheme derived from the cover — a table lookup

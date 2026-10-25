@@ -11,7 +11,7 @@ export function fmt(s, params = {}) {
 const MSG = /^@([a-z][a-z0-9_]*(?:\.[a-z0-9_]+)+)(?:\u001f|$)/;
 
 /**
- * A message the firmware publishes (docs/PLAN_PANEL_LANG_2026-10-12.md, U8.5): "@<key>", then
+ * A message the firmware publishes: "@<key>", then
  * name=value arguments, each behind U+001F — the panel's i18n::render() reads the same. A status
  * line, a progress: airplay.mode_status, audio.port_meas_status, the DLNA browser's lines. Only a
  * key of the catalog's shape that the catalog has makes a message; anything else — a DLNA folder

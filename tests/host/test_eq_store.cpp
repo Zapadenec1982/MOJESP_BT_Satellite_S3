@@ -755,7 +755,7 @@ TEST_CASE("web: numbers out of reach of the panel's page are held to it") {
 
 TEST_CASE("web: an imported set of three bands is «Власний», and a restart and a sound chosen meanwhile keep it") {
     // S7: «Імпорт фільтрів» posts a file's bands as they are — three here, not ten — and S2 keeps
-    // «Власний» of any count (docs/PLAN_SOUND_UX_2026-10-14.md)
+    // «Власний» of any count
     Pair f;
     EqStore st;
     EqDoc d;

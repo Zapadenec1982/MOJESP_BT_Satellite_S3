@@ -5,7 +5,7 @@
  * Header-only and free of IDF so the host suite holds it to its shape
  * (tests/host/test_dlna_browser_json.cpp); modules/dlna/src/dlna_browser_http.inc sends it.
  *
- * The web's DLNA page (docs/PLAN_WEBUI_2026-10-11.md §2, A7) reads the same snapshot the panel's
+ * The web's DLNA page reads the same snapshot the panel's
  * page draws, and commands it the same way: dlna.browse_cmd, encode()d with the revision shown.
  * `can_back` is what the panel's header ← asks before it climbs a level; without it the web
  * could only guess whether "up" exists.

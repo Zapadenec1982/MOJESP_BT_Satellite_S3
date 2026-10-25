@@ -1,9 +1,10 @@
 <script>
-  // Firmware (PLAN_WEBUI §2, System › Device): what runs now (GET /api/ota) and an update from a
+  // Firmware: what runs now (GET /api/ota) and an update from a
   // .bin file (POST /api/ota). The image goes into the other app slot and the panel restarts
   // into it; the web interface itself is in the data partition and is not part of the image.
   import { onMount, onDestroy } from 'svelte';
-  import { t, fmt } from '../../stores/i18n.js';
+  import { t, fmt, language } from '../../stores/i18n.js';
+  import { decimal } from '../../lib/numbers.js';
   import { apiGet, apiUpload } from '../../lib/api.js';
   import { toastError, toastWarn } from '../../stores/toast.js';
   import Group from '../../m3/Group.svelte';
@@ -27,7 +28,7 @@
   });
   onDestroy(() => clearInterval(timer));
 
-  const size = (b) => (b < 1048576 ? `${(b / 1024).toFixed(0)} KB` : `${(b / 1048576).toFixed(2)} MB`);
+  $: size = (b) => (b < 1048576 ? `${(b / 1024).toFixed(0)} ${$t['unit.kb']}` : `${decimal(b / 1048576, 2, $language)} ${$t['unit.mb']}`);
 
   function pick(e) {
     const f = e.target.files[0];

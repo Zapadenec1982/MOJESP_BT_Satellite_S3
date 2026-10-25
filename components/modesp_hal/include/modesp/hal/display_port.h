@@ -9,7 +9,6 @@
  *
  * Zero heap: лише etl-контейнери фіксованого розміру. Безпечно з on_update().
  * Єдиний шов display-підсистеми (legacy IDisplayRenderer/DisplayFrame видалено).
- * Деталі: docs/display/ADR-002-display-architecture.md.
  */
 
 #pragma once

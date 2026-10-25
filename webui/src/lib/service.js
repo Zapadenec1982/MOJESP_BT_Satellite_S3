@@ -39,8 +39,8 @@ export function limTenths(gr) {
 /** A working limiter is worth noticing, never a fault (screen_svc.cpp). */
 export const limiter = (tenths) => (tenths > 0 ? WARN : OK);
 
-// ── verdicts the panel does not draw: the norms of docs/DSP_V2_CALIBRATION.md ("Що дивитися
-//    потім") and the manifest's own words ──
+// ── verdicts the panel does not draw: the norms of docs/AUDIO.md «Діагностика» and the
+//    manifest's own words ──
 /** `audio.bass_gr`: 0…6 dB on loud bass at 100 %; more than 10 dB means the EQ asks too much. */
 export const bassGr = (db) => (db > 10 ? WARN : OK);
 /** `audio.dsp_pct`: up to ~35 % at 192 kHz. */

@@ -1,7 +1,7 @@
 /**
  * @file screen_eq.cpp
  * @brief The equalizer — the sounds' field, the response curve with draggable band handles and
- *        the band panel (docs/PLAN_SOUND_UX_2026-10-14.md, S7: the limiter's meter is Service's).
+ *        the band panel (S7: the limiter's meter is Service's).
  *        The sounds were chips from S7; since 15.10.2026 (the customer) they are a field that
  *        opens their list, as on the «Звук» sheet (sound_sheet.cpp ui_sound_pick_show).
  *
@@ -57,9 +57,10 @@ constexpr int32_t PLOT_H   = CARD_H - PLOT_Y - 26;     // room for the Hz scale:
 constexpr int32_t STEP_GAP = 8;
 constexpr int32_t STEP_W   = (uig::CONT_W - 2 * STEP_GAP) / 3;
 constexpr int32_t TYPE_W   = 176;
-constexpr int32_t PEQ_X    = 6;                        // the switch; its reach (84×64) ends at 74
-constexpr int32_t FIELD_X  = 84;                       // the sounds' field, after the switch
+constexpr int32_t PEQ_W    = 164;                      // the switch and its word «Увімкнено», one target
+constexpr int32_t FIELD_X  = PEQ_W + 8;                // the sounds' field, after the switch
 constexpr int32_t FIELD_W  = 330;                      // clear of «Скинути «Власний»» (from 522)
+static_assert(FIELD_X + FIELD_W <= 522 - 16, "the field stays clear of the reset button");
 constexpr int32_t FIELD_H  = TOP_H;
 constexpr int32_t RESET_W  = 230;                      // «Скинути «Власний»», at the right while it plays
 constexpr int32_t NAV_BTN  = 64;                       // ‹ › of the band, − + of a stepper
@@ -93,7 +94,7 @@ constexpr int CUSTOM = audio_core::EQ_PRESET_CUSTOM;
 constexpr S TYPE_NAME[] = {S::eq_type_peak, S::eq_type_lowshelf, S::eq_type_highshelf,
                            S::eq_type_lowpass, S::eq_type_highpass, S::eq_type_notch};
 /// The steppers' captions; the third is the Q's own name, the same in every language.
-const char* param_name(int i) { return i == 0 ? tr(S::eq_freq) : i == 1 ? tr(S::eq_gain) : "Q"; }
+const char* param_name(int i) { return i == 0 ? tr(S::eq_freq) : i == 1 ? tr(S::eq_gain) : tr(S::eq_q_width); }
 
 /// The presets by id (audio_dsp/eq_presets.cpp), as the web names them (DspPage's PRESET_KEYS):
 /// the component's own name is Ukrainian and stays only as the fallback for an id not here.
@@ -247,15 +248,15 @@ int pass_q_index(float q) {
 }
 
 /// Writes what the third stepper should show and returns the caption that belongs above it.
-/// A named alignment is a slope; anything else is a bare Q, and printing "Спад 3.90" would be
-/// a lie about what the number means.
+/// A named alignment is a slope; anything else is a width, «Ширина (Q)» as the web's band sheet
+/// says it — printing "Спад 3.90" would be a lie about what the number means.
 const char* q_text(const audio_core::EqBand& b, char* out, int n) {
     if (is_pass(b.type)) {
         if (fabsf(b.q - Q_LR12) < 0.02f) { snprintf(out, (size_t)n, "LR 12"); return tr(S::eq_slope); }
         if (fabsf(b.q - Q_BW12) < 0.02f) { snprintf(out, (size_t)n, "BW 12"); return tr(S::eq_slope); }
     }
     i18n::num(out, (size_t)n, (int32_t)lroundf(b.q * 100.0f), 2);
-    return "Q";
+    return tr(S::eq_q_width);
 }
 
 /// Changing the type into a pass filter starts it at Butterworth. Leftover Q from a peak —
@@ -319,6 +320,12 @@ void edited_by_hand() {
 
 // ── drawing ──
 
+/// A grid line's dB as the web's plot (EqPlot.svelte) labels it: "+6", "0", "−6" (U+2212).
+void grid_text(char* out, size_t n, int db) {
+    if (db < 0) snprintf(out, n, "\xE2\x88\x92%d", -db);
+    else        snprintf(out, n, db > 0 ? "+%d" : "%d", db);
+}
+
 void pick_range() {
     const audio_core::EqSection& sec = g.cfg.sec[0];
     float want = 12.0f;
@@ -334,8 +341,8 @@ void pick_range() {
         const int32_t y = PLOT_Y + (int32_t)(gy((float)db) * (float)PLOT_H);
         lv_obj_set_y(g.grid_y[i], y);
         lv_obj_set_y(g.grid_y_lbl[i], y - 10);
-        char b[8];
-        snprintf(b, sizeof(b), "%+d", db);
+        char b[16];
+        grid_text(b, sizeof(b), db);
         lv_label_set_text(g.grid_y_lbl[i], b);
     }
 }
@@ -395,15 +402,14 @@ void refresh_band_panel() {
     lv_label_set_text(g.band_lbl, buf);
     if (b.enabled) lv_obj_add_state(g.band_sw, LV_STATE_CHECKED);
     else           lv_obj_remove_state(g.band_sw, LV_STATE_CHECKED);
-    // Numbers with the language's decimal separator (decision 7); the units stay as the page
-    // has always written them.
+    // Numbers with the language's decimal separator (decision 7), units in its words.
     char v[16];
-    if (b.freq_hz >= 1000.0f) snprintf(buf, sizeof(buf), "%s kHz", i18n::num(v, sizeof(v), (int32_t)lroundf(b.freq_hz / 10.0f), 2));
-    else                      snprintf(buf, sizeof(buf), "%.0f Hz", (double)b.freq_hz);
+    if (b.freq_hz >= 1000.0f) snprintf(buf, sizeof(buf), "%s %s", i18n::num(v, sizeof(v), (int32_t)lroundf(b.freq_hz / 10.0f), 2), tr(S::unit_khz));
+    else                      snprintf(buf, sizeof(buf), "%.0f %s", (double)b.freq_hz, tr(S::unit_hz));
     lv_label_set_text(g.step_val[0], buf);
     // Showing "+7.0 dB" on a low pass invites pressing a + that is wired to nothing.
     const bool gain = has_gain(b.type);
-    if (gain) snprintf(buf, sizeof(buf), "%s dB", i18n::num(v, sizeof(v), (int32_t)lroundf(b.gain_db * 10.0f), 1, true));
+    if (gain) snprintf(buf, sizeof(buf), "%s %s", i18n::num(v, sizeof(v), (int32_t)lroundf(b.gain_db * 10.0f), 1, true), tr(S::unit_db));
     else      snprintf(buf, sizeof(buf), "—");
     lv_label_set_text(g.step_val[1], buf);
     m3w::button_enable(g.step_dec[1], gain);
@@ -482,10 +488,10 @@ bool same_band(const audio_core::EqBand& a, const audio_core::EqBand& b) {
 
 /// A band as the snackbar says it — as the band panel writes its numbers.
 void band_text(char* out, size_t n, const audio_core::EqBand& b) {
-    char f[20], v[12];
-    if (b.freq_hz >= 1000.0f) snprintf(f, sizeof(f), "%s kHz", i18n::num(v, sizeof(v), (int32_t)lroundf(b.freq_hz / 10.0f), 2));
-    else                      snprintf(f, sizeof(f), "%.0f Hz", (double)b.freq_hz);
-    if (has_gain(b.type)) snprintf(out, n, "%s %s dB", f, i18n::num(v, sizeof(v), (int32_t)lroundf(b.gain_db * 10.0f), 1, true));
+    char f[24], v[12];
+    if (b.freq_hz >= 1000.0f) snprintf(f, sizeof(f), "%s %s", i18n::num(v, sizeof(v), (int32_t)lroundf(b.freq_hz / 10.0f), 2), tr(S::unit_khz));
+    else                      snprintf(f, sizeof(f), "%.0f %s", (double)b.freq_hz, tr(S::unit_hz));
+    if (has_gain(b.type)) snprintf(out, n, "%s %s %s", f, i18n::num(v, sizeof(v), (int32_t)lroundf(b.gain_db * 10.0f), 1, true), tr(S::unit_db));
     else                  snprintf(out, n, "%s", f);
 }
 
@@ -728,8 +734,15 @@ lv_obj_t* build(lv_obj_t* parent, UiCtx& c) {
 
     // ── top row: the switch, the sounds' field, «Скинути «Власний»» while it plays; the line
     //    under them (paint_top). The limiter's meter is Service's (screen_svc.cpp R_LIM). ──
-    g.peq = m3w::switch_m3(root, PEQ_X, (TOP_H - 32) / 2, false);
+    // the switch had no word: «Увімкнено», and the row takes a finger anywhere
+    lv_obj_t* peq_row = m3w::box(root, 0, 0, PEQ_W, TOP_H);
+    g.peq = m3w::switch_m3(peq_row, 6, (TOP_H - 32) / 2, false);
     lv_obj_add_event_cb(g.peq, peq_cb, LV_EVENT_VALUE_CHANGED, nullptr);
+    lv_obj_t* peq_lbl = m3w::text(peq_row, t.t.label_m, t.c.on_surface, tr(S::eq_enabled));
+    lv_obj_set_pos(peq_lbl, 6 + 52 + 12, (TOP_H - lv_font_get_line_height(t.t.label_m)) / 2);
+    lv_obj_set_width(peq_lbl, PEQ_W - (6 + 52 + 12));
+    lv_label_set_long_mode(peq_lbl, LV_LABEL_LONG_DOT);
+    m3w::switch_row(peq_row, g.peq);
 
     g.sounds = ui_sound_field(root, FIELD_W, FIELD_H, &g.sound_val);
     lv_obj_set_pos(g.sounds, FIELD_X, (TOP_H - FIELD_H) / 2);
@@ -752,8 +765,8 @@ lv_obj_t* build(lv_obj_t* parent, UiCtx& c) {
         const int db = (int)(s_range_db / 2.0f) * (2 - i);
         const int32_t y = PLOT_Y + (int32_t)(gy((float)db) * (float)PLOT_H);
         g.grid_y[i] = m3w::surface(g.card, PLOT_X, y, PLOT_W, 1, db == 0 ? t.c.outline : t.c.outline_var, 0);
-        char b[8];
-        snprintf(b, sizeof(b), "%+d", db);
+        char b[16];
+        grid_text(b, sizeof(b), db);
         g.grid_y_lbl[i] = m3w::text(g.card, t.t.label_s, t.c.outline, b);
         lv_obj_set_pos(g.grid_y_lbl[i], 6, y - 10);
     }

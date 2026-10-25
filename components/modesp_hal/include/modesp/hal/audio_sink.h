@@ -63,7 +63,7 @@ public:
 // ── player-fork: full-duplex stereo transport seam ──────────────────────────
 // One I²S controller = one clock domain: on a master port write() and read() are
 // paced by the same BCLK/WS, so the DAC output and the ADC input never drift
-// against each other (docs/CONCEPT.md §3). A slave port (external master such as
+// against each other (docs/CONCEPT.md «Тактові домени»). A slave port (external master such as
 // the BT module) is read-only; its true rate is whatever the peer clocks, and the
 // audio core measures it from the frame count.
 

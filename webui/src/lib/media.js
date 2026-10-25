@@ -1,5 +1,5 @@
 /*
- * The card's library and the DLNA browser, the parts with no page in them (W6, PLAN_WEBUI §2).
+ * The card's library and the DLNA browser, the parts with no page in them.
  * tools/tests/test_webui_media.py holds them to the firmware: the browser's command numbers and
  * their packing (components/dlna_client: dlna_browser.h, encode()), and the panel's way of
  * turning a path into a row (modules/ui_lvgl/src/screen_library.cpp).

@@ -1,7 +1,7 @@
 /**
  * @file test_dsp_passes.cpp
- * @brief HOST tests for the speed-ups of 15.10.2026 (components/audio_dsp;
- *        docs/PLAN_SOUND_UX_2026-10-14.md, S3): none of them changes a bit of the output. The
+ * @brief HOST tests for the speed-ups of 15.10.2026 (components/audio_dsp):
+ *        none of them changes a bit of the output. The
  *        filter sections run two to a pass (DspChain::Passes, svf_stereo2) give what one section
  *        a pass gives, through every kind of change; in the steady state they really make half
  *        the passes; and the whole chain still hashes to what it gave before.

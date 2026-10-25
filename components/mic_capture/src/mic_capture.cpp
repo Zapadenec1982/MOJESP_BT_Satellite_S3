@@ -115,7 +115,7 @@ bool init_hardware() {
     }
     capture_codec = use_es8311 ? "ES8311" : "ES7210";
     capture_gain = use_es8311 ? (gain_db / 6) * 6 : gain_db;
-    // CONCEPT section4: onboard NS4150 must remain disabled. External amplifier
+    // CONCEPT «Бортові піни»: onboard NS4150 must remain disabled. External amplifier
     // uses GPIO34 and belongs to AudioModule; never change that pin here.
     if (gpio_set_level(GPIO_NUM_11, 0) != ESP_OK ||
         gpio_set_direction(GPIO_NUM_11, GPIO_MODE_OUTPUT) != ESP_OK) return false;

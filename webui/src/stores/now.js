@@ -1,6 +1,7 @@
 import { derived } from 'svelte/store';
 import { state } from './state.js';
 import { K } from './i18n.js';
+import { badge } from '../lib/numbers.js';
 
 /*
  * What is playing, one shape for every source — the same faces, fallbacks and commands as the
@@ -148,3 +149,15 @@ function face(s) {
 }
 
 export const now = derived(state, ($s) => face($s));
+
+// the units badge() says, named for the catalog's check (tools/tests/test_webui_i18n.py)
+K('unit.khz'); K('unit.hz'); K('unit.kbps'); K('unit.bit'); K('unit.ch');
+
+/**
+ * The line under the title as a page shows it: the device's text — in the language's units where it
+ * is a technical line, USB's rate and the tone's frequency (numbers.js badge) — or the catalog's.
+ */
+export function subLine(np, t, lang) {
+  if (np.subtitle == null) return np.subtitleKey ? t[np.subtitleKey] : '';
+  return np.kind === 'usb' || np.kind === 'tone' ? badge(np.subtitle, t, lang) : np.subtitle;
+}

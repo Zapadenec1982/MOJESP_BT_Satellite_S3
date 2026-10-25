@@ -9,7 +9,7 @@
  *   - Phase 2 (CONFIG_MODESP_BLE_PROVISIONING): write-only provisioning service that
  *     sets Wi-Fi credentials into NVS via wifi_service + triggers reconnect.
  *
- * Init order (verified, docs/ble/ipixel_nimble_spec.md §2.5):
+ * Init order:
  *   NVS (main step 0) -> Wi-Fi (phase 2, registered before this) -> NimBLE (here).
  */
 #include "modesp/ble/ble_service.h"

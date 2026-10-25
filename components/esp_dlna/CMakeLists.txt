@@ -2,8 +2,8 @@
 # UPnP stack (espressif/esp_media_protocols: SSDP, SOAP, GENA).
 #
 # Vendored from the ESP-ADF example rather than depended on, because ADF's copy sits inside
-# an example tree with no registry package, and pulling ESP-ADF whole is exactly what
-# CONCEPT §8 refused. See README.md for the origin and the three local changes.
+# an example tree with no registry package, and pulling ESP-ADF whole is exactly what was
+# refused (docs/NETWORK.md «DLNA»). See README.md for the origin and the local changes.
 #
 # The XML is embedded as text files, and the list is longer than ADF's own CMakeLists.
 #

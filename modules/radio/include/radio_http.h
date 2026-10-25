@@ -3,7 +3,7 @@
  * @brief One plain-HTTP GET into a caller's buffer, for the station catalog and the covers.
  *
  * Plain HTTP on purpose: the panel holds one TLS session at a time, and while the radio
- * plays it belongs to the station (CONCEPT §Інтернет-радіо). Radio Browser and Deezer both
+ * plays it belongs to the station (docs/NETWORK.md «Інтернет-радіо»). Radio Browser and Deezer both
  * answer on port 80 (checked 04–05.10.2026).
  */
 
@@ -18,7 +18,7 @@ namespace radio_http {
 /// cut off before its end.
 ///
 /// A fresh client every time: the one esp_http_client failure this project has met is a
-/// REUSED handle whose previous answer was drained only partly (AUDIT_ESPRESSIF_2026-09-17).
+/// REUSED handle whose previous answer was drained only partly.
 int get(const char* host, int port, const char* path, char* buf, size_t cap,
         const char* user_agent, char* why, size_t why_sz);
 

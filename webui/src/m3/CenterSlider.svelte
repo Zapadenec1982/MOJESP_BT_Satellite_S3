@@ -1,6 +1,6 @@
 <script>
-  // A slider whose zero is in the middle — Бас, Високі and the balance (docs/PLAN_SOUND_UX_2026-10-14.md,
-  // S3): the one slider (Slider.svelte; the customer, 16.10.2026) — a 6 px rail, a round 20 px knob,
+  // A slider whose zero is in the middle — Бас, Високі and the balance:
+  // the one slider (Slider.svelte; the customer, 16.10.2026) — a 6 px rail, a round 20 px knob,
   // the name at the left and the number at the right — with a tick at the centre and the fill
   // running from the centre to the value; the number without a unit ("+2", "0", "−3"). Touch and the mouse are
   // lib/gesture.js's — a press changes nothing, a finger that goes up or down scrolls the page —

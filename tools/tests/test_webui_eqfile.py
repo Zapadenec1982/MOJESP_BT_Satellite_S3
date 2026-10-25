@@ -1,7 +1,7 @@
 """Filters as text, the equalizer page's edits and the whole system's curve, in Node:
 webui/src/lib/eqfile.js, lib/eqband.js and lib/syscurve.js.
 
-docs/PLAN_SOUND_UX_2026-10-14.md, S7: import and export in the text Equalizer APO and REW use, up to
+Import and export in the text Equalizer APO and REW use, up to
 10 bands, held to the panel's limits. The DoD: import -> export gives the same bands. Also what the
 other dialects look like when they come in (AutoEQ, REW's Generic export, APO's own forms), what
 is counted and not read, and the page's add / delete / reset on a set.
@@ -144,23 +144,23 @@ eq(p.clamped, 3, 'three filters had a number held');
 """)
 
 
-def test_the_page_adds_deletes_and_resets():
+def test_the_page_adds_to_a_short_set_and_resets():
     run("""
 const flat = Array.from({ length: 10 }, (_, i) => ({ type: 'peak', f: 100 * (i + 1), gain: 0, q: 1, on: false }));
-eq(B.shownBands(flat), [], '«Рівно»: nothing listed');
-let r = B.addBand(flat);
-eq([r.i, r.bands[0]], [0, { type: 'peak', f: 1000, gain: 0, q: 1, on: true }], 'the first off band, a 0 dB peak at 1 kHz');
-eq(B.shownBands(r.bands).map((x) => x.i), [0], 'listed by its place');
+eq(B.shownBands(flat), [], '«Рівно»: none on');
+eq(B.addBand(flat), null, 'ten bands: none to add — a band is switched on in its sheet');
+let r = B.addBand([]);
+eq([r.i, r.bands], [0, [{ type: 'peak', f: 1000, gain: 0, q: 1, on: true }]], 'an empty set: a 0 dB peak at 1 kHz');
 r = B.addBand(r.bands);
 eq([r.i, r.bands[1].f], [1, 140], 'the next goes in the widest free stretch: between 20 Hz and 1 kHz');
 const three = [{ type: 'lowshelf', f: 80, gain: 3, q: 0.71, on: true }, { type: 'peak', f: 3000, gain: -2, q: 1.4, on: true },
                { type: 'highshelf', f: 10000, gain: 1.5, q: 0.71, on: true }];
 r = B.addBand(three);
-eq([r.i, r.bands.length, r.bands[3].f], [3, 4, 490], 'a short set grows; 490 Hz is between 80 Hz and 3 kHz');
-eq(B.deleteBand(three, 1).map((b) => b.on), [true, false, true], 'deleting turns it off');
+eq([r.i, r.bands.length, r.bands[3].f, r.bands[3].on], [3, 4, 490, true], 'a short set grows; 490 Hz is between 80 Hz and 3 kHz');
+eq(B.shownBands(three.map((b, i) => (i === 1 ? { ...b, on: false } : b))).map((x) => x.i), [0, 2], 'on, by their place');
 eq(B.resetBands(three).map((b) => b.on), [false, false, false], 'reset: all off, the layout kept');
 const full = Array.from({ length: 10 }, (_, i) => ({ type: 'peak', f: 100 * (i + 1), gain: 1, q: 1, on: true }));
-eq(B.addBand(full), null, 'ten on: full');
+eq(B.addBand(full), null, 'ten: full');
 """)
 
 
@@ -183,6 +183,10 @@ near(at(st, 100), 3, 0.05, 'Бас +6: +3 dB at 100 Hz');
 near(at(st, 20), 6, 0.3, 'and near +6 under it');
 near(at(st, 10000), -1.5, 0.05, 'Високі -3: -1.5 dB at 10 kHz');
 eq(Y.systemBands({ bass: 9 })[0].gain, 6, 'held to ±6, as the core holds them');
+// where they stand: the room's cut on Бас's shelf, Бас keeping its ±6 over it (DspChain::PLACE_DB)
+eq(Y.systemBands({ place: 1 })[0].gain, -3, 'by a wall: -3 dB on the shelf');
+eq(Y.systemBands({ bass: -6, place: 2 })[0].gain, -12, 'in a corner, Бас -6 under it: -12');
+eq(Y.systemBands({ bass: 6, place: 2 }), [], 'Бас +6 in a corner: flat, no shelf');
 // the loudness: the high shelf is K_HI / K_LO of the low one
 st = Y.systemBands({ loudDb: 5.605 });
 eq(st.map((b) => [b.f, Math.round(b.gain * 1000) / 1000, !!b.bilinear]), [[148.6, 5.605, true], [10000, 2.253, true]], 'two bilinear shelves');

@@ -1,5 +1,5 @@
 <script>
-  // Bluetooth (PLAN_WEBUI §2, System › Links): what the panel's Bluetooth page shows and asks
+  // Bluetooth: what the panel's Bluetooth page shows and asks
   // (screen_bt.cpp) — the phone that is connected, the radio, visibility, auto-reconnect, the
   // name, the codecs and the phones the satellite remembers — over GET / POST /api/bt (A5).
   // bt.cfg_rev in the state says the satellite's settings moved; the page reads them again.

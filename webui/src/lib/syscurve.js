@@ -1,5 +1,5 @@
 /*
- * «Показати всю систему» (docs/PLAN_SOUND_UX_2026-10-14.md, appendix A, the equalizer): what the
+ * «Показати всю систему»: what the
  * stages around the equalizer do to the sound, drawn with it — Бас and Високі, the loudness at the
  * level it is at now, the subsonic and the port's lift. Each is the audio core's own section
  * (components/audio_dsp/src/dsp_chain.cpp), built from dsp_chain.h's numbers and designed by
@@ -15,6 +15,7 @@ import { designBand, svfMagnitudeDb, curveDb } from './eqmath.js';
 
 // dsp_chain.h
 const TONE_LO_HZ = 100, TONE_HI_HZ = 10000, TONE_Q = 0.71, TONE_MAX_DB = 6;
+const PLACE_DB = [0, -3, -6];             // where the speakers stand, off Бас's shelf (audio.placement)
 const LOUD_LO_HZ = 148.6, LOUD_LO_Q = 0.359, LOUD_LO_K = 0.5605;
 const LOUD_HI_HZ = 10000, LOUD_HI_Q = 0.71, LOUD_HI_K = 0.2253;
 const SUB_Q = [0.5411961, 1.306563];      // a 4th-order Butterworth as two sections (design_subsonic)
@@ -23,12 +24,13 @@ const PORT_Q = 1.4, PORT_SUB_RATIO = 0.8, PORT_LIFT_MAX = 6;
 const clamp = (v, lo, hi) => (v < lo ? lo : v > hi ? hi : v);
 
 /**
- * The stages as bands: `bass` and `treble` dB (audio.bass_db, treble_db), `loudDb` the loudness's
+ * The stages as bands: `bass` and `treble` dB (audio.bass_db, treble_db), `place` where the speakers
+ * stand (audio.placement: its cut joins Бас on the one shelf, as set_tone takes it), `loudDb` the loudness's
  * low shelf now (audio.loud_db), `hpHz` the subsonic asked for (audio.hp_hz), `portHz` and
  * `liftDb` the port that plays (0 for closed speakers, lib/speakers.js port()). `bilinear` marks
  * the loudness's shelves.
  */
-export function systemBands({ bass = 0, treble = 0, loudDb = 0, hpHz = 0, portHz = 0, liftDb = 0 } = {}) {
+export function systemBands({ bass = 0, treble = 0, place = 0, loudDb = 0, hpHz = 0, portHz = 0, liftDb = 0 } = {}) {
   const out = [];
   const fc = portHz > 0 ? PORT_SUB_RATIO * portHz : hpHz;
   if (fc >= 20 && fc <= 80) for (const q of SUB_Q) out.push({ type: 'highpass', f: fc, gain: 0, q, on: true });
@@ -37,7 +39,8 @@ export function systemBands({ bass = 0, treble = 0, loudDb = 0, hpHz = 0, portHz
     out.push({ type: 'lowshelf', f: LOUD_LO_HZ, gain: loudDb, q: LOUD_LO_Q, on: true, bilinear: true });
     out.push({ type: 'highshelf', f: LOUD_HI_HZ, gain: (loudDb * LOUD_HI_K) / LOUD_LO_K, q: LOUD_HI_Q, on: true, bilinear: true });
   }
-  if (bass) out.push({ type: 'lowshelf', f: TONE_LO_HZ, gain: clamp(bass, -TONE_MAX_DB, TONE_MAX_DB), q: TONE_Q, on: true });
+  const lo = clamp(bass, -TONE_MAX_DB, TONE_MAX_DB) + (PLACE_DB[place] || 0);
+  if (lo) out.push({ type: 'lowshelf', f: TONE_LO_HZ, gain: lo, q: TONE_Q, on: true });
   if (treble) out.push({ type: 'highshelf', f: TONE_HI_HZ, gain: clamp(treble, -TONE_MAX_DB, TONE_MAX_DB), q: TONE_Q, on: true });
   return out;
 }

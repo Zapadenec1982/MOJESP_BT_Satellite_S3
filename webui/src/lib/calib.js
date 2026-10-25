@@ -1,5 +1,5 @@
 /*
- * The test tone's keys as the device has them (docs/DSP_V2_CALIBRATION.md), for the port's search
+ * The test tone's keys as the device has them (docs/AUDIO.md «Тест-тон»), for the port's search
  * and lib/tone.js. The amplifier ceiling's arithmetic — the multimeter's, the search by ear's, the
  * supply's sag — left with its page (18.10.2026). tools/tests/test_webui_service.py holds these to
  * the firmware. No imports: the test loads this file in Node.

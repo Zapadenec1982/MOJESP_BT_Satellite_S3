@@ -1,5 +1,5 @@
 <script>
-  // Stations (PLAN_WEBUI §2): the panel's tabs — Favourites · Top · Countries · Genres · Search.
+  // Stations: the panel's tabs — Favourites · Top · Countries · Genres · Search.
   // Favourites edit the list on the device; the catalog tabs come in their own file, fetched the
   // first time one is opened (rollup chunk), so the page that most visits never use it.
   import { t, K } from '../stores/i18n.js';

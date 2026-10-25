@@ -7,7 +7,7 @@
  * UiScreenDef; ui_shell.cpp owns the top bar, the pop-out menu and the switching.
  *
  * All geometry below is in LOGICAL (post-rotation) pixels — 800x480 landscape — and comes
- * from the design in docs/ui/. All colour and type comes from ui_theme.h. A screen file that
+ * from the design. All colour and type comes from ui_theme.h. A screen file that
  * contains a raw hex colour or a bare font name is a bug.
  */
 
@@ -175,7 +175,7 @@ void ui_eq_pushed(uint32_t revision, uint32_t store_rev);
 /// A sound's name in the panel's language (audio_dsp/eq_presets.h index; screen_eq.cpp's table).
 const char* ui_eq_preset_name(int preset);
 
-/// «Звук» (sound_sheet.cpp, docs/PLAN_SOUND_UX_2026-10-14.md S3): the side sheet over the Player.
+/// «Звук» (sound_sheet.cpp): the side sheet over the Player.
 /// Built once with the shell, on the screen; all of these with the LVGL lock held.
 void ui_sound_build(lv_obj_t* scr, UiCtx& c);
 void ui_sound_open();
@@ -270,8 +270,8 @@ lv_obj_t* ui_station_tabs(lv_obj_t* parent, int on);
 /// The catalog page on tab 1 Топ, 2 Країни, 3 Жанри or 4 Пошук, each from its top.
 void ui_catalog_open(int tab);
 /// One encoder update: `delta` detents since the last call, `event` 0 none / 1 click / 2 hold.
-/// The knob has one job on every page, over every sheet and dialog (customer, 18.10.2026,
-/// docs/UX_RESEARCH_2026-10-18.md): a turn is the volume, a press plays and pauses, a hold
+/// The knob has one job on every page, over every sheet and dialog (customer, 18.10.2026):
+/// a turn is the volume, a press plays and pauses, a hold
 /// opens the menu. What is on the glass is chosen by touch. Called from the LVGL refresh, which
 /// is the only place that may touch widgets.
 void ui_shell_encoder(int32_t delta, uint8_t event, UiCtx& c);

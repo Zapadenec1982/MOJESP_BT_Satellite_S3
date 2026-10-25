@@ -23,10 +23,11 @@ static constexpr int   MAX_BANDS   = 10;
 /// The rate everything downstream is running at, right now.
 ///
 /// It used to be a constant, because the DAC and the ADC share a clock and 48 kHz was the
-/// one rate they both ran at (CONCEPT §3). That cost a resampler on every 44.1 kHz source,
+/// one rate they both ran at. That cost a resampler on every 44.1 kHz source,
 /// and the resampler cost 800 ms of CPU per second of audio — measured, and more than the
 /// MP3 decoder by a factor of thirty-five. Every ESP32 radio and player worth copying does
-/// the obvious thing instead: the output clock follows the source. So this moves.
+/// the obvious thing instead: the output clock follows the source
+/// (CONCEPT «Вихідний такт іде за джерелом»). So this moves.
 ///
 /// Written by the audio task when it retunes I2S, read by everything that turns a frequency
 /// into a coefficient. A plain float: it changes between blocks, never during one.
@@ -172,9 +173,13 @@ public:
     static constexpr float PORT_Q = 1.4f;           ///< the port lift's peak (set_port)
     static constexpr float PORT_SUB_RATIO = 0.8f;   ///< the subsonic under a port, × its frequency
     // Бас and Високі (set_tone): where the shelves turn, to be settled by ear on the owner's
-    // speakers (docs/PLAN_SOUND_UX_2026-10-14.md, S3), and how far they go.
+    // speakers, and how far they go.
     static constexpr float TONE_LO_HZ = 100.0f, TONE_HI_HZ = 10000.0f, TONE_Q = 0.71f;
     static constexpr float TONE_MAX_DB = 6.0f;
+    /// Where the speakers stand (Колонки › Розміщення, audio.placement): free, by a wall, in a
+    /// corner. A wall sends the bass back into the room, a corner more of it; this much comes off
+    /// Бас's own shelf (set_tone), so it costs no section and Бас keeps its ±TONE_MAX_DB over it.
+    static constexpr float PLACE_DB[3] = {0.0f, -3.0f, -6.0f};
     static constexpr float BAL_MAX_DB = 6.0f;       ///< set_balance_db()
 
     DspChain() { set_sample_rate(FS_HZ_DEFAULT); }
@@ -221,8 +226,8 @@ public:
     /// scale plays; and their gains glide (LOUD_TAU_S, the filters retuned across each block), so
     /// turning the knob does not tick. A wire, bit-exact, at the top of the scale and when off.
     void set_loudness(float strength);
-    /// Where the loudness adds nothing — «Звичайна гучність» (docs/PLAN_SOUND_UX_2026-10-14.md,
-    /// S6), % of the effective level, 20…100. At 100, the default, it is the top of the scale: the
+    /// Where the loudness adds nothing — «Звичайна гучність»,
+    /// % of the effective level, 20…100. At 100, the default, it is the top of the scale: the
     /// rule above, on its old code path bit for bit — the algebra is the same, the floats would
     /// not be. Under it, the shelves lift for every dB the volume sits under the reference and for
     /// nothing above it: a = level(ref) − level(vol), level(p) = min(volume_db(p), −B). So at
@@ -231,12 +236,13 @@ public:
     float loud_ref() const { return loud_ref_; }
     /// The loudness bass shelf's gain right now, dB (≥ 0).
     float loudness_db() const { return loud_lo_db_; }
-    /// Бас and Високі (docs/PLAN_SOUND_UX_2026-10-14.md, S3): a low shelf at TONE_LO_HZ and a
+    /// Бас and Високі: a low shelf at TONE_LO_HZ and a
     /// high shelf at TONE_HI_HZ, each within ±TONE_MAX_DB, right after the loudness. They are
     /// two sections of their own — none of the ten EQ bands is ever taken — and they play
     /// whether the EQ is on or not. They count in B, a change crossfades as an EQ edit does,
-    /// and at 0 dB a shelf is a wire, bit-exact.
-    void set_tone(float bass_db, float treble_db);
+    /// and at 0 dB a shelf is a wire, bit-exact. `place_db`, 0 down to PLACE_DB's last, is the
+    /// room's cut (audio.placement), added to Бас on the same low shelf; NaN or above 0 is 0.
+    void set_tone(float bass_db, float treble_db, float place_db = 0.0f);
     /// The balance (S3): `db` > 0 turns the LEFT channel down by that much, so the image moves
     /// right; < 0 the right channel; within ±BAL_MAX_DB. Only ever down, so it costs no
     /// headroom. After the stereo stage, before the bass limiter, gliding as the volume does;
@@ -277,8 +283,8 @@ public:
     /// but the bands themselves (the AOSP LVM approach). The alternative, a fixed preamp of −B,
     /// would make "EQ on" quieter at every volume and the A/B dishonest.
     ///
-    /// `pct` may be fractional: «Максимум» compresses the scale rather than cutting it
-    /// (docs/PLAN_SOUND_UX_2026-10-14.md, S4), so the level is pct × limit / 100 of the same law
+    /// `pct` may be fractional: «Максимум» compresses the scale rather than cutting it,
+    /// so the level is pct × limit / 100 of the same law
     /// (LevelLatch::effective) — at an 85 % limit a step is 0.51 dB. The loudness follows it.
     void set_volume(float pct);
     void set_volume_percent(int pct) { set_volume((float)pct); }

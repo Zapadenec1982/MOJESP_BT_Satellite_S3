@@ -1,5 +1,5 @@
 <script>
-  // Налаштування › Кросовер (docs/PLAN_SOUND_UX_2026-10-14.md, S8 and appendix A): the four ways the
+  // Налаштування › Кросовер: the four ways the
   // outputs can be used — Стерео, + сабвуфер, Бі-ампінг, 4 колонки — each drawn as the mock-up draws
   // it. A scheme works only once the firmware says it plays it (audio.out_caps, lib/xover.js); the
   // rest say «ще не підтримується». This board has one stereo pair, so stereo plays, and the page

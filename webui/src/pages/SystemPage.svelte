@@ -1,5 +1,5 @@
 <script>
-  // Налаштування (PLAN_WEBUI §2, stage W4; «Система» until S1 of PLAN_SOUND_UX): the panel's
+  // Налаштування («Система» until S1): the panel's
   // groups (screen_set.cpp) — Sound, Device, Links, Services — and what the glass does not do: the
   // clock, the login, firmware, a backup of the user's files. Each page under it is its own file,
   // fetched the first time it is opened. No Home Assistant row: MQTT stays off (customer,

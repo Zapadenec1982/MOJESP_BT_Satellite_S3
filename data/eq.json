@@ -1,5 +1,5 @@
 {
-  "_comment": "DSP of the audio core (modules/audio), 48 kHz. Sectioned by OUTPUT — see docs/CONCEPT.md 7a. Two DACs are planned, giving four modes picked from the menu: 2.0 (DAC 1 only), biamp, 4.0 and 2.1. The shape is fixed now so saved presets never need migrating. TODAY only section 0 is loaded and only mode 2.0 runs; everything else is declared, not implemented. Band type: peak | lowshelf | highshelf | lowpass | highpass | notch; f in Hz, gain in dB, q. Edit, then toggle audio.eq_reload.",
+  "_comment": "DSP of the audio core (modules/audio), 48 kHz. Sectioned by OUTPUT — see docs/CONCEPT.md «Виходи». Two DACs are planned, giving four modes picked from the menu: 2.0 (DAC 1 only), biamp, 4.0 and 2.1. The shape is fixed now so saved presets never need migrating. TODAY only section 0 is loaded and only mode 2.0 runs; everything else is declared, not implemented. Band type: peak | lowshelf | highshelf | lowpass | highpass | notch; f in Hz, gain in dB, q. Edit, then toggle audio.eq_reload.",
   "version": 2,
   "mode": "2.0",
   "crossover": {

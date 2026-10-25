@@ -1,6 +1,5 @@
 /*
- * net_probe.c — the panel end of tools/net_probe.py. See net_probe.h and
- * docs/NET_LOSS_2026-09-23.md.
+ * net_probe.c — the panel end of tools/net_probe.py. See net_probe.h.
  *
  * One task, one UDP socket. It counts DATA packets, echoes the ones the PC flags, obeys
  * CTRL commands and sends a REPORT once a second to whoever spoke last. It does no audio

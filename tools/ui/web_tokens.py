@@ -2,7 +2,7 @@
 """
 web_tokens.py — the panel's Material 3 colour roles as CSS custom properties for the web UI.
 
-The web UI wears the panel's colours (docs/PLAN_WEBUI_2026-10-11.md §3), and the panel's
+The web UI wears the panel's colours, and the panel's
 colours live in one place: the THEMES table in modules/ui_lvgl/src/ui_m3.cpp, whose role
 order is struct Colors in ui_m3.h. This script reads both and writes
 webui/src/styles/m3_schemes.css — one block per scheme, selected by data-scheme="N" on

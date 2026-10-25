@@ -348,7 +348,7 @@ bool decode_soft(Store& g, const uint8_t* jpg, size_t len, uint32_t expected) {
 /// Huffman tables in it, 4112; the code-length table built under that, 2544; the PNG
 /// reader's palette above both, 1296. A progressive JPEG takes 868. Measured on 05.10.2026
 /// by running the firmware's own cover_soft.c.obj under QEMU on a painted stack, and within
-/// 16 bytes of -fstack-usage (docs/bench/2026-10-05-cover-stack). The callers had 6 KB
+/// 16 bytes of -fstack-usage. The callers had 6 KB
 /// (Bluetooth, AirPlay), 8 KB (the player) and 12 KB with 2.7 KB of it their own (DLNA), so a
 /// PNG cover through any of them was a stack overflow and a reboot - which the radio's art
 /// task, then 8 KB, met first, on a station's logo.

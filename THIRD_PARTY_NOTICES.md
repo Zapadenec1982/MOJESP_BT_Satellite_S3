@@ -99,7 +99,7 @@ here, not resolved. The CI keeps a size report, not an image.
   release needs Remi Bouteiller's written permission, or `components/airplay2` and
   `modules/airplay` removed (`components/airplay2/UPSTREAM.md`).
 - **Patents** are a separate question from copyright: AAC, decoded by esp_audio_codec, is
-  still under patent licensing for commercial devices (`docs/CONCEPT.md` §10а).
+  still under patent licensing for commercial devices.
 
 ## Re-checking
 

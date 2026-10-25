@@ -1,7 +1,7 @@
 // bt_http.inc — the satellite's Bluetooth settings for the web UI: GET and POST /api/bt.
 //
 // Included into bt_module.cpp's anonymous namespace (as radio's stations_http.inc is into its
-// module). docs/PLAN_WEBUI_2026-10-11.md §6, A5.
+// module).
 //
 // The web asks for what the panel's Bluetooth page asks for, through the same queue
 // (bt_settings.h): the handlers run on the HTTP server's task and only read the view and put

@@ -3,7 +3,7 @@
  * @brief AirPlay 2 as a source: the receiver's lifecycle, its events in SharedState, and the
  *        source contract.
  *
- * Three rules from docs/CONCEPT.md §7 decide everything here:
+ * Three rules from docs/CONCEPT.md «Контракт SharedState: джерела» decide everything here:
  *  - whoever produces the sound switches audio.source to itself — a phone that starts
  *    playing makes AirPlay the source;
  *  - a producer whose source is no longer selected is not heard — the receiver's ring output
@@ -17,7 +17,7 @@
 #include "airplay_module.h"
 
 // airplay.mode_status and the stopped receiver's airplay.active_mode_label are messages of the
-// web's catalog ("@<key>", docs/PLAN_PANEL_LANG_2026-10-12.md U8.5): the panel and each browser
+// web's catalog ("@<key>"): the panel and each browser
 // show them in their own language. tools/i18n/gen_panel_strings.py checks every key.
 
 #include <atomic>
@@ -63,8 +63,8 @@ constexpr const char* NVS_TRY = "starting";
 /// for up to 2 s (mdns_query_guard.cpp) from tasks that outrank main: it retries next turn.
 constexpr uint32_t MDNS_TURN_WAIT_MS = 20;
 /// hap_init() generates and stores the pairing keys on the first boot — a flash write, and
-/// a flash write on a PSRAM stack is a crash here (CONCEPT §8а). So the one-shot task that
-/// starts the receiver gets an internal stack, and gives it back when it is done.
+/// a flash write on a PSRAM stack is a crash here (CONCEPT «Обмеження плати»). So the one-shot
+/// task that starts the receiver gets an internal stack, and gives it back when it is done.
 constexpr uint32_t START_STACK = 8 * 1024;
 
 enum Start : int { NOT_YET = 0, STARTING = 1, UP = 2, FAILED = 3 };
@@ -444,9 +444,10 @@ void AirplayModule::stop_listening() {
 }
 
 void AirplayModule::follow_source(int32_t source) {
-    // The phone started playing: the producer switches the source to itself (CONCEPT §7).
-    // Only on the start, not on every PLAYING — a pick of another source on the panel sticks
-    // until the phone is paused and played again, which is the phone's owner asking.
+    // The phone started playing: the producer switches the source to itself
+    // (CONCEPT «Хто перемикає джерело»). Only on the start, not on every PLAYING — a pick of
+    // another source on the panel sticks until the phone is paused and played again, which is
+    // the phone's owner asking.
     const bool started = sh.play_edge.exchange(false);
     if (started) vol_.play_start();   // a sender restates its level as it starts
     // Turned off, AirPlay takes nothing — not even from a sender that starts before the

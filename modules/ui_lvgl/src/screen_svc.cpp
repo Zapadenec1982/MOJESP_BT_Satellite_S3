@@ -196,7 +196,7 @@ lv_obj_t* build(lv_obj_t* parent, UiCtx&) {
     make_row(root, R_LINK,  x3, y3, tr(S::svc_link)); y3 += ROW_H;
     make_row(root, R_PEER,  x3, y3, tr(S::svc_peer)); y3 += ROW_H;
     make_row(root, R_RTT,   x3, y3, "RTT");       y3 += ROW_H;
-    make_row(root, R_OVF,   x3, y3, "UART ovf");  y3 += ROW_H;
+    make_row(root, R_OVF,   x3, y3, tr(S::svc_uart_ovf));  y3 += ROW_H;
     make_row(root, R_DROPS, x3, y3, tr(S::svc_drops)); y3 += ROW_H;
     make_row(root, R_GAPS,  x3, y3, tr(S::svc_gaps));  y3 += ROW_H;
 

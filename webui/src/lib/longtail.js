@@ -1,5 +1,5 @@
 /*
- * The long tail (PLAN_WEBUI §2, Service): whatever the generated pages (data/ui.json) carry that no
+ * The long tail: whatever the generated pages (data/ui.json) carry that no
  * hand-written page shows, rendered in Service as the generated cards. A module that gains a key
  * with a widget shows up there by itself, and tools/generate_ui.py stays as it is (rule 6).
  *
@@ -21,7 +21,7 @@ export const SHOWN = [
   'audio.eq_enabled', 'audio.loudness', 'audio.loud_db', 'audio.bass_db', 'audio.treble_db',
   'audio.vol_max', 'audio.vol_start',
   // Налаштування › Колонки (S6)
-  'audio.balance_db10',
+  'audio.balance_db10', 'audio.placement',
   // System
   'ui.backlight', 'ui.standby_bl', 'radio.covers',
   'airplay.enabled', 'airplay.name', 'airplay.mode', 'airplay.mode_status', 'airplay.mode_error',
@@ -59,7 +59,7 @@ export const DROPPED = [
   'audio.state', 'audio.eq_reload',
   'audio.in_l', 'audio.in_r', 'audio.level_l', 'audio.level_r', 'audio.in_rate', 'audio.asrc_ppm',
   // The generated catalog card's query language ("top:UA", "play row N"): Stations › catalog
-  // does all of it over radio.web_* (PLAN_WEBUI §2, Stations).
+  // does all of it over radio.web_*.
   'radio.cat_query', 'radio.cat_sort', 'radio.cat_quality', 'radio.cat_prev', 'radio.cat_next',
   'radio.cat_state', 'radio.cat_page', 'radio.cat_count', 'radio.cat_list', 'radio.cat_error',
   'radio.cat_play', 'radio.cat_fav',

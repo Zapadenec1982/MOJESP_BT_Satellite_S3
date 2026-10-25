@@ -2,7 +2,7 @@
  * @file ui_fit.cpp
  * @brief GET /api/i18n/overflow — the text on the glass that does not fit its place.
  *
- * Level 2 of the length check in docs/PLAN_PANEL_LANG_2026-10-12.md §7. German and Polish run
+ * Level 2 of the length check. German and Polish run
  * longer than the Ukrainian the screens were laid out in; tools/i18n/fit.py measures every
  * string against its Ukrainian, and this looks at the real thing: the LVGL tree as built, in the
  * language that is on, every page at once — they are all built and only shown in turn, so

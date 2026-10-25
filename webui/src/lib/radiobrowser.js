@@ -3,7 +3,8 @@
  * panel's own (components/radio_catalog: keep(), search_path()) as data/www/radio.html had them:
  * MP3, AAC, AAC+ and FLAC, no HLS, a stream URL that fits the station list, the quality floor,
  * one row per stream. Ranking only within a country or a genre: global votes are inflated
- * (CONCEPT §8). The panel gets only a station's name, stream and uuid (radio.web_*).
+ * (docs/NETWORK.md «Каталог Radio Browser»). The panel gets only a station's name, stream
+ * and uuid (radio.web_*).
  */
 
 import { URL_MAX } from './stations.js';

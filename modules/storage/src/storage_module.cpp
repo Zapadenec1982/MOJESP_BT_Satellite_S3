@@ -4,7 +4,8 @@
  *
  * This is the first half of a local player. It answers the question that gates the rest and
  * that nothing else can answer — does the TF slot work on this panel, with these pins, next
- * to ESP-Hosted. Playback is a separate step and needs a decoder decision (CONCEPT §11).
+ * to ESP-Hosted. Playback is a separate step and needs a decoder decision
+ * (CONCEPT «Прибиті залежності»).
  *
  * How the card is brought up is drivers/sdmmc_card's business (item 8.9): the power rail, the
  * retries, the FAT mount and the reason ESP-Hosted must not have its host torn down all live

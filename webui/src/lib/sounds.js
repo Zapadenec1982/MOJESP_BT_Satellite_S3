@@ -1,7 +1,7 @@
 // The sounds by id (components/audio_dsp/src/eq_presets.cpp) and their names in the catalogs —
 // the kept presets too, since one plays under its name until another is chosen. The device says
 // which are offered (GET /api/eq "presets"); the panel names them from the same catalogs
-// (screen_eq.cpp PRESET_NAMES). docs/PLAN_SOUND_UX_2026-10-14.md, S2 and S3.
+// (screen_eq.cpp PRESET_NAMES).
 import { K } from '../stores/i18n.js';
 
 export const SOUND_KEYS = {

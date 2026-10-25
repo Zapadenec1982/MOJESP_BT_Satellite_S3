@@ -1,6 +1,5 @@
 # Line endings: LF in the repository and on checkout, whatever core.autocrlf says on the
-# machine (plan 5.4). This commit only adds the rules. Existing files are NOT renormalised
-# here; that is one separate commit (git add --renormalize .) after the wave-1 branches merge.
+# machine.
 * text=auto eol=lf
 
 # Windows batch files misbehave with LF-only line endings (labels, goto): keep them CRLF.
@@ -34,10 +33,6 @@
 
 # SVG is XML: text.
 *.svg text eol=lf
-
-# Bench evidence (docs/bench/README.md) is stored byte-exact: whatever line endings the
-# capture had, git leaves them alone.
-docs/bench/** -text
 
 # Vendored code, stored exactly as published: never converted, so the hashes in
 # components/airplay2/upstream.sha256 keep meaning "as upstream committed it".

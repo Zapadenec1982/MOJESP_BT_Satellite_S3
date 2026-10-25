@@ -1,7 +1,7 @@
 // eq_http.inc — the EQ for the web UI: GET and POST /api/eq.
 //
 // Included into audio_module.cpp's anonymous namespace (as radio's stations_http.inc is into
-// its module). docs/PLAN_WEBUI_2026-10-11.md §6, A3.
+// its module).
 //
 // The document is audio_dsp's EqStore, and the bodies are audio_dsp's eq_web (host-tested).
 // These handlers run on the HTTP server's task and only put edits into the store; the module

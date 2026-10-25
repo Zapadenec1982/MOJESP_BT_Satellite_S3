@@ -1,5 +1,5 @@
 <script>
-  // The daily sound (docs/PLAN_SOUND_UX_2026-10-14.md, S3 and appendix A): the presets, Бас and
+  // The daily sound: the presets, Бас and
   // Високі, the loudness and the way to the equalizer. One component in two places — the Player's
   // sheet and Налаштування › Звук (`page`), of which the sheet is a shortcut to the top. The
   // presets are the EQ document's (lib/eq.js), so a choice here is the panel's at once, and the

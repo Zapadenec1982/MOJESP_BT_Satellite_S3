@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate the panel's string tables from the web UI's catalogs (docs/PLAN_PANEL_LANG_2026-10-12.md §3).
+"""Generate the panel's string tables from the web UI's catalogs.
 
 One source of translations for the glass and the web: webui/src/i18n/<lang>.json, flat keys, the
 same set in each (tools/tests/test_webui_i18n.py). The panel's code names a string by its key with

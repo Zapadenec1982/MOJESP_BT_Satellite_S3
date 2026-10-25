@@ -1,4 +1,5 @@
-# bt — the control link to the Bluetooth satellite (CONCEPT 4, docs/LINK_PROTOCOL.md).
+# bt — the control link to the Bluetooth satellite (CONCEPT «J5 — UART до супутника»,
+# docs/LINK_PROTOCOL.md).
 # The wire is a bound driver (drivers/uart_link) behind modesp/hal/byte_link.h, so this
 # module no longer depends on a UART driver — only on what is said over the wire.
 idf_component_register(

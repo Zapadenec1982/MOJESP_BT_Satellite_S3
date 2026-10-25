@@ -2,7 +2,7 @@
  * The previous interface's variables, mapped onto the panel's M3 roles.
  *
  * The widgets of the generated pages (components/widgets, GroupAccordion) still draw Service's
- * long tail (PLAN_WEBUI §2): this layer lets them wear the panel's colours, the way the panel's
+ * long tail: this layer lets them wear the panel's colours, the way the panel's
  * own service page did through ui_theme.cpp.
  * Delete a variable here when nothing uses it any more; delete the file with the last widget.
  */

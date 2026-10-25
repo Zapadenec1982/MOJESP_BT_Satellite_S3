@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Do the panel's strings fit in every language? Level 1 of docs/PLAN_PANEL_LANG_2026-10-12.md §7.
+"""Do the panel's strings fit in every language?
 
 The rule needs no table of slots. Ukrainian is the language the glass was laid out and accepted
 in, so a translation no wider than its Ukrainian fits wherever the Ukrainian does. A wider one
@@ -37,7 +37,7 @@ FIT = ROOT / "modules" / "ui_lvgl" / "i18n_fit.json"
 REFERENCE = "ui_font_400_20"        # body_l: the rows' titles, the commonest text on the glass
 SLACK = 0.5                         # px: rounding, not leniency
 
-COMMENT = ("Panel strings wider than their Ukrainian (tools/i18n/fit.py, docs/PLAN_PANEL_LANG_2026-10-12.md §7). "
+COMMENT = ("Panel strings wider than their Ukrainian (tools/i18n/fit.py). "
            "px in the reference face. checked: seen fitting on the glass; unchecked: not yet seen.")
 
 

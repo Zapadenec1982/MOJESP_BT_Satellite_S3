@@ -2,7 +2,7 @@
  * @file dsi_st7701_driver.cpp
  * @brief ST7701S MIPI-DSI panel backend — bring-up sequence from the vendor BSP.
  *
- * Sequence (docs/CONCEPT.md §8б, csvke/esp32_p4_jc4880p433c_bsp bsp_display.c):
+ * Sequence (docs/CONCEPT.md «Референсні проєкти», csvke/esp32_p4_jc4880p433c_bsp bsp_display.c):
  *   MIPI PHY LDO → DSI bus → DBI io → esp_lcd_st7701 (vendor init table, DPI panel) →
  *   reset → init → display on → LEDC backlight (left at 0 %, the UI module sets it).
  */

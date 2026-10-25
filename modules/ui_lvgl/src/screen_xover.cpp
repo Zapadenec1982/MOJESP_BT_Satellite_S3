@@ -1,7 +1,7 @@
 /**
  * @file screen_xover.cpp
  * @brief Налаштування → Кросовер: the ways the outputs can be used, and which of them play
- *        (docs/PLAN_SOUND_UX_2026-10-14.md, S8 and appendix A; the mock-up V2_Panel_Xover).
+ *        (the mock-up V2_Panel_Xover).
  *
  * The schemes as a list on the left — Стерео, Стерео + сабвуфер, Бі-ампінг, 4 колонки — and what
  * the one that plays means on the right. A scheme is offered only once the firmware says it plays

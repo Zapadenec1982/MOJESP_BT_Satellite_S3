@@ -7,8 +7,8 @@
  * delay line at the signal divided by (1 + a1 + a2), which for a 40 Hz band is tens of
  * thousands at 96 kHz; its output is a difference of numbers that large, so float32's
  * rounding came out as broadband noise riding on the bass — measured at −36 dB under the
- * signal at 96 kHz and −23 dB at 192 kHz with the customer's EQ (docs/DSP_RESEARCH_2026-09-30.md
- * §3.1). That was the "grit" that went away with the EQ switched off. Every direct form has
+ * signal at 96 kHz and −23 dB at 192 kHz with the customer's EQ.
+ * That was the "grit" that went away with the EQ switched off. Every direct form has
  * the same problem in single precision at low f0 and high fs; the trapezoidal SVF (A. Simper,
  * cytomic.com/files/dsp/SvfLinearTrapOptimised2.pdf) keeps its integrators at signal level
  * and measured −125/−114 dB in the same case, for the same frequency response (it is the RBJ

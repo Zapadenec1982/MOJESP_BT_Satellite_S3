@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """net_probe.py: measure the P4 <-> C6 link the way an AirPlay 1 receiver would see it.
 
-Talks to the panel's UDP probe (components/net_probe; flash the NETTEST image first, see
-docs/NET_LOSS_2026-09-23.md). Sends a steady stream shaped like AirPlay 1 audio — 352 stereo
+Talks to the panel's UDP probe (components/net_probe; flash the NETTEST image first).
+Sends a steady stream shaped like AirPlay 1 audio — 352 stereo
 16-bit frames per packet, 125.3 packets/s, ~1.4 KB each — asks for a small echo every so often
 (the upstream traffic a receiver sends: resend and timing requests), and prints what the panel
 reports once a second: loss, the longest run of lost packets, the longest silence, jitter,
@@ -50,7 +50,7 @@ AIRPLAY_SIZE = 1420         # 12-byte RTP header + 1408 bytes of 16-bit stereo a
 
 # What decides the verdict. RAOP (AirPlay 1) buffers ~2 s and asks again for what is missing,
 # so scattered loss is survivable and a long silence is not; philippe44's receiver discards
-# timing replies slower than 100 ms. docs/NET_LOSS_2026-09-23.md has the sources.
+# timing replies slower than 100 ms.
 LOSS_OK_PCT, LOSS_RESEND_PCT = 2.0, 10.0
 GAP_OK_MS, GAP_LIMIT_MS = 1000, 1500
 RTT_OK_MS = 100
@@ -142,7 +142,7 @@ def start_session(link, psram):
         if link.wait_report(lambda r: r["session"] == session, 1.0):
             break
     else:
-        sys.exit("The panel did not answer. Is the NETTEST image flashed (docs/NET_LOSS_2026-09-23.md), "
+        sys.exit("The panel did not answer. Is the NETTEST image flashed, "
                  "the IP right, and nothing on this PC blocking UDP?")
     if psram is not None:
         want = 1 if psram else 0

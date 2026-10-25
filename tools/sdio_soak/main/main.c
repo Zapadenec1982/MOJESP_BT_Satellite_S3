@@ -1,7 +1,7 @@
 /*
  * tools/sdio_soak — soak test of the ESP32-P4 <-> ESP32-C6 SDIO link (ESP-Hosted 3.0.7).
  *
- * What it does (docs/CONCEPT.md §8, §10 phase 0): connects to Wi-Fi through the C6 with
+ * What it does (docs/CONCEPT.md «Мережа»): connects to Wi-Fi through the C6 with
  * the credentials the player stored in NVS, then pulls one HTTP(S) stream for hours into
  * a PSRAM ring buffer that a "decoder" drains at a fixed bit rate. Every SOAK_REPORT_SEC
  * it prints one greppable line:
@@ -58,7 +58,7 @@ static void wifi_event_handler(void *arg, esp_event_base_t base, int32_t id, voi
         ip_event_got_ip_t *e = (ip_event_got_ip_t *)data;
         ESP_LOGI(TAG, "got ip " IPSTR, IP2STR(&e->ip_info.ip));
         /* Unbound UDP (SNTP) only works when the hosted netif is the default one
-           (docs/CONCEPT.md §8а); harmless for TCP, kept for parity with the player. */
+           (docs/NETWORK.md «WiFiService»); harmless for TCP, kept for parity with the player. */
         esp_netif_set_default_netif(s_sta_netif);
         xEventGroupSetBits(s_wifi_events, WIFI_CONNECTED_BIT);
     }
@@ -216,7 +216,7 @@ static void report(void)
 /*
  * The link is never measured alone on the real device. On the player the same DMA-capable
  * internal pool also holds the LVGL working buffers, the I2S rings and mbedTLS, and what
- * is left over for the ESP-Hosted RX pool is about 27 KB (docs/CONCEPT.md §8). A baseline
+ * is left over for the ESP-Hosted RX pool is about 27 KB (docs/CONCEPT.md «Мережа»). A baseline
  * taken with 440 KB free says nothing about that, so the test can squeeze the pool down to
  * a named figure and hold it there for a phase.
  *

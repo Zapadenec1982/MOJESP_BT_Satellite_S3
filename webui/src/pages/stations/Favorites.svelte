@@ -1,5 +1,5 @@
 <script>
-  // The station list and its presets (PLAN_WEBUI §2, Stations · Favourites) — what the panel's
+  // The station list and its presets — what the panel's
   // «Улюблені» shows, plus what is awkward on the glass: renaming, ordering, deleting, adding a
   // stream by its address, a playlist file in and out. The device keeps the list; every edit
   // goes back whole, with the generation it was made from (lib/stations.js), and the page

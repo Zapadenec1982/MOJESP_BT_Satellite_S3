@@ -1,5 +1,5 @@
 {
-  "_comment": "Written by the player. DSP config, sectioned by output — see docs/CONCEPT.md 7a. Band type: peak | lowshelf | highshelf | lowpass | highpass | notch.",
+  "_comment": "Written by the player. DSP config, sectioned by output — see docs/CONCEPT.md «Виходи». Band type: peak | lowshelf | highshelf | lowpass | highpass | notch.",
   "version": 2,
   "mode": "2.0",
   "crossover": { "freq_hz": 2500, "slope": "LR24" },

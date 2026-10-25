@@ -6,7 +6,7 @@
  * (tests/host/test_web_media.cpp). The handlers do the reading — the card's index, the cover
  * tile — and these do the writing.
  *
- * docs/PLAN_WEBUI_2026-10-11.md §6: A4 (the card's library, a page at a time) and A1 (the
+ * A4 (the card's library, a page at a time) and A1 (the
  * Player's picture, as a thumbnail).
  */
 

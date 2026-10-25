@@ -155,23 +155,23 @@ TEST_CASE("fmt: the cut is on a character boundary, and nothing follows it") {
     CHECK(i18n::fmt(nullptr, 8, "abc", {}) == 0);
 }
 
-TEST_CASE("num: the language's decimal separator, printf's signs") {
+TEST_CASE("num: the language's decimal separator, the minus sign, printf's plus") {
     CHECK(num(35, 1) == "3,5");
-    CHECK(num(-35, 1) == "-3,5");
-    CHECK(num(-5, 1) == "-0,5");                  // the sign of a value under one survives
+    CHECK(num(-35, 1) == "−3,5");                 // U+2212, as the pages print it
+    CHECK(num(-5, 1) == "−0,5");                  // the sign of a value under one survives
     CHECK(num(35, 1, true) == "+3,5");
     CHECK(num(0, 1, true) == "+0,0");             // "%+.1f" of zero
     CHECK(num(1234, 2) == "12,34");
     CHECK(num(5, 2) == "0,05");
     CHECK(num(42, 0) == "42");
-    CHECK(num(-42, 0, true) == "-42");
+    CHECK(num(-42, 0, true) == "−42");
     CHECK(num(7, 5) == "0,007");                   // decimals beyond 3 are 3
-    CHECK(num(INT32_MIN, 0) == "-2147483648");
+    CHECK(num(INT32_MIN, 0) == "−2147483648");
     CHECK(i18n::decimal_sep() == ',');
     {
         LangGuard g(Lang::EN);
         CHECK(i18n::decimal_sep() == '.');
-        CHECK(num(-35, 1) == "-3.5");
+        CHECK(num(-35, 1) == "−3.5");
     }
     {
         LangGuard g(Lang::DE);
@@ -181,6 +181,41 @@ TEST_CASE("num: the language's decimal separator, printf's signs") {
         LangGuard g(Lang::PL);
         CHECK(num(35, 1) == "3,5");
     }
+}
+
+namespace {
+
+std::string badge(const char* raw, size_t cap = 64) {
+    std::string buf(cap, '\x7f');
+    const size_t n = i18n::badge(&buf[0], cap, raw);
+    CHECK(n == strlen(buf.c_str()));
+    return std::string(buf.c_str());
+}
+
+}  // namespace
+
+TEST_CASE("badge: a technical line in the language's units, as the web's badge() says it") {
+    // The same lines as tools/tests/test_webui_numbers.py: the glass and the web agree.
+    CHECK(badge("44.1 kHz 2 ch 128 kbps") == "44,1 кГц 128 кбіт/с");     // the radio: stereo unsaid
+    CHECK(badge("16/44.1 kHz 2 ch") == "16/44,1 кГц");                   // the card: bits/rate
+    CHECK(badge("16/48.0 kHz 1 ch") == "16/48 кГц 1 кан.");              // no ",0"; mono is said
+    CHECK(badge("LHDC V5 96.0 kHz") == "LHDC V5 96 кГц");                // Bluetooth: the codec stays
+    CHECK(badge("48.0 kHz 24 bit") == "48 кГц 24 біт");                  // USB
+    CHECK(badge("1000 Hz") == "1000 Гц");
+    CHECK(badge("AirPlay") == "AirPlay");
+    CHECK(badge("AAC kHz") == "AAC kHz");                                 // a unit after a word is a word
+    CHECK(badge("") == "");
+    CHECK(badge(nullptr) == "");
+    {
+        LangGuard g(Lang::EN);
+        CHECK(badge("44.1 kHz 2 ch 128 kbps") == "44.1 kHz 128 kbit/s");
+    }
+    // The cut is whole letters, never half of one: room for 6 bytes ends before «к», for 7 after it.
+    CHECK(badge("44.1 kHz", 7) == "44,1 ");
+    CHECK(badge("44.1 kHz", 8) == "44,1 к");
+    char sentinel[2] = {'q', '\0'};
+    CHECK(i18n::badge(sentinel, 0, "44.1 kHz") == 0);
+    CHECK(sentinel[0] == 'q');
 }
 
 namespace {
@@ -197,12 +232,12 @@ std::string render(const char* m, size_t cap = 160) {
 TEST_CASE("render: a module's message in the panel's language, anything else as it is") {
     // The generated table has the modules' messages (dlna_browser.cpp, audio_module.cpp).
     CHECK(render("@cal.m_progress" I18N_MSG_ARG "hz=63" I18N_MSG_ARG "k=3" I18N_MSG_ARG "n=40") ==
-          "вимір: 63 Гц (3 з 40)");
+          "Вимір: 63 Гц (3 з 40)");
     CHECK(render("@dlna.servers") == "Медіасервери");
     CHECK(render("@dlna.st_playing" I18N_MSG_ARG "title=a=b") == "Грає: a=b");    // "=" in a value
     {
         LangGuard g(Lang::PL);
-        CHECK(render("@cal.m_found" I18N_MSG_ARG "hz=63") == "znaleziono: 63 Hz");
+        CHECK(render("@cal.m_found" I18N_MSG_ARG "hz=63") == "Znaleziono: 63 Hz");
     }
     // Not a message: shown as it is, the web's msg() the same.
     CHECK(render("@dlna.nothing" I18N_MSG_ARG "n=1") == "@dlna.nothing" I18N_MSG_ARG "n=1");
@@ -213,6 +248,6 @@ TEST_CASE("render: a module's message in the panel's language, anything else as 
     CHECK(render("{name}") == "{name}");
     CHECK(render(nullptr) == "");
     // A missing argument stays as written; the cut is whole letters.
-    CHECK(render("@cal.m_found") == "знайдено: {hz} Гц");
+    CHECK(render("@cal.m_found") == "Знайдено: {hz} Гц");
     CHECK(render("@dlna.servers", 7) == "Мед");
 }

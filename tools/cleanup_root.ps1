@@ -3,7 +3,7 @@
     Cleanup of the D:\P4_DSP working root. Dry run by default; deletes only with -Force.
 
 .DESCRIPTION
-    Plan item 5.7 (docs/PLAN_HARDENING_2026-09-21.md). The root of D:\P4_DSP accumulated
+    The root of D:\P4_DSP accumulated
     one-off build logs, soak-run markers and copies of files that are tracked in the
     repository. This script classifies every candidate and prints the verdict. Nothing is
     removed unless -Force is given, and even then only the rows marked DELETE.
@@ -11,15 +11,11 @@
     Verdicts
       DELETE    build_*.log, build_done.txt, soak_done.txt, soak_stop.txt, soak_build.log:
                 superseded one-off logs/markers of builds that no longer exist (2026-09-15/16).
-                soak_log.txt: only once docs/bench/2026-09-16-sdio-soak/soak_log.txt in the
-                repository holds the same content.
                 testfiles\*.wav: only when MD5-identical to the tracked testfiles\ copy.
                 Docs\*: only when byte-identical to a tracked docs\ counterpart.
       REVIEW    Docs\* that differ from, or have no, tracked counterpart: a person decides.
       CUSTOMER  testfiles\bt-test-96kHz-24bit-stereo.wav and any other WAV without a tracked
                 counterpart: the customer's decision. Never deleted by this script.
-      KEEP      a candidate whose precondition is not met (e.g. the soak log is not mirrored
-                in the repository yet).
 
 .PARAMETER Root
     The working root to clean. Default D:\P4_DSP.
@@ -82,23 +78,7 @@ foreach ($pattern in 'build_*.log', 'build_done.txt', 'soak_done.txt', 'soak_sto
     }
 }
 
-# 2. soak_log.txt - only once the repository carries it.
-$soak = Join-Path $Root 'soak_log.txt'
-if (Test-Path -LiteralPath $soak) {
-    $mirrorRel = 'docs/bench/2026-09-16-sdio-soak/soak_log.txt'
-    $mirror = Get-RepoPath $mirrorRel
-    if (-not (Test-Path -LiteralPath $mirror)) {
-        Add-Row 'KEEP' $soak "not mirrored yet: $mirrorRel is missing"
-    } elseif ((Get-Sha $soak) -eq (Get-Sha $mirror)) {
-        Add-Row 'DELETE' $soak "byte-identical copy tracked as $mirrorRel"
-    } elseif (Test-SameText $soak $mirror) {
-        Add-Row 'DELETE' $soak "same text as tracked $mirrorRel (line endings differ)"
-    } else {
-        Add-Row 'KEEP' $soak "differs from tracked $mirrorRel - not the same log"
-    }
-}
-
-# 3. testfiles\*.wav against the tracked testfiles\ of the repository.
+# 2. testfiles\*.wav against the tracked testfiles\ of the repository.
 $trackedWav = @{}
 foreach ($t in @($tracked | Where-Object { $_ -like 'testfiles/*.wav' })) {
     $trackedWav[(Split-Path -Leaf $t)] = Get-RepoPath $t
@@ -116,7 +96,7 @@ if (Test-Path -LiteralPath $wavDir) {
     }
 }
 
-# 4. Docs\* against tracked docs\ (same file name, plus known renames).
+# 3. Docs\* against tracked docs\ (same file name, plus known renames).
 $aliases = @{ 'P4_PLAYER_CONCEPT.md' = 'docs/CONCEPT.md' }
 $docsDir = Join-Path $Root 'Docs'
 if (Test-Path -LiteralPath $docsDir) {
@@ -155,8 +135,8 @@ $del = @($rows | Where-Object { $_.Verdict -eq 'DELETE' })
 $bytes = 0
 foreach ($r in $del) { $bytes += $r.Size }
 $inv = [System.Globalization.CultureInfo]::InvariantCulture   # "15,781,032", not a locale NBSP
-Write-Output ("cleanup_root: {0} DELETE ({1} bytes), {2} REVIEW, {3} CUSTOMER, {4} KEEP" -f `
-    $del.Count, $bytes.ToString('N0', $inv), (Count-Verdict 'REVIEW'), (Count-Verdict 'CUSTOMER'), (Count-Verdict 'KEEP'))
+Write-Output ("cleanup_root: {0} DELETE ({1} bytes), {2} REVIEW, {3} CUSTOMER" -f `
+    $del.Count, $bytes.ToString('N0', $inv), (Count-Verdict 'REVIEW'), (Count-Verdict 'CUSTOMER'))
 
 if ($Force) {
     foreach ($r in $del) {

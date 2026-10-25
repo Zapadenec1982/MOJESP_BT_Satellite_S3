@@ -1,5 +1,5 @@
 <script>
-  // The frame every page sits in (PLAN_WEBUI §2): a top bar, the three sections — a bottom bar on
+  // The frame every page sits in: a top bar, the three sections — a bottom bar on
   // a phone, a rail from 600 px — the mini-player over them, and while a test tone plays, its bar
   // over the page. Losing the panel shows a banner
   // after 5 s, as the previous interface did, and the panel's fourth WebSocket client is told so.
@@ -10,13 +10,19 @@
   import { toastSuccess } from '../stores/toast.js';
   import NavItems from './NavItems.svelte';
   import MiniPlayer from './MiniPlayer.svelte';
+  import { now } from '../stores/now.js';
   import Icon from '../m3/Icon.svelte';
   import IconButton from '../m3/IconButton.svelte';
 
   export let title = '';
   /** Hide the mini-player where the page itself is the player. */
   export let mini = true;
-  /** The Player's background (docs/PLAN_SOUND_UX_2026-10-14.md, S5): ui.cover_rgb, the colour
+  // ... and where nothing plays and nothing could go on from it: switched off, no phone, a
+  // computer that sends nothing — «Телефон не підключено» over the navigation was a line with
+  // nothing to do. A pause it can resume keeps it.
+  $: np = $now;
+  $: showMini = mini && (np.playing || !!(np.toggle && np.live));
+  /** The Player's background: ui.cover_rgb, the colour
    *  the glass draws from the cover, RGB888; 0 on the Player with no cover, −1 on every other
    *  page. The Player has no top bar: the page starts with where the sound comes from, and the
    *  height is the cover's. */
@@ -57,8 +63,8 @@
   $: ssid = $state['wifi.ssid'] || '';
 
   // The test tone's bar is fetched the first time a tone plays, as its own file: most visits never
-  // see one, and with it would come the calibration's arithmetic (PLAN_WEBUI §5, the bundle
-  // budget). audio.source 1 is the tone — SRC_TONE in lib/tone.js, not imported here for that reason.
+  // see one, and with it would come the calibration's arithmetic.
+  // audio.source 1 is the tone — SRC_TONE in lib/tone.js, not imported here for that reason.
   const SRC_TONE = 1;
   let ToneBar = null;
   let toneBarLoading = false;
@@ -74,7 +80,7 @@
   }
 </script>
 
-<div class="shell" class:with-mini={mini}>
+<div class="shell" class:with-mini={showMini}>
   <nav class="rail" aria-label={$t['nav.sections']}>
     <span class="brand"><Icon name="speaker" size={32} /></span>
     <NavItems active={$section} />
@@ -104,7 +110,7 @@
     </main>
   </div>
 
-  {#if mini}
+  {#if showMini}
     <div class="mini-dock"><MiniPlayer /></div>
   {/if}
 
@@ -154,6 +160,9 @@
     white-space: nowrap;
   }
   .title.pad { padding-left: 12px; }
+  @media (max-width: 420px) {
+    .title { font-size: 20px; }                /* «Aktualizacja oprogramowania» whole at 390 px */
+  }
   .wifi {
     color: var(--on-surface-var);
     display: flex;

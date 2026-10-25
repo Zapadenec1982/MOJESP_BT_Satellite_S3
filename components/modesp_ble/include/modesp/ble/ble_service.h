@@ -11,7 +11,6 @@
  *
  * Layered design: this component is the ONLY place that touches esp_nimble_*.
  * BLE devices are drivers (hardware_type "ble"); app logic lives in modules.
- * See docs/ble/ipixel_nimble_spec.md and docs/ble/sensors_observer_spec.md.
  */
 #pragma once
 

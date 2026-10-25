@@ -1,16 +1,20 @@
 /**
  * @file screen_speakers.cpp
  * @brief Налаштування → Колонки: what has been done about the speakers, and the balance
- *        (docs/PLAN_SOUND_UX_2026-10-14.md, §4 «стан і баланс»; the web's pages/system/SpeakersPage).
+ *        (the web's pages/system/SpeakersPage).
  *
  * The state card says what the web's page says (lib/speakers.js, speakerState): closed speakers,
  * a port measured or set by hand, or not set up yet — with the two speakers drawn as the web draws
  * them, the port shown only when they have one — and that setting them up is the web's: the
- * wizard measures with the panel's microphone and asks before it writes anything.
+ * wizard measures with the panel's microphone and asks before it writes anything. Where the web
+ * is: the panel's address and a QR code of the web's Колонки,
+ * when the panel has an address and the build has LVGL's QR code.
  *
- * The balance card is the web's: −6…+6 dB in half-dB steps, zero in the middle, «Л» and «П» at
- * the ends. Only a finger on the knob takes it, nothing on a press or a tap, and «Скасувати»
- * after it moved the balance, as Бас and Високі do (sound_sheet.cpp, touch_gesture.h).
+ * Розміщення is the web's: where the speakers stand — free, by a wall, in a corner (audio.placement,
+ * a cut on Бас's shelf, DspChain::PLACE_DB) — and the balance: −6…+6 dB in half-dB steps, zero in
+ * the middle, «Л» and «П» at the ends. Only a finger on the knob takes it, nothing on a press or a
+ * tap, and «Скасувати» after it moved the balance, as Бас and Високі do (sound_sheet.cpp,
+ * touch_gesture.h).
  */
 
 #include "ui_common.h"
@@ -20,6 +24,7 @@
 
 #include <climits>
 #include <cstdio>
+#include <cstring>
 
 namespace {
 
@@ -27,15 +32,22 @@ using i18n::S;
 using i18n::tr;
 
 // ── geometry, relative to the 752x384 content column ──
-constexpr int32_t STATE_H  = 212;
+constexpr int32_t STATE_H  = 148;
 constexpr int32_t GAP      = 16;
 constexpr int32_t BAL_Y    = STATE_H + GAP;
 constexpr int32_t BAL_H    = uig::CONT_H - BAL_Y;
-static_assert(BAL_H >= 140, "the balance card has room for its line and its slider");
 constexpr int32_t ART_W    = 220;               ///< the two speakers, the web's 220x112 drawing
 constexpr int32_t ART_H    = 112;
+static_assert(STATE_H >= ART_H + 32, "the drawing has its margins");
+constexpr int32_t QR_BOX   = 116;               ///< the QR code on its white square, quiet zone in it
+constexpr int32_t QR_X     = uig::CONT_W - 24 - QR_BOX;
 constexpr int32_t TEXT_X   = 24 + ART_W + 24;
-constexpr int32_t TEXT_W   = uig::CONT_W - TEXT_X - 24;
+constexpr int32_t TEXT_W   = QR_X - 16 - TEXT_X;
+// Розміщення: its name, the three places, the balance's name and value, the slider
+constexpr int32_t NAME_Y   = 14;
+constexpr int32_t PLACE_Y  = 44;
+constexpr int32_t BALN_Y   = PLACE_Y + m3w::CHIP_H + 12;
+constexpr int32_t PLACE_GAP = 8;
 constexpr int32_t ROW_X    = 24;                ///< the slider's row, in from the card's sides
 constexpr int32_t ROW_W    = uig::CONT_W - 2 * ROW_X;
 // the panel's one slider (ui_m3_widgets.h), the zero in the middle, «Л» and «П» at its ends
@@ -55,6 +67,13 @@ struct Page {
     lv_obj_t* line = nullptr;
     char      line_txt[96] = "";
     int32_t   type = -1, hz = -1, src = -1;   ///< what the card was painted for
+    lv_obj_t* addr = nullptr;            ///< the panel's address, under «Налаштувати — у вебінтерфейсі»
+    char      addr_txt[16] = "";
+    lv_obj_t* qr_box = nullptr;
+    lv_obj_t* qr = nullptr;
+    // where they stand
+    m3w::Chip place[3];
+    int32_t   placed = -1;
     // the balance
     lv_obj_t* row = nullptr;
     lv_obj_t* value = nullptr;
@@ -143,7 +162,32 @@ void slider_cb(lv_event_t* e) {
     }
 }
 
+// ── where they stand ──
+
+void place_cb(lv_event_t* e) {
+    const int32_t i = (int32_t)(intptr_t)lv_event_get_user_data(e);
+    g.placed = i;                                        // at once; the snapshot agrees after
+    for (int j = 0; j < 3; j++) m3w::chip_set(g.place[j], j == i);
+    post(UiLvglModule::Req::PLACEMENT, i);
+}
+
 // ── the state ──
+
+/// The panel's address under «Налаштувати — у вебінтерфейсі», and the web's Колонки as a QR code
+/// beside the text — nothing of either while the panel has no address.
+void paint_addr(const UiLvglModule::Snapshot& s) {
+    if (strncmp(s.wifi_ip, g.addr_txt, sizeof(g.addr_txt)) == 0) return;
+    uih::set_text(g.addr, g.addr_txt, sizeof(g.addr_txt), s.wifi_ip);
+    uih::show(g.addr, s.wifi_ip[0] != '\0');
+#if LV_USE_QRCODE
+    if (g.qr && s.wifi_ip[0]) {
+        char url[64];
+        const int n = snprintf(url, sizeof(url), "http://%s/#/system/speakers", s.wifi_ip);
+        lv_qrcode_update(g.qr, url, (uint32_t)n);
+    }
+    uih::show(g.qr_box, s.wifi_ip[0] != '\0');
+#endif
+}
 
 /// A circle of the drawing: centre, radius, a fill or none, a line or none.
 void circle(lv_obj_t* art, int32_t cx, int32_t cy, int32_t r, const uint32_t* fill, bool line) {
@@ -214,6 +258,8 @@ lv_obj_t* text_block(lv_obj_t* card) {
     lv_obj_t* web = m3w::text(col, t.t.body_m, t.c.outline, tr(S::spk_setup_web));
     lv_obj_set_width(web, TEXT_W);
     lv_label_set_long_mode(web, LV_LABEL_LONG_WRAP);
+    g.addr = m3w::text(col, t.t.body_m, t.c.on_surface_var, "");
+    uih::show(g.addr, false);
     return col;
 }
 
@@ -227,15 +273,35 @@ lv_obj_t* build(lv_obj_t* parent, UiCtx& c) {
     lv_obj_t* card = m3w::surface(root, 0, 0, uig::CONT_W, STATE_H, t.c.surface_low, m3::shape::L);
     g.art = m3w::box(card, 24, (STATE_H - ART_H) / 2, ART_W, ART_H);
     text_block(card);
+#if LV_USE_QRCODE
+    // dark on white, as a camera wants it; the square's margin is the quiet zone
+    g.qr_box = m3w::surface(card, QR_X, (STATE_H - QR_BOX) / 2, QR_BOX, QR_BOX, 0xFFFFFF, m3::shape::XS);
+    g.qr = lv_qrcode_create(g.qr_box);
+    lv_qrcode_set_size(g.qr, QR_BOX - 16);
+    lv_qrcode_set_dark_color(g.qr, lv_color_black());
+    lv_qrcode_set_light_color(g.qr, lv_color_white());
+    lv_obj_center(g.qr);
+    uih::show(g.qr_box, false);
+#endif
 
     // ── the balance ──
     lv_obj_t* bal = m3w::surface(root, 0, BAL_Y, uig::CONT_W, BAL_H, t.c.surface_low, m3::shape::L);
+    lv_obj_t* where = m3w::text(bal, t.t.body_l, t.c.on_surface, tr(S::spk_placement));
+    lv_obj_set_pos(where, ROW_X, NAME_Y);
+    static constexpr S PLACES[3] = {S::spk_place_free, S::spk_place_wall, S::spk_place_corner};
+    const int32_t pw = (ROW_W - 2 * PLACE_GAP) / 3;
+    for (int i = 0; i < 3; i++) {
+        g.place[i] = m3w::chip(bal, ROW_X + i * (pw + PLACE_GAP), PLACE_Y, tr(PLACES[i]), false);
+        lv_obj_set_width(g.place[i].obj, pw);
+        lv_obj_add_event_cb(g.place[i].obj, place_cb, LV_EVENT_CLICKED, (void*)(intptr_t)i);
+    }
     lv_obj_t* name = m3w::text(bal, t.t.body_l, t.c.on_surface, tr(S::spk_balance));
-    lv_obj_set_pos(name, ROW_X, 20);
+    lv_obj_set_pos(name, ROW_X, BALN_Y);
     g.value = m3w::text(bal, t.t.label_m, t.c.on_surface_var, "");
-    lv_obj_align(g.value, LV_ALIGN_TOP_RIGHT, -ROW_X, 22);
+    lv_obj_align(g.value, LV_ALIGN_TOP_RIGHT, -ROW_X, BALN_Y + 2);
 
-    const int32_t row_y = BAL_H - SLIDER_H - 24;
+    const int32_t row_y = BAL_H - SLIDER_H - 6;
+    static_assert(BAL_H - SLIDER_H - 6 >= BALN_Y + 26, "the slider under the balance's name");
     g.row = m3w::box(bal, ROW_X, row_y, ROW_W, SLIDER_H);
     lv_obj_add_flag(g.row, LV_OBJ_FLAG_OVERFLOW_VISIBLE);
     lv_obj_set_style_radius(g.row, m3::shape::M, 0);
@@ -274,6 +340,11 @@ lv_obj_t* build(lv_obj_t* parent, UiCtx& c) {
 
 void refresh(lv_obj_t*, UiCtx& c) {
     paint_state(c.s);
+    paint_addr(c.s);
+    if (c.s.placement != g.placed) {
+        g.placed = c.s.placement;
+        for (int i = 0; i < 3; i++) m3w::chip_set(g.place[i], i == g.placed);
+    }
     // a finger on it leaves it alone; the snapshot catches up after
     const int32_t half = c.s.balance_db10 / 5;
     if (!g.drag && half != g.shown) {

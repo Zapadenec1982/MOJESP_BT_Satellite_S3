@@ -1,7 +1,7 @@
 <script>
   // Налаштування › Тонке налаштування (the customer, 18.10.2026): what sat in two places —
   // «Бас і стерео» under the equalizer and «Для фахівців» folded under the port's measurement — in
-  // one section of its own, names and values only (docs/UX_RESEARCH_2026-10-18.md). The web's
+  // one section of its own, names and values only. The web's
   // alone, as both were: the glass has the loudness as a switch in «Звук» and none of the rest.
   //
   // «Звичайна гучність» joined them the same day, from a page of its own that played the old sound
@@ -59,23 +59,23 @@
     <div class="set">
       <span class="t">{$t['eq.mono_bass']}</span>
       <Slider label={$t['eq.mono_bass']} min={0} max={300} step={10} value={s['audio.mono_bass_hz'] ?? 0}
-              format={hzOrOff('Hz')} on:input={(e) => monoBass.send(e.detail)} undo={(v) => monoBass.send(v)} />
+              format={hzOrOff($t['unit.hz'])} on:input={(e) => monoBass.send(e.detail)} undo={(v) => monoBass.send(v)} />
     </div>
     <div class="set">
       <span class="t">{$t['cal.hp']}</span>
       <Slider label={$t['cal.hp']} min={0} max={80} step={5} value={s['audio.hp_hz'] ?? 40} disabled={p.hz > 0}
-              format={p.hz > 0 ? () => fmt($t['spk.d_sub_port'], { hz: subUnder(p.hz) }) : hzOrOff('Hz')}
+              format={p.hz > 0 ? () => fmt($t['spk.d_sub_port'], { hz: subUnder(p.hz) }) : hzOrOff($t['unit.hz'])}
               on:input={(e) => hp.send(e.detail)} undo={(v) => hp.send(v)} />
     </div>
     <div class="set">
       <span class="t">{$t['cal.xo']}</span>
       <Slider label={$t['cal.xo']} min={0} max={250} step={10} value={s['audio.bass_xo_hz'] ?? 120}
-              format={hzOrOff('Hz')} on:input={(e) => xo.send(e.detail)} undo={(v) => xo.send(v)} />
+              format={hzOrOff($t['unit.hz'])} on:input={(e) => xo.send(e.detail)} undo={(v) => xo.send(v)} />
     </div>
     <div class="set">
       <span class="t">{$t['cal.lift']}</span>
       <Slider label={$t['cal.lift']} min={0} max={6} step={1} value={s['audio.port_lift_db'] ?? 3} disabled={!p.hz}
-              format={p.hz ? (v) => `${v} dB` : () => $t['eq.off']}
+              format={p.hz ? (v) => `${v} ${$t['unit.db']}` : () => $t['eq.off']}
               on:input={(e) => lift.send(e.detail)} undo={(v) => lift.send(v)} />
     </div>
   </Group>

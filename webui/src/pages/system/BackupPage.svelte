@@ -1,5 +1,5 @@
 <script>
-  // Backup (PLAN_WEBUI §2, System › Device): two files a person keeps.
+  // Backup: two files a person keeps.
   //  - Their own files (A6, GET / POST /api/userdata): the station list, the EQ and «Власний», the
   //    remote devices, the track to resume. A restore is staged and goes in at the next boot,
   //    because the modules hold their own copies (main/userdata_http.cpp) — so it ends with a

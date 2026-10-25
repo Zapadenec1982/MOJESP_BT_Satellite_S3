@@ -9,7 +9,7 @@
  * is short of. When that allocation fails the frame is gone: on the receive path without a
  * log line or a counter, on the send path as ESP_ERR_NO_MEM to lwIP, which does not resend
  * an ACK or a ping reply. hosted_mem.c moves those copies to PSRAM and counts what it could
- * not place. The evidence and the reasoning are in docs/NET_LOSS_2026-09-23.md.
+ * not place.
  *
  * All of this is ESP32-P4 + ESP-Hosted only. Elsewhere the functions exist and report an
  * inactive component, so callers need no #if of their own.

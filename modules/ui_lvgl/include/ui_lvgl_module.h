@@ -63,6 +63,7 @@ public:
         int32_t  port_hz    = 0;        ///< audio.port_hz, 0 = none
         int32_t  port_src   = 0;        ///< audio.port_src: 0 not set, 1 by hand, 3 measured
         int32_t  balance_db10 = 0;      ///< audio.balance_db10, −60…+60: tenths of a dB, − is left
+        int32_t  placement  = 0;        ///< audio.placement: 0 free, 1 by a wall, 2 in a corner
         int32_t  underruns  = 0;
         int32_t  cpu_pct    = 0;
         int32_t  in_rate    = 0;        ///< measured input sample rate, 0 = none
@@ -211,6 +212,7 @@ public:
         TREBLE,       ///< value = audio.treble_db, −6…+6
         LOUDNESS,     ///< value = audio.loudness, 0…100 (0 = off)
         BALANCE,      ///< value = audio.balance_db10, −60…+60 in steps of 5 (Колонки)
+        PLACEMENT,    ///< value = audio.placement, 0 free / 1 by a wall / 2 in a corner (Колонки)
     };
 
 

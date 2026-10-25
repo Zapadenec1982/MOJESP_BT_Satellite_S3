@@ -1,7 +1,6 @@
 /**
  * @file userdata_http.cpp
- * @brief GET and POST /api/userdata — the user's files, backed up and restored from the web
- *        (docs/PLAN_WEBUI_2026-10-11.md, A6).
+ * @brief GET and POST /api/userdata — the user's files, backed up and restored from the web.
  *
  * GET sends every user file that exists (UserStore::FILES: the station list, the EQ and
  * "Свій", the remote devices, the track to resume) as one JSON document to keep

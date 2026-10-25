@@ -5,7 +5,7 @@
  *
  * Two of these shape what the audio task plays. One sits in front of the DSP chain, as the
  * envelope always did. The other sits after it, in front of the DAC, and that one is what makes a
- * source change, a pause or a reset silent (docs/AUDIO_PATH_REVIEW_2026-10-05.md, A01 and A02).
+ * source change, a pause or a reset silent.
  * A fade at the chain's input does not silence its output. The subsonic, the loudness shelf, a
  * resonant EQ band and the bass limiter's crossover keep ringing after the input has gone quiet,
  * for longer than the chain's look-ahead. Clearing them while they ring was the click. Behind the

@@ -23,8 +23,17 @@ set(EXTRA_COMPONENT_DIRS
 # any drift between this bootstrap and the authoritative Kconfig value.
 set(_BOARD_DIR "")
 
-if(EXISTS "${CMAKE_SOURCE_DIR}/sdkconfig")
-    file(STRINGS "${CMAKE_SOURCE_DIR}/sdkconfig" _sdkconfig_lines
+# The sdkconfig this build uses: the project's own, or the one `-D SDKCONFIG=<path>` names — which
+# is how a P4 and an S3 build live side by side (README, "Building"; e.g. -B build_s3
+# -D SDKCONFIG=build_s3/sdkconfig). Reading the project's when another was named would resolve
+# the OTHER board and stop at the mismatch guard below.
+set(_SDKCONFIG_FILE "${CMAKE_SOURCE_DIR}/sdkconfig")
+if(SDKCONFIG)
+    get_filename_component(_SDKCONFIG_FILE "${SDKCONFIG}" ABSOLUTE BASE_DIR "${CMAKE_SOURCE_DIR}")
+endif()
+
+if(EXISTS "${_SDKCONFIG_FILE}")
+    file(STRINGS "${_SDKCONFIG_FILE}" _sdkconfig_lines
          REGEX "^CONFIG_MODESP_BOARD_DIR=")
     foreach(_line ${_sdkconfig_lines})
         if(_line MATCHES "^CONFIG_MODESP_BOARD_DIR=\"(.+)\"$")
@@ -167,6 +176,14 @@ file(GLOB _modesp_i18n_inputs CONFIGURE_DEPENDS
      "${CMAKE_SOURCE_DIR}/data/i18n/*.json")
 file(GLOB _modesp_schemas CONFIGURE_DEPENDS
      "${CMAKE_SOURCE_DIR}/tools/schemas/*.schema.json")
+# generated/ and data/ are shared by every build directory of this tree (a P4 and an S3 build side
+# by side). generate_ui.py rewrites project_info.h on every configure, so when ANOTHER board's
+# configure has rewritten generated/ and data/, this build sees it newer than its own build files
+# and configures again — re-copying its own board.json and regenerating its own headers — before
+# it compiles anything. Without it, the second build would ship the first one's board.json.
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
+    "${CMAKE_SOURCE_DIR}/generated/project_info.h")
+
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
     "${CMAKE_SOURCE_DIR}/project.json"
     "${CMAKE_SOURCE_DIR}/tools/generate_ui.py"
@@ -184,6 +201,7 @@ if(Python3_FOUND)
         COMMAND ${Python3_EXECUTABLE}
             "${CMAKE_SOURCE_DIR}/tools/generate_ui.py"
             --project     "${CMAKE_SOURCE_DIR}/project.json"
+            --board       "${_BOARD_DIR}"
             --modules-dir "${CMAKE_SOURCE_DIR}/modules"
             --output-data "${CMAKE_SOURCE_DIR}/data"
             --output-gen  "${CMAKE_SOURCE_DIR}/generated"
@@ -213,6 +231,22 @@ include("${CMAKE_SOURCE_DIR}/generated/modules.cmake")
 # symbols do not exist and the panic handler never writes the coredump partition.
 set(COMPONENTS main ${PRODUCT_MODULES} modesp_mqtt modesp_ble espcoredump)
 
+# A module folder the product leaves out (a board's `exclude_modules` in project.json — the
+# headless S3 has no ui_lvgl) is excluded outright, not only left uncompiled. COMPONENTS above
+# keeps it out of the build, but the component manager solves the idf_component.yml of every
+# component it can SEE, so ui_lvgl's LVGL and esp_lvgl_port would still be downloaded and pinned
+# into the lock of a board that has no display. Drivers are not excluded this way: modesp_hal
+# requires every one (a disabled driver compiles empty), so the panel and touch drivers' managed
+# dependencies still resolve on the S3 — downloaded, never built.
+file(GLOB _module_dirs LIST_DIRECTORIES true "${CMAKE_SOURCE_DIR}/modules/*")
+foreach(_dir ${_module_dirs})
+    get_filename_component(_mod "${_dir}" NAME)
+    if(EXISTS "${_dir}/CMakeLists.txt" AND NOT _mod IN_LIST PRODUCT_MODULES)
+        list(APPEND EXCLUDE_COMPONENTS ${_mod})
+        message(STATUS "  module '${_mod}' is not in this board's product: excluded")
+    endif()
+endforeach()
+
 # ── Firmware version (semver) ──
 # Used by esp_app_get_description()->version in heartbeat & OTA version matching.
 # Single source of truth: project.json "version" — bump it there before a release.
@@ -220,6 +254,15 @@ file(READ "${CMAKE_SOURCE_DIR}/project.json" _PROJECT_JSON_CONTENT)
 string(JSON PROJECT_VER GET "${_PROJECT_JSON_CONTENT}" "version")
 
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)
+
+# One lock file per target. The component manager re-solves and REWRITES the lock whenever
+# the target changes, so a single file would flip between the P4's resolution (esp_hosted,
+# esp_wifi_remote, LVGL, ...) and the S3's with every `idf.py set-target`. The P4 keeps the
+# committed dependencies.lock it was bench-verified with; every other target gets its own
+# (IDF's documented recipe, api-guides/tools/idf-component-manager.rst).
+if(NOT IDF_TARGET STREQUAL "esp32p4")
+    idf_build_set_property(DEPENDENCIES_LOCK "${CMAKE_SOURCE_DIR}/dependencies.lock.${IDF_TARGET}")
+endif()
 
 # SharedState string values are etl::string<MODESP_MAX_STRING_VALUE_LENGTH>, and etl
 # truncates silently. Upstream's 32 is right for a fridge, where every string is a short
@@ -313,10 +356,19 @@ littlefs_create_partition_image(data data FLASH_IN_PROJECT
 # Guard the table rather than trust it: without a `userdata` row the firmware still boots
 # (it falls back to /data and says so), but the protection is silently gone and the next
 # full flash takes the EQ with it again. Cheaper to fail here.
-file(READ "${CMAKE_SOURCE_DIR}/partitions_p4_16mb.csv" _PART_CSV)
+# The table is the board's (CONFIG_PARTITION_TABLE_CUSTOM_FILENAME, set in sdkconfig.board):
+# partitions_p4_16mb.csv on the P4, partitions_s3_16mb.csv on the S3.
+set(_PART_FILE "${CMAKE_SOURCE_DIR}/${CONFIG_PARTITION_TABLE_CUSTOM_FILENAME}")
+if(NOT CONFIG_PARTITION_TABLE_CUSTOM OR NOT EXISTS "${_PART_FILE}")
+    message(FATAL_ERROR
+        "The board does not name a custom partition table (CONFIG_PARTITION_TABLE_CUSTOM_FILENAME "
+        "in boards/<board>/sdkconfig.board), or '${_PART_FILE}' is missing. The firmware needs "
+        "the 'data' and 'userdata' partitions only a custom table has.")
+endif()
+file(READ "${_PART_FILE}" _PART_CSV)
 if(NOT _PART_CSV MATCHES "(^|\n)[ \t]*userdata[ \t]*,")
     message(FATAL_ERROR
-        "partitions_p4_16mb.csv has no 'userdata' partition. Runtime user files (eq.json, "
+        "${CONFIG_PARTITION_TABLE_CUSTOM_FILENAME} has no 'userdata' partition. Runtime user files (eq.json, "
         "stations.json, last_track, devices.json) would go back to living in 'data', which "
         "`idf.py flash` rewrites whole — the data loss of 18.09.2026 and 22.09.2026. Restore "
         "the row, or delete this guard knowingly.")

@@ -70,6 +70,49 @@ def schema_errors(data, schema_name, label):
     return out
 
 
+def apply_board_overlay(project, board):
+    """project.json's boards.<board> overlay applied to `project` (a new dict; the input is left
+    alone): exclude_modules leaves modules out, add_modules puts modules in — in the place of
+    the first one left out, so ui_headless takes ui_lvgl's — and `system` overrides fields such
+    as device_name. A board without an overlay gets the project as it is. Exits on a name the
+    overlay cannot apply: excluding what is not listed, adding what already is."""
+    overlay = (project.get("boards") or {}).get(board or "", None)
+    if overlay is None:
+        print(f"Board: {board} (no overlay in project.json)")
+        return project
+    excluded = list(overlay.get("exclude_modules", []))
+    added = list(overlay.get("add_modules", []))
+    base = list(project.get("modules", []))
+    unknown = [m for m in excluded if m not in base]
+    if unknown:
+        print(f"ERROR: project.json boards.{board}.exclude_modules names "
+              f"{', '.join(unknown)}, which project.json does not list")
+        sys.exit(1)
+    twice = [m for m in added if m in base]
+    if twice:
+        print(f"ERROR: project.json boards.{board}.add_modules names "
+              f"{', '.join(twice)}, which project.json already lists")
+        sys.exit(1)
+    mods, placed = [], False
+    for m in base:
+        if m in excluded:
+            if not placed:
+                mods.extend(added)
+                placed = True
+            continue
+        mods.append(m)
+    if not placed:
+        mods.extend(added)
+    out = dict(project)
+    out["modules"] = mods
+    if overlay.get("system"):
+        out["system"] = {**(project.get("system") or {}), **overlay["system"]}
+    print(f"Board: {board} — overlay applied"
+          + (f", without {', '.join(excluded)}" if excluded else "")
+          + (f", with {', '.join(added)}" if added else ""))
+    return out
+
+
 # ── DataLogger channel/event collection (shared: chart widget + generated headers) ──
 
 def collect_log_channels(manifests):
@@ -2805,6 +2848,9 @@ def main():
     parser.add_argument("--output-gen", type=Path,
                         default=PROJECT_ROOT / "generated",
                         help="Output path for generated C++ headers")
+    parser.add_argument("--board", default=None,
+                        help="Active board folder (boards/<name>/): applies project.json's "
+                             "boards.<name> overlay (modules left out, system overrides)")
     parser.add_argument("--minify", action="store_true",
                         help="Minify ui.json output")
     parser.add_argument("--report-capabilities", action="store_true",
@@ -2823,6 +2869,23 @@ def main():
 
     with open(args.project, "r", encoding="utf-8") as f:
         project = json.load(f)
+
+    # The board overlay is applied HERE, before anything reads the module list, so every
+    # artifact below — modules.cmake, the registration headers, ui.json, state_meta.h, the
+    # i18n bundles — sees one list. The schema check further down runs on the overlaid
+    # project, whose `boards` block it also validates.
+    # Without --board (the host tests, tools that call the generator directly), the board the
+    # tree was last configured for: data/board.json, which CMake copies before calling here and
+    # whose bindings the validation below reads. Its overlay must match those bindings.
+    if not args.board:
+        _active = args.output_data / "board.json"
+        if _active.exists():
+            try:
+                args.board = json.loads(_active.read_text(encoding="utf-8")).get("board") or None
+            except (OSError, ValueError):
+                args.board = None
+    if args.board:
+        project = apply_board_overlay(project, args.board)
 
     print(f"\nProject: {project.get('project', '?')} v{project.get('version', '?')}")
     print(f"Modules: {', '.join(project.get('modules', []))}")
@@ -3030,6 +3093,22 @@ def main():
     with open(display_path, "w", encoding="utf-8") as f:
         f.write(display_h)
     print(f"  + {display_path}")
+    files_written += 1
+
+    # 4b. project_info.h — the project's name for the device, after the board overlay, for the
+    # firmware's own fallbacks (modules/bt/include/device_name.h: what Bluetooth, AirPlay, DLNA
+    # and the USB sound card call the player until somebody names it). C as well as C++.
+    _sys = project.get("system", {}) or {}
+    def _c_str(v):
+        return '"' + str(v).replace("\\", "\\\\").replace('"', '\\"') + '"'
+    pinfo_path = gen_dir / "project_info.h"
+    with open(pinfo_path, "w", encoding="utf-8") as f:
+        f.write("#pragma once\n"
+                "// Auto-generated from project.json (system, with the board's overlay) by "
+                "generate_ui.py — DO NOT EDIT\n\n"
+                f"#define MODESP_DEVICE_NAME {_c_str(_sys.get('device_name', 'ModESP'))}\n"
+                f"#define MODESP_BOARD {_c_str(args.board or '')}\n")
+    print(f"  + {pinfo_path}")
     files_written += 1
 
     # 5. features_config.h (only if resolver available)

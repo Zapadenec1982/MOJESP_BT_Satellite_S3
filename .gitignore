@@ -1,5 +1,7 @@
 # === Build ===
 /build/
+# side-by-side target builds, e.g. idf.py -B build_s3 -D SDKCONFIG=build_s3/sdkconfig
+/build_*/
 tests/host/build/
 *.elf
 *.map

@@ -21,6 +21,55 @@
         "pattern": "^[a-z][a-z0-9_]*$"
       }
     },
+    "boards": {
+      "type": "object",
+      "description": "Per-board overlays, keyed by the board folder (boards/<name>/). A board can leave out modules its hardware cannot run (exclude_modules: a headless board has no ui_lvgl), add modules only it runs (add_modules: ui_headless in ui_lvgl's place) and override system fields such as device_name. tools/generate_ui.py --board applies the active one.",
+      "propertyNames": {
+        "pattern": "^[a-z][a-z0-9_]*$"
+      },
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "exclude_modules": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_]*$"
+            },
+            "uniqueItems": true
+          },
+          "add_modules": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_]*$"
+            },
+            "uniqueItems": true
+          },
+          "description": {
+            "type": "string"
+          },
+          "system": {
+            "type": "object",
+            "properties": {
+              "device_name": {
+                "type": "string"
+              },
+              "mqtt_topic_root": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9_-]*$",
+                "maxLength": 24
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "patternProperties": {
+          "^_": {}
+        },
+        "additionalProperties": false
+      }
+    },
     "system": {
       "type": "object",
       "properties": {

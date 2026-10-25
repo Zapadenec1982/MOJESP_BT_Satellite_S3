@@ -30,7 +30,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "tools"))
-from generate_ui import validate_bindings, load_all_driver_manifests, unused_drivers  # noqa: E402
+from generate_ui import (validate_bindings, load_all_driver_manifests, unused_drivers,  # noqa: E402
+                         apply_board_overlay)
 
 
 def cfg_symbol(name: str) -> str:
@@ -158,6 +159,10 @@ def main(argv=None) -> int:
     if project is None:
         print(f"WARNING: {ROOT / 'project.json'} not found — "
               "skipping the orphaned-binding (module in project) check.")
+    # The ACTIVE board's list: project.json's boards.<board> overlay leaves modules out and puts
+    # others in (the headless S3 binds its encoder to ui_headless, which the base list lacks).
+    if project and board and board.get("board"):
+        project = apply_board_overlay(project, board["board"])
     project_modules = set(project.get("modules", [])) if project else None
     errors, vwarn = [], []
     validate_bindings(board, bindings, drivers, errors, vwarn,

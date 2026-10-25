@@ -176,7 +176,9 @@
     showStations();
   }
 
-  function sub(st) {
+  // Reactive for the same reason as Favorites' subtitle: it reads $t, and a plain function
+  // called from the template would keep the first catalog's words.
+  $: sub = (st) => {
     const codec = (st.codec || '').toUpperCase();
     const parts = [codec === 'FLAC' ? `FLAC · ${$t['cat.lossless']}` : st.bitrate ? `${codec} ${st.bitrate}` : codec];
     if (st.countrycode) parts.push(region(st.countrycode));
@@ -184,7 +186,7 @@
     if (sort === 1) parts.push(plural($t, lang, 'cat.votes', st.votes || 0));
     if (st.tags) parts.push(st.tags.split(',').slice(0, 3).join(', '));
     return parts.join(' · ');
-  }
+  };
 
   /** act: 0 play, 1 keep in the list, 2..7 keep in preset 1..6 (radio.web_act). */
   async function toPanel(st, act) {

@@ -120,10 +120,14 @@
     return list.presets.indexOf(i);
   }
 
-  function subtitle(st, i) {
+  // Reactive, not a plain function: the template calls subtitle(st, i), and Svelte re-runs that
+  // call only when something in the call itself changes. $t is read inside, so a plain function
+  // kept the bundled Ukrainian text after the English catalog arrived (customer, 25.10.2026:
+  // «кнопка 1» on the English Stations page).
+  $: subtitle = (st, i) => {
     const p = presetOf(i);
     return p >= 0 ? `${S.host(st.url)} · ${fmt($t['st.preset_n'], { n: p + 1 })}` : S.host(st.url);
-  }
+  };
 
   function openSheet(i) {
     sheet = i;

@@ -45,7 +45,8 @@
     }
     load();
   }
-  const name = (l) => (NAMES[l] ? $t[NAMES[l]] : l);
+  // Reactive: the level names in the list follow the catalog when it arrives.
+  $: name = (l) => (NAMES[l] ? $t[NAMES[l]] : l);
 </script>
 
 

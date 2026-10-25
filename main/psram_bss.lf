@@ -1,0 +1,71 @@
+# Static data that lives in PSRAM on a board whose internal RAM is short (the ESP32-S3).
+#
+# The P4 has 768 KB of internal SRAM and none of this applies there: the condition below names
+# the S3 (and the option that makes PSRAM .bss possible), so on the P4 every entry falls back to
+# the default placement even if it ever turns that option on. libbt.a is the player's `bt`
+# module (modules/bt), which shadows IDF's Bluetooth component; should BLE ever be enabled here,
+# that name has to change first, and this mapping with it. The S3 has 512 KB,
+# out of which the caches, the IRAM code, Wi-Fi, lwIP, the I2S DMA rings and every internal stack
+# are paid for — and this firmware's .bss alone filled what the linker had left (99.4 % of
+# D/IRAM with nothing moved, 25.10.2026). CONFIG_SPIRAM_ALLOW_BSS_SEG_EXTERNAL_MEMORY
+# (boards/s3_player/sdkconfig.board) already moves lwIP's and Wi-Fi's; these are the
+# framework's and the control plane's, none of them on a path with a deadline:
+#
+#   main         — the services (config, logger, error, watchdog, HAL tables) and the module
+#                  instances — EXCEPT the audio module, whose object holds the state the audio
+#                  task touches every 5 ms block;
+#   modesp_core  — App: SharedState, the module manager, the message bus;
+#   modesp_net, bt, airplay2, modesp_mqtt — request and response buffers of HTTP handlers.
+#
+# PSRAM stays reachable while flash is written because code runs from it too
+# (CONFIG_SPIRAM_XIP_FROM_PSRAM), so nothing here becomes unsafe in an interrupt or during an NVS
+# write. .ext_ram.bss is zeroed at boot before C++ constructors run (esp_system, cpu_start.c).
+
+[mapping:modesp_main_psram_bss]
+archive: libmain.a
+entries:
+    if IDF_TARGET_ESP32S3 = y && SPIRAM_ALLOW_BSS_SEG_EXTERNAL_MEMORY = y:
+        * (extram_bss)
+        main:_ZL5audio (default)
+    else:
+        * (default)
+
+[mapping:modesp_core_psram_bss]
+archive: libmodesp_core.a
+entries:
+    if IDF_TARGET_ESP32S3 = y && SPIRAM_ALLOW_BSS_SEG_EXTERNAL_MEMORY = y:
+        * (extram_bss)
+    else:
+        * (default)
+
+[mapping:modesp_net_psram_bss]
+archive: libmodesp_net.a
+entries:
+    if IDF_TARGET_ESP32S3 = y && SPIRAM_ALLOW_BSS_SEG_EXTERNAL_MEMORY = y:
+        * (extram_bss)
+    else:
+        * (default)
+
+[mapping:modesp_bt_psram_bss]
+archive: libbt.a
+entries:
+    if IDF_TARGET_ESP32S3 = y && SPIRAM_ALLOW_BSS_SEG_EXTERNAL_MEMORY = y:
+        * (extram_bss)
+    else:
+        * (default)
+
+[mapping:modesp_airplay2_psram_bss]
+archive: libairplay2.a
+entries:
+    if IDF_TARGET_ESP32S3 = y && SPIRAM_ALLOW_BSS_SEG_EXTERNAL_MEMORY = y:
+        * (extram_bss)
+    else:
+        * (default)
+
+[mapping:modesp_mqtt_psram_bss]
+archive: libmodesp_mqtt.a
+entries:
+    if IDF_TARGET_ESP32S3 = y && SPIRAM_ALLOW_BSS_SEG_EXTERNAL_MEMORY = y:
+        * (extram_bss)
+    else:
+        * (default)

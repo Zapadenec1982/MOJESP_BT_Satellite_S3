@@ -1,0 +1,27 @@
+# The audio core's per-block DSP in IRAM on the ESP32-S3.
+#
+# The S3 runs its code from PSRAM (CONFIG_SPIRAM_XIP_FROM_PSRAM) through a 16 KB instruction cache
+# that both cores share; while Wi-Fi, lwIP and a decoder run on core 0, the DSP's loops on core 1
+# keep being evicted and fetched again from PSRAM. These are the functions DspChain::process() runs
+# every block (components/audio_dsp: the chain, the SVF kernels, the limiters) — about 8 KB, nothing
+# that designs a filter or parses a file. The P4 is left exactly as it was.
+
+[mapping:audio_dsp_iram]
+archive: libaudio_dsp.a
+entries:
+    if IDF_TARGET_ESP32S3 = y:
+        dsp_chain:_ZN10audio_core8DspChain7processEPfj (noflash)
+        dsp_chain:_ZN10audio_core8DspChain8run_bassEPfj (noflash)
+        dsp_chain:_ZN10audio_core8DspChain9bass_knotEffff (noflash)
+        dsp_chain:_ZN10audio_core8DspChain12run_loudnessERNS0_6PassesE (noflash)
+        dsp_chain:_ZN10audio_core8DspChain8run_gainEPfj (noflash)
+        dsp_chain:_ZN10audio_core8DspChain10run_stereoEPfj (noflash)
+        dsp_chain:_ZN10audio_core8DspChain11run_balanceEPfj (noflash)
+        dsp_chain:_ZN10audio_core8DspChain8run_bandERNS0_4BandEPfj (noflash)
+        dsp_chain:_ZN10audio_core7KnotEnv4knotEf (noflash)
+        dsp_kernels:_ZN10audio_core11svf_stereo2EPfjRKNS_7SvfCoefERNS_8SvfStateES3_S5_ (noflash)
+        dsp_kernels:_ZN10audio_core15svf_stereo_rampEPfjRKNS_7SvfCoefES3_RNS_8SvfStateE (noflash)
+        dsp_kernels:_ZN10audio_core10svf_stereoEPfjRKNS_7SvfCoefERNS_8SvfStateE (noflash)
+        dsp_kernels:_ZN10audio_core13svf_stereo_toEPKfPfjRKNS_7SvfCoefERNS_8SvfStateE (noflash)
+    else:
+        * (default)

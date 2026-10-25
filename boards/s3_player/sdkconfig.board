@@ -1,0 +1,173 @@
+# boards/s3_player — ESP32-S3 N16R8 (16 MB quad flash, 8 MB octal PSRAM in the package),
+# headless: no display, no touch. Applied on top of sdkconfig.defaults for a FRESH sdkconfig
+# (idf.py set-target esp32s3). Verified against the board on the bench 25.10.2026 with
+# `esptool flash_id`: ESP32-S3 (QFN56) rev v0.2, "Embedded PSRAM 8MB (AP_3v3)", 16 MB flash.
+#
+# What the P4 profile (boards/p4_player/sdkconfig.board) has and this one does not, and why:
+# - ESP-Hosted / esp_wifi_remote: Wi-Fi is the S3's own radio;
+# - the chip-revision pin, the Boya flash driver, the 0x10000 table offset: P4 facts;
+# - LVGL, PPA, DSI: there is no display;
+# - the cache write-back chunking: a P4 option (esp_mm), and the S3's I2S driver does not
+#   write the TX buffer back after every write (no L1 cache in front of internal RAM).
+
+# ── Flash: 16 MB QIO 80 MHz, the S3 table (no slave_fw) ──
+CONFIG_ESPTOOLPY_FLASHSIZE_16MB=y
+CONFIG_ESPTOOLPY_FLASHSIZE="16MB"
+CONFIG_ESPTOOLPY_FLASHMODE_QIO=y
+CONFIG_ESPTOOLPY_FLASHFREQ_80M=y
+CONFIG_PARTITION_TABLE_CUSTOM=y
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions_s3_16mb.csv"
+CONFIG_PARTITION_TABLE_OFFSET=0x8000
+
+# ── CPU: both cores at 240 MHz ──
+CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ_240=y
+
+# ── PSRAM: 8 MB octal (AP, 3.3 V) at 80 MHz ──
+# 120 MHz octal is an experimental IDF feature that depends on the temperature at power-on;
+# not for a box that sits next to an amplifier.
+CONFIG_SPIRAM=y
+CONFIG_SPIRAM_MODE_OCT=y
+CONFIG_SPIRAM_SPEED_80M=y
+CONFIG_SPIRAM_USE_MALLOC=y
+# As on the P4: ordinary allocations above 1 KB go to PSRAM. Internal RAM is the scarce
+# resource here too — 512 KB for Wi-Fi, lwIP, the I2S/SDMMC/USB DMA and every internal stack.
+CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL=1024
+# What malloc() keeps back from PSRAM-capable requests for DMA and internal-only users.
+CONFIG_SPIRAM_MALLOC_RESERVE_INTERNAL=49152
+CONFIG_SPIRAM_TRY_ALLOCATE_WIFI_LWIP=y
+# Code and read-only data run from PSRAM, copied there from flash at boot. On the S3 that is
+# what lets the cache stay ON while flash is written (NVS persist, eq.json, OTA): with it, an
+# interrupt or a task that is not in IRAM keeps running through a flash write instead of
+# stalling for the length of the erase. The I2S receive interrupt hands over only the last
+# finished DMA block, and the USB controller has 1 ms per isochronous packet — both lose data
+# when held off by a sector erase. It also makes a cache miss on code an octal-PSRAM read
+# rather than a quad-flash one. Costs the image's text+rodata in PSRAM (~2 MB of the 8).
+CONFIG_SPIRAM_XIP_FROM_PSRAM=y
+# Static data in PSRAM: lwIP's and Wi-Fi's by IDF's own choice, and the framework's control plane
+# by main/psram_bss.lf, which says what and why. Without it .bss filled internal RAM to 99.4 %.
+CONFIG_SPIRAM_ALLOW_BSS_SEG_EXTERNAL_MEMORY=y
+
+# ── Caches: IDF's defaults (32 KB data, 16 KB instruction) ──
+# Larger caches are carved out of the same internal SRAM as .bss and the heap: 64 KB of data
+# cache and 32 KB of instruction cache took 48 KB of it, and the image's .bss then did not fit
+# by 14.5 KB (25.10.2026). Internal RAM is the scarce resource here (I2S DMA, Wi-Fi, stacks);
+# a cache miss is an octal-PSRAM read either way.
+
+# mbedTLS arena out of internal RAM, and the 16 KB input record (the P4 profile has the reason:
+# a server that sends 16 KB records cannot be decrypted with less). OUT stays 4096.
+CONFIG_MBEDTLS_EXTERNAL_MEM_ALLOC=y
+CONFIG_MBEDTLS_SSL_IN_CONTENT_LEN=16384
+
+# ── Coredump to flash (ELF + CRC32) ──
+CONFIG_ESP_COREDUMP_ENABLE_TO_FLASH=y
+CONFIG_ESP_COREDUMP_DATA_FORMAT_ELF=y
+CONFIG_ESP_COREDUMP_CHECKSUM_CRC32=y
+
+# ── Console: UART0 only (the board's "COM" port, a USB-UART bridge) ──
+# The S3's USB-Serial/JTAG and its USB OTG share ONE internal PHY. The OTG controller is the
+# UAC2 sound card (components/usb_uac), so once it starts the Serial/JTAG port is gone from
+# the bus — a console there would go silent at the moment the sound card appears. No secondary
+# copy to Serial/JTAG either: with no host behind it each write waits before giving up.
+# Flashing and the monitor use the COM port; its DTR/RTS reset the chip as usual.
+CONFIG_ESP_CONSOLE_UART_DEFAULT=y
+CONFIG_ESP_CONSOLE_SECONDARY_NONE=y
+
+# ── BLE stays off (the S3 has it; nothing here uses it yet) ──
+CONFIG_MODESP_BLE_ENABLE=n
+
+# ── Audio core (modules/audio) — esp-dsp's S3 (PIE) kernels ──
+CONFIG_DSP_OPTIMIZED=y
+
+# esp_audio_codec: the decoders the player uses, and nothing else (the P4 profile has the
+# reasons for each line).
+CONFIG_AUDIO_DECODER_MP3_SUPPORT=y
+CONFIG_AUDIO_DECODER_FLAC_SUPPORT=y
+CONFIG_AUDIO_SIMPLE_DEC_WAV_SUPPORT=y
+CONFIG_AUDIO_DECODER_AAC_SUPPORT=y
+CONFIG_AUDIO_SIMPLE_DEC_M4A_SUPPORT=y
+CONFIG_AUDIO_DECODER_G711_SUPPORT=n
+CONFIG_AUDIO_DECODER_AMRNB_SUPPORT=n
+CONFIG_AUDIO_DECODER_AMRWB_SUPPORT=n
+CONFIG_AUDIO_DECODER_OPUS_SUPPORT=n
+CONFIG_AUDIO_DECODER_VORBIS_SUPPORT=n
+CONFIG_AUDIO_DECODER_ADPCM_SUPPORT=n
+CONFIG_AUDIO_DECODER_ALAC_SUPPORT=n
+CONFIG_AUDIO_DECODER_SBC_SUPPORT=n
+CONFIG_AUDIO_DECODER_LC3_SUPPORT=n
+CONFIG_AUDIO_DECODER_G722_SUPPORT=n
+CONFIG_AUDIO_SIMPLE_DEC_TS_SUPPORT=n
+CONFIG_AUDIO_SIMPLE_DEC_OGG_SUPPORT=n
+
+# FatFs for the microSD card (the P4 profile has the reasons): 512 B sectors, long names on
+# the heap, UTF-8.
+CONFIG_FATFS_SECTOR_512=y
+CONFIG_FATFS_LFN_HEAP=y
+CONFIG_FATFS_MAX_LFN=255
+CONFIG_FATFS_API_ENCODING_UTF_8=y
+CONFIG_FATFS_CODEPAGE_866=y
+
+# ── Scheduler: core 1 for audio ──
+# lwIP's tiT next to Wi-Fi on core 0 (the S3's Wi-Fi task is pinned there by default), the
+# audio task alone with its deadline on core 1. The P4 profile has the measurements.
+CONFIG_LWIP_TCPIP_TASK_AFFINITY_CPU0=y
+CONFIG_ESP_WIFI_TASK_PINNED_TO_CORE_0=y
+# Tasks may put their stacks in PSRAM (xTaskCreatePinnedToCoreWithCaps): radio, covers, the USB
+# producer, DLNA notify. Safe with XIP from PSRAM above, which keeps the cache on during flash
+# writes; the audio task's stack stays internal regardless.
+CONFIG_FREERTOS_TASK_CREATE_ALLOW_EXT_MEM=y
+
+# ── Tick: 1 kHz, so a 5 ms audio block is not quantised by a 10 ms scheduler ──
+CONFIG_FREERTOS_HZ=1000
+
+# ── Network ──
+# Native Wi-Fi has none of ESP-Hosted's internal-DMA frame copies that capped the P4's TCP
+# window at 8 x MSS (boards/p4_player/sdkconfig.board). With Wi-Fi and lwIP buffers in PSRAM
+# (above) a 16 x MSS window costs PSRAM, not internal RAM, and carries a 320 kbit/s stream from
+# a server 200 ms away with room to spare. The mailbox holds a window's segments and two more.
+CONFIG_LWIP_TCP_WND_DEFAULT=23040
+CONFIG_LWIP_TCP_SND_BUF_DEFAULT=11520
+CONFIG_LWIP_TCP_RECVMBOX_SIZE=18
+# Wi-Fi buffers: IDF's own PSRAM defaults (16 static RX, block-ack window 16 — its help calls 16
+# the minimum once Wi-Fi memory prefers PSRAM). The static ones are internal DMA memory,
+# 1.6 KB each; the dynamic ones are PSRAM.
+#
+# Every address a name has (modules/radio picks a nearer one); components/lwip_dns_compat keeps
+# lwIP's SNTP at one.
+CONFIG_LWIP_DNS_MAX_HOST_IP=4
+
+# ── AirPlay 2 receiver: SO_RCVBUF and a deep UDP mailbox (the P4 profile has the reasons) ──
+CONFIG_LWIP_SO_RCVBUF=y
+CONFIG_LWIP_UDP_RECVMBOX_SIZE=64
+
+# ── Sockets: HTTP server sessions, and everything else that holds a socket ──
+# Same budget as the P4 (its profile counts them).
+CONFIG_MODESP_HTTPD_MAX_OPEN_SOCKETS=10
+CONFIG_LWIP_MAX_SOCKETS=36
+CONFIG_LWIP_MAX_ACTIVE_TCP=32
+
+# ── Shipping log level: WARN by default, INFO still in the binary ──
+CONFIG_LOG_DEFAULT_LEVEL_WARN=y
+CONFIG_LOG_MAXIMUM_LEVEL_INFO=y
+
+# ── I2S and GDMA interrupts in IRAM ──
+# The I2S receive interrupt hands over only the LAST finished DMA block; one held off for
+# longer than a block (1.25 ms at 96 kHz) loses the block before it. The P4 profile has the
+# measurement.
+CONFIG_I2S_ISR_IRAM_SAFE=y
+CONFIG_GDMA_ISR_IRAM_SAFE=y
+
+# ── Drivers for hardware this board does not have ──
+# The GT911 touch driver is generic I2C and would build here; with no panel it is flash for
+# nothing (and esp_lcd_touch with it). The DSI panel driver needs no line: it depends on
+# SOC_MIPI_DSI_SUPPORTED and is off on the S3 by itself.
+CONFIG_MODESP_DRIVER_GT911=n
+
+# ── Code out of IRAM ──
+# IRAM on the S3 is carved out of the same SRAM as the heap, and the image's IRAM code was 85 KB of
+# it. With XIP from PSRAM (above) the cache is never switched off for a flash write — IDF takes a
+# mutex instead (spi_flash_os_func_app.c, SPI_FLASH_CACHE_NO_DISABLE) — so code that IRAM kept
+# runnable through an erase is runnable from PSRAM just the same. FreeRTOS, the heap and the ring
+# buffers go there; Wi-Fi keeps its IRAM fast paths.
+CONFIG_FREERTOS_PLACE_FUNCTIONS_INTO_FLASH=y
+CONFIG_HEAP_PLACE_FUNCTION_INTO_FLASH=y
+CONFIG_RINGBUF_PLACE_FUNCTIONS_INTO_FLASH=y

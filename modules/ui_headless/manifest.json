@@ -1,0 +1,99 @@
+{
+  "manifest_version": 1,
+  "module": "ui_headless",
+  "version": "0.1.0",
+  "description": "Плеєр без екрана: обкладинка і бібліотека картки для веб-інтерфейсу, мова і схема вебу, енкодер — гучність, натиск — пуск/пауза, утримання — mute",
+  "priority": 3,
+  "requires": [
+    {
+      "role": "encoder_main",
+      "type": "sensor",
+      "capability": "rotary",
+      "label": "Енкодер",
+      "optional": true
+    },
+    {
+      "role": "encoder_sw",
+      "type": "sensor",
+      "capability": "binary_in",
+      "label": "Кнопка енкодера",
+      "optional": true
+    }
+  ],
+  "state": {
+    "ui.cover": {
+      "type": "int",
+      "access": "read",
+      "default": 0,
+      "description": "Обкладинка на Плеєрі: 0 — немає, інакше змінюється з кожною новою (GET /api/cover)"
+    },
+    "ui.cover_rgb": {
+      "type": "int",
+      "access": "read",
+      "default": 0,
+      "description": "Тло Плеєра з кольору обкладинки, RGB 0xRRGGBB: 0 — немає обкладинки"
+    },
+    "ui.theme": {
+      "type": "int",
+      "access": "readwrite",
+      "default": 0,
+      "min": 0,
+      "max": 3,
+      "step": 1,
+      "persist": true,
+      "mqtt_subscribe": true,
+      "description": "Схема веб-інтерфейсу: 0 Бурштин, 1 Синя, 2 Зелена, 3 Червона"
+    },
+    "ui.lang": {
+      "type": "int",
+      "access": "readwrite",
+      "default": 0,
+      "min": 0,
+      "max": 3,
+      "step": 1,
+      "persist": true,
+      "mqtt_subscribe": true,
+      "description": "Мова пристрою (веб, коли браузер не вибрав свою): 0 Українська, 1 English, 2 Deutsch, 3 Polski"
+    },
+    "ui.encoder_pos": {
+      "type": "int",
+      "access": "read",
+      "default": 0,
+      "description": "Положення енкодера (клацань від старту)"
+    },
+    "ui.encoder_sw": {
+      "type": "bool",
+      "access": "read",
+      "default": false,
+      "on_label": "натиснуто",
+      "off_label": "відпущено",
+      "description": "Кнопка енкодера"
+    }
+  },
+  "ui": {
+    "page": "Керування",
+    "page_id": "ui",
+    "icon": "tune",
+    "order": 20,
+    "cards": [
+      {
+        "title": "Енкодер",
+        "widgets": [
+          {
+            "key": "ui.encoder_pos",
+            "widget": "value"
+          },
+          {
+            "key": "ui.encoder_sw",
+            "widget": "indicator"
+          }
+        ]
+      }
+    ]
+  },
+  "mqtt": {
+    "publish": [
+      "ui.encoder_pos"
+    ]
+  }
+}

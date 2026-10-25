@@ -1,0 +1,54 @@
+{
+  "manifest_version": 1,
+  "board": "s3_player",
+  "display_name": "S3 Player (ESP32-S3 N16R8, headless)",
+  "version": "0.1",
+  "description": "ESP32-S3 N16R8 (16 MB flash, 8 MB octal PSRAM), native Wi-Fi, no display. Pins: docs/S3_PORT.md.",
+
+  "sdmmc_slots": [
+    {"id": "sd_0", "label": "microSD, SDMMC slot 1 through the GPIO matrix; the pins follow the card's own order. Fit 10k pull-ups on CMD/D0-D3",
+     "slot": 1, "width": 4,
+     "clk": 12, "cmd": 11, "d0": 13, "d1": 14, "d2": 9, "d3": 10,
+     "cd": -1, "freq_khz": 20000,
+     "mount_point": "/sd"}
+  ],
+
+  "encoders": [
+    {"id": "enc_0", "label": "Encoder A/B", "clk": 1, "dt": 2, "pull": "up"}
+  ],
+
+  "gpio_inputs": [
+    {"id": "enc_sw", "label": "Encoder SW (to GND)", "gpio": 42, "pull": "up", "invert": true}
+  ],
+
+  "gpio_outputs": [
+    {"id": "amp_enable", "label": "Amp /RESET + PCM5102A XSMT (low = mute, ext. pull-down)", "gpio": 4, "active_high": true}
+  ],
+
+  "i2s_buses": [
+    {
+      "id": "i2s_a", "label": "I2S0 out to the PCM5102A; S3 is master, the rate follows the source; no MCLK. DIN is the satellite's data line: the receive side exists for clocking the BT link",
+      "port": 0, "role": "master",
+      "mclk": -1, "bclk": 5, "ws": 6, "dout": 7, "din": 17,
+      "sample_rate_hz": 48000, "slot_bits": 32, "mclk_multiple": 256
+    },
+    {
+      "id": "i2s_b", "label": "I2S1 in from the BT satellite. Below link 1.9 the satellite is master; from 1.9 I2S0 drives BCLK/WS (GPIO15/16). Width opened at its maximum (32-bit); 160 MHz clocks it at 48 kHz",
+      "port": 1, "role": "slave",
+      "bclk": 15, "ws": 16, "din": 17,
+      "sample_rate_hz": 48000, "slot_bits": 32
+    }
+  ],
+
+  "uart_buses": [
+    {
+      "id": "uart_sat",
+      "label": "Control link to the BT satellite (its GPIO16/17). Wire format: docs/LINK_PROTOCOL.md",
+      "port": 1,
+      "tx": 18,
+      "rx": 8,
+      "baud": 460800,
+      "rx_buffer": 8192
+    }
+  ]
+}

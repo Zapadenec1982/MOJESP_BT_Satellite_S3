@@ -14,6 +14,9 @@ idf_component_register(
                   user_store safe_file esp_http_server
                   hosted_mem net_probe   # esp_hosted frame copies; bench-only UDP probe
                   lwip_dns_compat        # one address for lwIP's SNTP, see its source
+    # Which static data goes to PSRAM on a board short of internal RAM (the S3); nothing on the P4.
+    LDFRAGMENTS "psram_bss.lf"
+                "dsp_iram.lf"   # the S3's per-block DSP in IRAM, nothing on the P4
 )
 
 # Cloud backend: compile-time Kconfig choice (MODESP_CLOUD_NONE links nothing)

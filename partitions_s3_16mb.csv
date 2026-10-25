@@ -1,0 +1,24 @@
+# ModESP Streamer — 16 MB flash layout for the ESP32-S3 board (boards/s3_player, N16R8).
+#
+# The same rows as partitions_p4_16mb.csv, without what only the P4 needs:
+# - no `slave_fw`: Wi-Fi is the S3's own radio, there is no co-processor image to keep;
+# - the table sits at the default 0x8000: the S3 bootloader starts at 0x0 and, with app
+#   rollback, still ends below it (the P4's starts at 0x2000 and does not).
+#
+# `data` vs `userdata` is the P4's split, for the P4's reasons (partitions_p4_16mb.csv): `data`
+# is build output that every `idf.py flash` rewrites, `userdata` has no image in the build and
+# holds what a person makes (EQ, stations, the track to resume). The root CMakeLists.txt refuses
+# a table without a `userdata` row.
+#
+# Two 4 MB app slots like the P4's: the S3 image carries no LVGL and no fonts and is smaller,
+# but the slots are what OTA can grow into, and 16 MB leaves room for both.
+# 0xA30000-0xF80000 (5.3 MB) is left unallocated for later.
+# Name,     Type, SubType,  Offset,   Size,     Flags
+nvs,        data, nvs,      0x9000,   0x14000,
+otadata,    data, ota,      0x1D000,  0x2000,
+phy_init,   data, phy,      0x1F000,  0x1000,
+coredump,   data, coredump, 0x20000,  0x10000,
+ota_0,      app,  ota_0,    0x30000,  0x400000,
+data,       data, spiffs,   0x430000, 0x200000,
+ota_1,      app,  ota_1,    0x630000, 0x400000,
+userdata,   data, spiffs,   0xF80000, 0x80000,

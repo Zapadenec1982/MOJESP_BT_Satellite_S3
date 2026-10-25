@@ -1,0 +1,12 @@
+{
+  "manifest_version": 1,
+  "bindings": [
+    {"hardware": "enc_0",   "driver": "rotary_encoder", "role": "encoder_main", "module": "ui_headless"},
+    {"hardware": "enc_sw",  "driver": "digital_input",  "role": "encoder_sw",   "module": "ui_headless"},
+    {"hardware": "i2s_a",      "driver": "i2s_std",     "role": "port_main",  "module": "audio"},
+    {"hardware": "i2s_b",      "driver": "i2s_std",     "role": "port_bt",    "module": "audio"},
+    {"hardware": "amp_enable", "driver": "gpio_output", "role": "amp_enable", "module": "audio"},
+    {"hardware": "uart_sat", "driver": "uart_link",    "role": "sat_link", "module": "bt"},
+    {"hardware": "sd_0",     "driver": "sdmmc_card",     "role": "card",     "module": "storage"}
+  ]
+}

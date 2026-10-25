@@ -8,10 +8,25 @@
     "storage",
     "player",
     "radio",
-    "dlna", "bt",
+    "dlna",
+    "bt",
     "airplay",
     "usb_audio"
   ],
+  "boards": {
+    "s3_player": {
+      "description": "ESP32-S3 N16R8 without a display: the same player, controlled from the web UI, MQTT and an encoder; ui_headless serves what the panel's module served the web",
+      "exclude_modules": [
+        "ui_lvgl"
+      ],
+      "add_modules": [
+        "ui_headless"
+      ],
+      "system": {
+        "device_name": "S3 Player"
+      }
+    }
+  },
   "system": {
     "device_name": "P4 Player",
     "mqtt_topic_root": "player",

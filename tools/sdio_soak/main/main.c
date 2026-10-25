@@ -308,7 +308,7 @@ static void pull_task(void *arg)
             .buffer_size = 4096,
             .buffer_size_tx = 1024,
             .crt_bundle_attach = esp_crt_bundle_attach,
-            .user_agent = "P4_DSP-soak/0.1 (ESP32-P4; esp_hosted 3.0.7)",
+            .user_agent = "ModESP-Streamer-soak/0.1 (ESP32-P4; esp_hosted 3.0.7)",
             .disable_auto_redirect = false,
             .max_redirection_count = 5,
         };

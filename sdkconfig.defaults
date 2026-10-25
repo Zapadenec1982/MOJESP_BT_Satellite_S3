@@ -1,4 +1,4 @@
-# P4_DSP — shared sdkconfig defaults (target-independent).
+# ModESP Streamer — shared sdkconfig defaults (target-independent).
 # Board selection lives in sdkconfig.defaults.<target>; everything board-specific
 # (flash, PSRAM, partitions, ESP-Hosted pins) lives in boards/<board>/sdkconfig.board.
 

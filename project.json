@@ -1,7 +1,7 @@
 {
   "project": "p4_dsp",
   "version": "0.1.0",
-  "description": "P4_DSP — ESP32-P4 network stereo player with DSP (Guition JC4880P443C)",
+  "description": "ModESP Streamer — ESP32-P4 network stereo streamer with DSP (Guition JC4880P443C)",
   "modules": [
     "ui_lvgl",
     "audio",

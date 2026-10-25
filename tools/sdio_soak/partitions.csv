@@ -1,4 +1,4 @@
-# P4_DSP — 16 MB flash layout (Guition JC4880P443C).
+# ModESP Streamer — 16 MB flash layout (Guition JC4880P443C).
 # COPY of ../../partitions_p4_16mb.csv — keep identical. Flashing this tool REPLACES the
 # panel's partition table, so a stale copy here would put the old single-`data` layout back
 # and take the `userdata` partition (and everything in it) with it.

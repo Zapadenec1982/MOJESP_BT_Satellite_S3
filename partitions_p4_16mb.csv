@@ -1,4 +1,4 @@
-# P4_DSP — 16 MB flash layout (Guition JC4880P443C).
+# ModESP Streamer — 16 MB flash layout (Guition JC4880P443C).
 # Two 4 MB OTA slots, coredump (the USB-CDC console gives no output after a panic),
 # slave_fw = ESP-Hosted co-processor image for the ESP32-C6 (pushed to the C6 over
 # SDIO by the updater, see docs/C6_UPDATE.md), data = LittleFS.

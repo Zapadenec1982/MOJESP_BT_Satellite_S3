@@ -1,4 +1,4 @@
-# P4_DSP — ESP32-P4 network stereo player on the ModESP v4 framework
+# ModESP Streamer — ESP32-P4 network stereo streamer on the ModESP v4 framework
 cmake_minimum_required(VERSION 3.16)
 
 set(EXTRA_COMPONENT_DIRS

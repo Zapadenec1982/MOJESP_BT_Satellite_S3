@@ -1,6 +1,6 @@
 /**
  * @file main.cpp
- * @brief P4_DSP — boot sequence and main loop (ModESP v4 control plane)
+ * @brief ModESP Streamer — boot sequence and main loop (ModESP v4 control plane)
  *
  * Staged boot sequence:
  *   1. NVS init (required for WiFi credentials)
@@ -246,7 +246,7 @@ extern "C" void app_main(void)
     etl::error_handler::set_callback<on_etl_error>();
 
     ESP_LOGI(TAG, "======================================");
-    ESP_LOGI(TAG, "  P4_DSP player — ModESP v4 control plane");
+    ESP_LOGI(TAG, "  ModESP Streamer — ModESP v4 control plane");
     ESP_LOGI(TAG, "======================================");
 
     // ── Step 0: NVS init (before everything) ──

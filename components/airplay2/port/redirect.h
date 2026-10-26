@@ -24,3 +24,35 @@
 #pragma once
 
 #define esp_read_mac airplay2_read_mac
+
+/*
+ * Task stacks in PSRAM, on the ESP32-S3 board only.
+ *
+ * Upstream gives every task an internal-RAM stack — the realtime receiver alone takes 12 KB
+ * (audio_stream_realtime.c), its control port 4 KB more — because on a plain ESP32 a flash write
+ * switches the cache off and a PSRAM stack with it (upstream/spiram_task.h). The S3 runs its code
+ * from PSRAM (CONFIG_SPIRAM_XIP_FROM_PSRAM), and with that IDF never switches the cache off for a
+ * flash write, so a PSRAM stack is as safe as an internal one. What the S3 does not have is the
+ * internal RAM: with Wi-Fi up there was not 12 KB in one piece left, the receiver task could not
+ * be created and every AirPlay RECORD answered 500 (26.10.2026).
+ *
+ * So, for the upstream files only and only on that board, every task is created with its stack in
+ * PSRAM and deleted the way such a task must be: vTaskDeleteWithCaps, which IDF 5.5 also accepts
+ * from the task deleting itself — upstream's tasks all end in vTaskDelete(NULL) — and frees the
+ * memory through a short clean-up task instead of leaking it. The FreeRTOS headers are read
+ * first, so the macros rename the calls and never the declarations.
+ */
+#include "sdkconfig.h"
+#if CONFIG_IDF_TARGET_ESP32S3 && CONFIG_SPIRAM_XIP_FROM_PSRAM && CONFIG_FREERTOS_TASK_CREATE_ALLOW_EXT_MEM
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "freertos/idf_additions.h"
+#include "esp_heap_caps.h"
+#define xTaskCreate(fn, name, depth, param, prio, handle)                                       \
+    xTaskCreatePinnedToCoreWithCaps((fn), (name), (depth), (param), (prio), (handle),            \
+                                    tskNO_AFFINITY, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT)
+#define xTaskCreatePinnedToCore(fn, name, depth, param, prio, handle, core)                     \
+    xTaskCreatePinnedToCoreWithCaps((fn), (name), (depth), (param), (prio), (handle), (core),    \
+                                    MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT)
+#define vTaskDelete(task) vTaskDeleteWithCaps(task)
+#endif

@@ -191,6 +191,21 @@ until it is renamed (`project.json`, `boards.s3_player.system.device_name`; gene
   48 kHz/16-bit, 44.1 kHz/16-bit and 48 kHz/24-bit played with the source switching to USB by
   itself, the output retuning between rates (clock stopped 130–230 µs), every frame arriving
   (48000/48000, 44100/44100) and no late audio blocks.
+- On the home network (26.10.2026; Wi-Fi station, RSSI −46 dBm, 7 h up without a restart):
+  - DLNA, `tools/dlna_acceptance.py --renderer-only --rate-switches` against the renderer: SOAP
+    faults, SetNext/Next/Previous, automatic advancement, end of track, metadata, Pause/Resume/
+    Stop, GENA events, 44.1 ↔ 48 kHz switches both ways — all pass. Its "ranged GET after a Seek"
+    check does not: the firmware refuses to seek a WAV over HTTP on purpose (radio_module.cpp,
+    seek_stream), and the fixtures are WAV.
+  - AirPlay 1 (RAOP), `tools/airplay_send.py` with a quiet tone and a JPEG cover: RECORD,
+    metadata, progress and artwork accepted, the source switches itself to AirPlay, no underruns,
+    no resend requests, ui.cover and its colour published; three sessions in a row return the
+    memory they took. The AirPlay 2 half (pairing, PTP, buffered AAC) needs a real Apple sender.
 - Not connected at the time, so not checked: the DAC and amplifier, the satellite, the microSD
-  card, the encoder; and everything behind a Wi-Fi station connection (radio, DLNA, AirPlay,
-  MQTT, the web UI over the network).
+  card, the encoder; internet radio and MQTT were not exercised.
+
+The first AirPlay session found one more S3 limit: upstream creates its receiver with a 12 KB
+internal-RAM stack, and with Wi-Fi up the S3 had no 12 KB in one piece — RECORD answered 500. On
+the S3 the upstream files' tasks now have PSRAM stacks (`components/airplay2/port/redirect.h`;
+safe there because XIP from PSRAM keeps the cache on through flash writes), created and deleted
+with IDF's `...WithCaps` calls; the upstream files stay byte-identical.

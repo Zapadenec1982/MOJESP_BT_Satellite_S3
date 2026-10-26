@@ -201,8 +201,11 @@ until it is renamed (`project.json`, `boards.s3_player.system.device_name`; gene
     metadata, progress and artwork accepted, the source switches itself to AirPlay, no underruns,
     no resend requests, ui.cover and its colour published; three sessions in a row return the
     memory they took. The AirPlay 2 half (pairing, PTP, buffered AAC) needs a real Apple sender.
+  - Internet radio over HTTPS, pushed through DLNA: Radio France FIP as MP3 128 kbit/s and as AAC
+    192 kbit/s — TLS, decoding and buffering hold (buffer 50–60 %, no underruns), the DSP at
+    11.5 % of a core, 43 KB of internal RAM free while TLS runs.
 - Not connected at the time, so not checked: the DAC and amplifier, the satellite, the microSD
-  card, the encoder; internet radio and MQTT were not exercised.
+  card, the encoder; MQTT was not exercised.
 
 The first AirPlay session found one more S3 limit: upstream creates its receiver with a 12 KB
 internal-RAM stack, and with Wi-Fi up the S3 had no 12 KB in one piece — RECORD answered 500. On

@@ -3,9 +3,8 @@
 # ESP32-S3 port (headless)
 
 The same player on an **ESP32-S3 N16R8** (16 MB quad flash, 8 MB octal PSRAM in the package) with
-**no display**: internet radio, DLNA, AirPlay 2, Bluetooth through the satellite, USB audio and the
-microSD card, the DSP chain and the web UI — controlled from the web, MQTT and an optional rotary
-encoder. The board is `boards/s3_player`; the P4 panel (`boards/p4_player`) builds from the same
+**no display**: internet radio, DLNA, AirPlay 2, Bluetooth through a satellite soldered to the
+board, USB audio, the DSP chain and the web UI — controlled from the web and MQTT. The board is `boards/s3_player`; the P4 panel (`boards/p4_player`) builds from the same
 tree exactly as before.
 
 Developed and checked on an ESP32-S3-DevKitC-1-style board (ESP32-S3 rev v0.2, "Embedded PSRAM
@@ -28,34 +27,40 @@ Developed and checked on an ESP32-S3-DevKitC-1-style board (ESP32-S3 rev v0.2, "
 
 ## Wiring
 
-Pins as on the DevKitC-1 headers; every one of them can move — they are data in
-`boards/s3_player/board.json`, not code.
+The board this runs on: the ESP32-S3 module with the PCM5102A and the Bluetooth satellite soldered
+to it. Every pin can move — they are data in `boards/s3_player/board.json`, not code.
 
-| GPIO | Signal | To | Header |
-|---|---|---|---|
-| 5 | I2S0 BCK | PCM5102A BCK | J1 |
-| 6 | I2S0 WS | PCM5102A LRCK | J1 |
-| 7 | I2S0 DOUT | PCM5102A DIN | J1 |
-| 4 | `amp_enable` | TPA3255 /RESET and PCM5102A XSMT; 10 kΩ pull-down, HIGH = playing | J1 |
-| 15 | I2S-B BCLK | satellite GPIO13 | J1 |
-| 16 | I2S-B WS | satellite GPIO26 | J1 |
-| 17 | I2S-B DATA, in | satellite GPIO27 | J1 |
-| 18 | UART1 TX | satellite GPIO16 (RX) | J1 |
-| 8 | UART1 RX | satellite GPIO17 (TX) | J1 |
-| 9, 10, 11, 12, 13, 14 | microSD D2, D3, CMD, CLK, D0, D1 | the card, in its own pin order | J1 |
-| 1, 2 | encoder A, B | encoder (to GND, internal pull-ups) | J3 |
-| 42 | encoder button | button to GND | J3 |
-| 19, 20 | USB D−, D+ | the "USB" connector: UAC2 sound card | — |
-| 43, 44 | UART0 TX, RX | the "COM" connector: console, flashing | — |
+| GPIO | Signal | To |
+|---|---|---|
+| 5 | I2S0 BCK | PCM5102A BCK |
+| 6 | I2S0 WS | PCM5102A LRCK |
+| 7 | I2S0 DOUT | PCM5102A DIN |
+| 4 | `amp_enable` | PCM5102A XSMT: HIGH plays, LOW mutes |
+| 8 | I2S-B BCLK | satellite GPIO25 (see below) |
+| 9 | I2S-B WS | satellite GPIO26 |
+| 10 | I2S-B DATA, in | satellite GPIO27 |
+| 11 | UART1 TX | satellite RXD0 (GPIO3) |
+| 12 | UART1 RX | satellite TXD0 (GPIO1) |
+| 13 | satellite EN | low = reset; pull-up and 1 µF at the module |
+| 2 | satellite IO0 | low through a reset = its ROM loader; pull-up at the module |
+| 19, 20 | USB D−, D+ | the "USB" connector: UAC2 sound card |
+| 43, 44 | UART0 TX, RX | the "COM" connector: console, flashing |
 
 - **PCM5102A:** SCK → GND (its PLL locks to BCK; no MCLK is wired), FMT → GND, DEMP → GND, XSMT ← GPIO4.
-- **Satellite:** a common ground. From link protocol 1.9 the S3 clocks the I2S line (GPIO15/16 are
-  outputs then, driven from I2S0) and the stream plays bit-exact; an older satellite clocks it
-  itself and gets a rebuffer every few minutes, as on the P4 (`MODESP_AUDIO_BT_DIRECT_CONTINUOUS`,
-  [AUDIO.md](AUDIO.md)). GPIO17 feeds both I2S0 RX and I2S1 RX: one wire, two readers.
-- **microSD:** slot 1 of the SDMMC controller, which reaches any GPIO through the matrix;
-  4-bit at 20 MHz. Fit 10 kΩ pull-ups on CMD and D0–D3 — the internal ones are too
-  weak at that speed (the driver says so in the log when a card mounts only at 400 kHz). FAT32.
+- **Satellite:** a bare ESP32-WROOM-32 soldered to the board, running modesp-bt-satellite's
+  bare-module build (`sdkconfig.bare`). The link is its UART0 at 460800, the pair its ROM loader
+  listens on, and its EN and IO0 are on GPIO13 and GPIO2, so the S3 can put it into that loader and
+  flash it over the same two wires; the player itself leaves EN and IO0 alone, and the module's
+  pull-ups keep it running. From link protocol 1.9 the S3 clocks the I2S line (GPIO8/9 are outputs
+  then, driven from I2S0) and the stream plays bit-exact; an older satellite clocks it itself and
+  gets a rebuffer every few minutes, as on the P4 (`MODESP_AUDIO_BT_DIRECT_CONTINUOUS`,
+  [AUDIO.md](AUDIO.md)). GPIO10 feeds both I2S0 RX and I2S1 RX: one wire, two readers.
+  BCLK reaches the module's GPIO25, as the board was built, while modesp-bt-satellite takes BCLK on
+  its GPIO13 (`main/board.h`): Bluetooth sound has not been tried yet, and one of the two has to
+  move for it.
+- **No microSD slot and no encoder** on this board. The firmware supports both (`drivers/sdmmc_card`,
+  the optional `encoder_main` and `encoder_sw` roles of `ui_headless`); a board that has them
+  declares them in its `board.json` and binds them in `bindings.json`.
 - **Not used, on purpose:** 0, 3, 45, 46 (strapping), 26–32 (flash), 33–37 (octal PSRAM),
   38 and 48 (the DevKit's RGB LED, depending on its revision).
 
@@ -164,12 +169,12 @@ and the encoder. `modules/ui_headless` keeps all of that without LVGL — same k
 the web UI is the same file — and `project.json`'s board overlay puts it in `ui_lvgl`'s place on
 the S3 (`boards.s3_player`: `exclude_modules`, `add_modules`; `tools/generate_ui.py --board`).
 
-The encoder without a screen:
+An encoder, on a board that has one (`encoder_main`, `encoder_sw`; this board has none):
 
 | | |
 |---|---|
 | turn | volume, 2 % a detent; a turn also ends a mute |
-| press | play/pause of whatever is playing, in that source's own commands (card, radio, DLNA, Bluetooth, AirPlay) |
+| press | play/pause of whatever plays: `audio.transport`, as the panel's Player button sends it (a station starts and stops) |
 | hold (650 ms) | mute on/off |
 
 ### Cover art
@@ -209,8 +214,10 @@ until it is renamed (`project.json`, `boards.s3_player.system.device_name`; gene
     192 kbit/s — TLS, decoding and buffering hold (buffer 50–60 %, no underruns), the DSP at
     11.5–19 % of a core depending on how many EQ bands are on (19 % with ten), 57 KB of internal
     RAM free while TLS runs.
-- Not connected at the time, so not checked: the DAC and amplifier, the satellite, the microSD
-  card, the encoder; MQTT was not exercised.
+- The satellite soldered to the board, with the bare-module build: the link comes up at protocol
+  1.10 with the S3 clocking the I2S line, SBC, AAC, aptX, aptX HD and LHDC V5 offered, the
+  satellite discoverable; 40 frames without a CRC error, a 9 ms round trip.
+- Not checked yet: Bluetooth sound from a phone, the DAC's analogue output, MQTT.
 
 The first AirPlay session found one more S3 limit: upstream creates its receiver with a 12 KB
 internal-RAM stack, and with Wi-Fi up the S3 had no 12 KB in one piece — RECORD answered 500. On

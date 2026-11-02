@@ -95,6 +95,11 @@ tools/c6_updater/sdkconfig.old
 tools/c6_updater/components/ota_partition/slave_fw_bin/*.bin
 tools/c6_updater/components/ota_littlefs/slave_fw_bin/*.bin
 
+# === tools/sat_bridge (standalone IDF project) ===
+tools/sat_bridge/build/
+tools/sat_bridge/sdkconfig
+tools/sat_bridge/sdkconfig.old
+
 # === tools/sdio_soak (standalone IDF project) ===
 tools/sdio_soak/build/
 tools/sdio_soak/managed_components/

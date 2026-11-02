@@ -55,7 +55,8 @@ DSP-ланцюг і веб-інтерфейс — керування з вебу
   P4 (`MODESP_AUDIO_BT_DIRECT_CONTINUOUS`, [AUDIO.uk.md](AUDIO.uk.md)). GPIO10 читають і I2S0 RX, і
   I2S1 RX: один дріт, два приймачі. BCLK приходить на GPIO25 модуля, як зібрано плату, а
   modesp-bt-satellite бере BCLK на своєму GPIO13 (`main/board.h`): звук із Bluetooth ще не
-  пробували, і для нього одне з двох доведеться перенести.
+  пробували, і для нього одне з двох доведеться перенести. Щоб прошити сателіт, S3 на час прошивки
+  запускає замість плеєра UART-міст: [`tools/sat_bridge`](../tools/sat_bridge/README.uk.md).
 - **microSD і енкодера** на цій платі немає. Прошивка вміє і те, і те (`drivers/sdmmc_card`,
   необов'язкові ролі `encoder_main` і `encoder_sw` у `ui_headless`); плата, де вони є, описує їх у
   своєму `board.json` і прив'язує в `bindings.json`.

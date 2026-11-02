@@ -1,0 +1,17 @@
+# Nothing of the S3's own may talk on UART0: it carries the satellite's ROM loader to the PC.
+CONFIG_ESP_CONSOLE_NONE=y
+CONFIG_LOG_DEFAULT_LEVEL_NONE=y
+CONFIG_BOOTLOADER_LOG_LEVEL_NONE=y
+CONFIG_FREERTOS_HZ=1000
+
+# Flashed over the player like any build of it: the player's flash settings, its partition table
+# (the file itself, so the two cannot drift) and its bootloader's rollback. `idf.py flash` here
+# then puts the bridge into ota_0 and resets otadata to it, and leaves the player's settings,
+# files and user data where they are.
+CONFIG_ESPTOOLPY_FLASHMODE_QIO=y
+CONFIG_ESPTOOLPY_FLASHFREQ_80M=y
+CONFIG_ESPTOOLPY_FLASHSIZE_16MB=y
+CONFIG_PARTITION_TABLE_CUSTOM=y
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="../../partitions_s3_16mb.csv"
+CONFIG_PARTITION_TABLE_OFFSET=0x8000
+CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE=y

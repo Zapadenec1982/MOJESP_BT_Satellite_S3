@@ -57,7 +57,8 @@ to it. Every pin can move — they are data in `boards/s3_player/board.json`, no
   [AUDIO.md](AUDIO.md)). GPIO10 feeds both I2S0 RX and I2S1 RX: one wire, two readers.
   BCLK reaches the module's GPIO25, as the board was built, while modesp-bt-satellite takes BCLK on
   its GPIO13 (`main/board.h`): Bluetooth sound has not been tried yet, and one of the two has to
-  move for it.
+  move for it. To flash the satellite, the S3 runs a UART bridge in the player's place for a while:
+  [`tools/sat_bridge`](../tools/sat_bridge/README.md).
 - **No microSD slot and no encoder** on this board. The firmware supports both (`drivers/sdmmc_card`,
   the optional `encoder_main` and `encoder_sw` roles of `ui_headless`); a board that has them
   declares them in its `board.json` and binds them in `bindings.json`.

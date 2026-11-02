@@ -1,7 +1,7 @@
 # boards/s3_player — ESP32-S3 N16R8 (16 MB quad flash, 8 MB octal PSRAM in the package),
 # headless: no display, no touch. Applied on top of sdkconfig.defaults for a FRESH sdkconfig
-# (idf.py set-target esp32s3). Verified against the board on the bench 25.10.2026 with
-# `esptool flash_id`: ESP32-S3 (QFN56) rev v0.2, "Embedded PSRAM 8MB (AP_3v3)", 16 MB flash.
+# (idf.py set-target esp32s3). Verified against the board with `esptool flash_id`: ESP32-S3
+# (QFN56) rev v0.2, "Embedded PSRAM 8MB (AP_3v3)", 16 MB flash.
 #
 # What the P4 profile (boards/p4_player/sdkconfig.board) has and this one does not, and why:
 # - ESP-Hosted / esp_wifi_remote: Wi-Fi is the S3's own radio;
@@ -50,7 +50,7 @@ CONFIG_SPIRAM_ALLOW_BSS_SEG_EXTERNAL_MEMORY=y
 # ── Caches: IDF's defaults (32 KB data, 16 KB instruction) ──
 # Larger caches are carved out of the same internal SRAM as .bss and the heap: 64 KB of data
 # cache and 32 KB of instruction cache took 48 KB of it, and the image's .bss then did not fit
-# by 14.5 KB (25.10.2026). Internal RAM is the scarce resource here (I2S DMA, Wi-Fi, stacks);
+# by 14.5 KB. Internal RAM is the scarce resource here (I2S DMA, Wi-Fi, stacks);
 # a cache miss is an octal-PSRAM read either way.
 
 # mbedTLS arena out of internal RAM, and the 16 KB input record (the P4 profile has the reason:
@@ -74,6 +74,18 @@ CONFIG_ESP_CONSOLE_SECONDARY_NONE=y
 
 # ── BLE stays off (the S3 has it; nothing here uses it yet) ──
 CONFIG_MODESP_BLE_ENABLE=n
+
+# ── What the player does not use, out of the build (the P4 profile has the reasons) ──
+CONFIG_MODESP_HTTP_FRAMEWORK_ROUTES=n
+# No restart for Wi-Fi time lost: a router that drops now and then would cut the music, and the
+# S3's own radio reconnects without one.
+CONFIG_MODESP_WIFI_RESTART_ON_LONG_DISCONNECT=n
+CONFIG_MODESP_MQTT_REMOTE_ADMIN=n
+CONFIG_MQTT_TRANSPORT_WEBSOCKET=n
+CONFIG_MQTT_TRANSPORT_WEBSOCKET_SECURE=n
+CONFIG_MDNS_ENABLE_CONSOLE_CLI=n
+CONFIG_MDNS_ENABLE_BROWSE=n
+CONFIG_MDNS_MEMORY_ALLOC_SPIRAM=y
 
 # ── Audio core (modules/audio) — esp-dsp's S3 (PIE) kernels ──
 CONFIG_DSP_OPTIMIZED=y

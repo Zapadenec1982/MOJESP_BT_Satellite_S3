@@ -160,6 +160,16 @@ that line is deleted and `idf.py reconfigure` is run), otherwise only the addres
 hierarchy of their own), then goes to `parent`, then to `from`. The station tabs (`radio` and
 `catalog`) are one page; moving between them creates no `parent`.
 
+**A minute alone.** After 60 s with no touch on the glass and no turn or press of the knob (the
+standby's idle timer), the panel goes back to the Player by itself, from any page, and closes the
+menu, the "Sound" sheet and the pick list (the list as "Cancel" does) — over the Player too. It
+does not leave Service (`svc`), which is watched rather than touched, or `m3test`. It waits while a
+keyboard or a dialog other than the pick list is open (the pairing dialog, "Forget “…”?"), a test
+tone plays (`audio.source` = 1) or a measurement runs (`audio.port_meas`), and goes as soon as that
+is over if the panel is still alone. In standby nothing moves. Once per idle period: the first pass
+after the minute decides, and a page brought up after that without a touch (the bench's `screen=`)
+stays. The rules are `include/idle_home.h` (test `tests/host/test_idle_home.cpp`).
+
 **Overlays**, bottom to top: the volume pop-up, the menu, the "Sound" side sheet (384 px, on the
 right), the pick list (`src/ui_pick.cpp`, up to 9 items), the "Undo" snackbar, the standby screen,
 the Bluetooth pairing dialog; above everything, the touch ring (30 px, follows the finger).
@@ -193,7 +203,7 @@ the Bluetooth pairing dialog; above everything, the touch ring (30 px, follows t
 | `sound` | Tone | LIST | Settings › Sound |
 | `eq` | Equalizer | LIST | "Sound" (sheet or page) |
 | `speakers` | Speakers | LIST | Settings › Sound |
-| `xover` | Crossover | LIST | Settings › Sound |
+| `xover` | Crossover | LIST | nothing yet: its row in Settings › Sound is hidden |
 | `display` | Screen | LIST | Settings › Device |
 | `svc` | Service | LIST | Settings › Device |
 | `wifi` | Wi-Fi | LIST | Settings › Connections |
@@ -203,27 +213,56 @@ the Bluetooth pairing dialog; above everything, the touch ring (30 px, follows t
 Two more `ui.screen` values: `boot` until the screen is built (and for good without a panel) and
 `standby` for the duration of standby.
 
-**Player** (`screen_now.cpp`). One layout for every source: the cover tile on the left, the track
-block on the right, the spectrum strip at the bottom; above the block, where the sound comes from
-(source and device) and the "Sound" button; the background is the cover colour (`ui.cover_rgb`)
-fading into the surface. What does not apply to the source is greyed out, not hidden. The title
-takes up to two lines; a one-line title sits right above the line under it (the artist), the free
-space goes above the title. The codec badge and the USB line are in the language's units and decimal
-separator (`i18n::badge`): "44.1 kHz 128 kbit/s", "LDAC 96 kHz"; two channels are not written, a
-whole number goes without ".0". Transport:
+**Player** (`screen_now.cpp`). One frame for every source: the cover tile on the left, the block on
+the right, the spectrum strip at the bottom; above the block, where the sound comes from (source
+and device) and the "Sound" button; the background is the cover colour (`ui.cover_rgb`) fading into
+the surface. Without a picture the tile shows a glyph (the source's on the empty face, a note
+otherwise); a station shows its stand-in instead (`include/station_badge.h`, test
+`tests/host/test_station_badge.cpp`): a 200 px disc in a colour taken from the station's name
+(FNV-1a of its bytes over a fixed palette of eight muted hues that white reads on) with a label —
+the name's first word that says something (leading numbers and frequencies and the word "radio"
+skipped) when it has at most five characters, otherwise the initials of its words, at most three:
+"KISS" for "106.5 Kiss FM", "DK" for "Deutschlandfunk Kultur"; capitals, Latin and Cyrillic.
 
-- radio — `radio.cmd` (1 play, 2 stop, 3 next, 4 previous);
+A track — the card's, a DLNA track, Bluetooth, AirPlay — has the title, the progress and the
+transport; what does not apply to the source is greyed out, not hidden. The title takes up to two
+lines; a one-line title sits right above the line under it (the artist), the free space goes above
+the title. The codec badge and the USB line are in the language's units and decimal separator
+(`i18n::badge`): "44.1 kHz 128 kbit/s", "LDAC 96 kHz"; two channels are not written, a whole number
+goes without ".0". Transport:
+
 - card — `player.cmd`; "Play" with no track open starts the track at the queue cursor;
 - a DLNA track, Bluetooth, AirPlay — `Req::TRANSPORT`, which the main loop routes to `dlna.cmd`,
   `bt.cmd` or `airplay.cmd`;
 - Bluetooth without a phone and AirPlay without a DACP remote (`airplay.remote`) — the buttons are
   inactive; Bluetooth without a phone shows "Turn on visibility" in place of the transport if new
-  phones cannot see the panel;
+  phones cannot see the panel (the satellite's radio or its visibility is off), and the button
+  turns both on;
 - tone, AUX, USB, output off — there is no transport.
 
-Seeking — `player.seek_s` (card) or `radio.seek_s` (a DLNA track, when `radio.seekable`). Repeat and
+A station (`audio.source` = 5, `radio.mode` not `push`) has no transport and no progress: it does
+not pause, stopping it would only be the mute, and it stops by itself when another source is
+chosen. Its block, under the same row:
+
+- the station's name (`radio.name`) in one line between ‹ and ›, 64 px targets that send
+  `radio.cmd` 4 and 3 — the previous and the next station of the list — and are greyed while the
+  list has no other station to step to;
+- under it, centred, what it plays (`radio.now_playing`) and the codec badge; until it plays,
+  "Connecting…", "Buffering…" or "Reconnecting…", and "Stopped" while it is idle;
+- where the transport stands, the six presets: a 3×2 grid of 144×64 buttons, each with the
+  station's 40 px disc and its name in up to two lines, the playing station outlined in the accent
+  colour, an empty one with its number and "Empty" — "Store here" while a tap would store. The disc
+  shows the station's logo, clipped to the circle, once the panel keeps it — a station with a Radio
+  Browser `uuid` ([NETWORK.md](NETWORK.md), "Covers and logos"); otherwise it is the stand-in with
+  the first character of its label. The buttons are repainted when a logo arrives
+  (`radio_catalog::logo_shelf()`). They are the Stations page's buttons, with its rules ("Lists").
+
+Seeking — the progress bar's knob under a finger moves the bar and the time; letting go writes
+`player.seek_s` (card) or `radio.seek_s` (a DLNA track, when `radio.seekable`) once. Repeat and
 shuffle — `player.repeat`, `player.shuffle`. The list button leads to the list of the source that is
-playing.
+playing. The moon after "Sound" switches "Volume leveling" (`audio.leveler`, `Req::LEVELER`;
+[AUDIO.md](AUDIO.md)): filled in the accent colour while it is on; the web's Player has the same
+moon beside its "Sound" button.
 
 **Source** (`screen_src.cpp`). A grid of cards in the order Bluetooth, AirPlay, Radio / Card,
 Media servers, USB; a card is there only when its bit is set in `audio.sources`. Each card says what
@@ -235,13 +274,14 @@ it gives now (phone, station, number of tracks). A tap sets `audio.source` and o
 
 | group | rows |
 |---|---|
-| Sound | Tone (preset on the second line), Speakers, Crossover |
+| Sound | Tone (preset on the second line), Speakers |
 | Device | Screen, Language (a dialog of four languages), Service (firmware version) |
 | Connections | Wi-Fi (network · address), Bluetooth (phone · codec) |
 | Services | AirPlay (announcement switch; a tap picks the mode), DLNA (switch) |
 
-**Lists.** Stations — six buttons (presets) at the top (a tap tunes, a long press saves the current
-station, a tap on an empty one while playing saves too) and the whole list, where a station on a
+**Lists.** Stations — six buttons (presets) at the top, the same as on the Player's station face (a
+tap tunes, a long press saves the current station, a tap on an empty one while playing saves too;
+`ui_preset_tap`, `ui_preset_store` in `screen_radio.cpp`) and the whole list, where a station on a
 button has "button N" in its caption; a tap tunes (`radio.station`) and returns to the Player. The
 catalogue reads what the radio module got from Radio Browser (`radio_catalog_ui.h`), in pages of up
 to 12 rows; search uses the keyboard `src/ui_search_kb.cpp` (the panel language's letters and a
@@ -252,10 +292,13 @@ page opens and there are no servers yet.
 
 **Sound and EQ.** The "Sound" sheet and the Tone page are the same controls (`sound_sheet.cpp`): the
 preset field (pick list), Bass and Treble (−6…+6 dB), loudness compensation (the `audio.loudness`
-switch), the way to the equalizer. The equalizer (`screen_eq.cpp`) draws the frequency response with
+switch; on puts back `audio.loud_back`, as on the web), the way to the equalizer. The Tone page
+also has, at its foot, "Volume leveling": "On a schedule" (`audio.lev_sched`) and, while it is on,
+the two times with − and + (a quarter hour a press, a held button keeps stepping; `audio.lev_from`,
+`audio.lev_to`), as on the web. The equalizer (`screen_eq.cpp`) draws the frequency response with
 the same function, `audio_core::eq_magnitude_db()`, that the audio core computes the biquads with;
-the band points are dragged with a finger. At the top: the PEQ switch captioned "On" (the row takes
-a finger anywhere), the preset field and, while "Custom" plays, "Reset “Custom”". Edits go to a local
+the band points are dragged with a finger. At the top: the PEQ switch captioned "On", the preset
+field and, while "Custom" plays, "Reset “Custom”". Edits go to a local
 copy of the document, the main loop puts it into `audio_core::eq_store()`, and the `audio` module
 does not write `eq.json` while `ui.screen` = `eq` (a LittleFS write stops the cache of both cores).
 An edit from the web reaches the page through the same document ([AUDIO.md](AUDIO.md)).
@@ -273,13 +316,18 @@ named LPF/HPF slope (LR 12, BW 12), otherwise "Width (Q)". The minus in the dB g
 (`wifi.ip`) under it; the web's QR code is in the menu. The second is balance −6…+6 dB in 0.5 dB
 steps (`audio.balance_db10`).
 The speaker setup itself is a wizard on the web. **Crossover** — output schemes; only those in
-`audio.out_caps` are available; the board has one stereo pair. **Screen** — brightness, standby
+`audio.out_caps` are available; the board has one stereo pair, so its row is hidden on the glass and
+the web (`XOVER_ROW` in `screen_set.cpp` and `SystemPage.svelte`) and the page is reached by no row. **Screen** — brightness, standby
 brightness, auto sleep (0, 5, 10, 15, 20, 30, 45, 60 min), scheme.
 
 **Service** (`screen_svc.cpp`) — three big numbers (audio CPU, the longest main-loop pass, free
 internal SRAM) and three columns of detail (audio and scheduler, heap, satellite link). A number's
 colour is a verdict by the thresholds in `include/service_readout.h` (test
 `tests/host/test_service_readout.cpp`); a row is redrawn only when the value or the verdict changes.
+The heap column grades free internal SRAM, its lowest since boot (`system.heap_internal_min`, by the
+same thresholds) and the DMA-capable part; the largest internal block, PSRAM and the whole heap
+(`system.heap_free`, PSRAM included) have no verdict. The whole heap's minimum, `system.heap_min`,
+is published but not shown.
 
 **Wi-Fi** — the current network (or the panel's own access point, or an attempt), "Forget", the list
 of networks from a scan (a separate task, `net_scan`: a scan over the C6 RPC takes seconds) and a
@@ -296,11 +344,12 @@ protocol 1.8 gives no settings — the phone and disconnecting remain.
 every page, over sheets, lists and dialogs (`ui_shell_encoder`):
 
 - rotation — `audio.volume` ±2 % per click (0…100); if mute is on, it is cleared;
-- a press shorter than 650 ms — the Player's play/pause button for the current source
-  (`ui_now_play_pause`);
+- a press shorter than 650 ms — the Player's play/pause for the current source (`ui_now_press`,
+  `audio.transport` 6); a station, which does not pause, starts and stops the stream;
 - a 650 ms hold — the menu (open/close), fires while the finger is still down; over a pick list, the
   "Sound" sheet or a dialog it does nothing;
-- in standby, a rotation or a press wakes the screen.
+- in standby, a rotation or a press only wakes the screen: the volume does not move, neither the
+  press's action nor the menu fires.
 
 Selection on the glass is by touch only.
 
@@ -312,16 +361,20 @@ touch writes `ui.touch_x/y` and `ui.touch_down` and resets the idle timer. The f
   gesture after 8 px along (more than across), and the slider moves from where it is rather than
   jumping to the finger; a press, a tap or a finger beside the slider changes nothing;
 - an EQ point: a tap selects the band; the point moves after a 300 ms hold or 8 px of movement;
+- a switch toggles only on a tap on the switch itself (its 52×32 and 16 px around), never on its
+  row; a finger that went 8 px from where it landed changes nothing when it lifts;
 - scrolling a page never sets anything.
 
 **Modality.** A dialog or a keyboard is marked modal (`m3w::mark_modal`); a UI rebuild from outside
-waits for them. Dialogs are at screen level, not page level (the pick list, pairing, "Forget “…”?"
+waits for them, and so does the return to the Player after a minute alone, which closes the pick
+list instead. Dialogs are at screen level, not page level (the pick list, pairing, "Forget “…”?"
 on Wi-Fi and Bluetooth): their scrim covers the header with ← as well.
 
 ### Standby
 
 - Turned on by the idle timer after `ui.standby_min` minutes (0 — never); the encoder, a touch, a tap
-  on the standby screen or a pairing request wakes the screen.
+  on the standby screen or a pairing request wakes the screen. The same timer takes a page back to
+  the Player after a minute ("A minute alone" above).
 - Two layouts: while music plays — the clock (160 px digits), the date, one line, *artist · title* or
   *station · what is playing* (scrolls if wider than the 640 px window) and the 28-bar spectrum;
   without music — only the clock and the date, centred.
@@ -418,7 +471,7 @@ To open them without reflashing (`-u <user>:<password>` while the HTTP API's Bas
 a reboot, and only for later events):
 
 ```
-curl -u <user>:<password> -X POST http://<panel>/api/loglevel -d '{"tag":"UiLvgl","level":"info"}'
+curl -u <user>:<password> -X POST -H 'Content-Type: application/json' http://<panel>/api/loglevel -d '{"tag":"UiLvgl","level":"info"}'
 ```
 
 ## Web interface (`webui/`)
@@ -438,9 +491,9 @@ curl -u <user>:<password> -X POST http://<panel>/api/loglevel -d '{"tag":"UiLvgl
 - A tab that was open while the web was reflashed compares `/build.txt` every time the WebSocket
   opens and offers to reload (`lib/update.js`).
 - `npm run dev` — `dev-server.js` on `http://localhost:5000`: a fake API over the state in
-  `dev/state.json`, WebSocket, stations, EQ (presets are read from
-  `components/audio_dsp/src/eq_presets.cpp`), the library, the DLNA browser, a cover. It runs
-  `rollup -c -w`, which means an unminified `dist/`; deploy only through `npm run deploy`.
+  `dev/state.json`, WebSocket, stations (a tune, ‹ ›, a station kept from the catalog), EQ (presets
+  are read from `components/audio_dsp/src/eq_presets.cpp`), the library, the DLNA browser, a cover.
+  It runs `rollup -c -w`, which means an unminified `dist/`; deploy only through `npm run deploy`.
 
 ### Shell and routes
 
@@ -474,21 +527,23 @@ that step back.
 bar on a phone, a rail from 600 px (`lib/nav.js`, the same icons as in the panel's menu), the
 mini-player above them, a test-tone bar while the tone plays (`ToneBar.svelte`), a banner after 5 s
 without a WebSocket (connection lost) or when the panel is busy. The mini-player is on every page
-except the Player when the source is playing (tone and AUX — always) or can be resumed from the
-mini-player: card, radio, DLNA, Bluetooth with a phone, AirPlay with a remote
-(`np.playing || np.toggle && np.live`, `stores/now.js`). Output off, Bluetooth without a phone, USB
-without a stream and AirPlay without a remote that is not playing do not have it. The Player has no
-top bar and is tinted with `ui.cover_rgb`. Above everything: login (`LoginModal`), the snackbar and
-the pairing dialog (`PairDialog.svelte`).
+except the Player when the source is playing (tone and AUX — always; a station while it plays or
+connects) or can be resumed from the mini-player: card, DLNA, Bluetooth with a phone, AirPlay with
+a remote, a station (`np.playing || np.toggle && np.live`, `stores/now.js`). Its button is
+play/pause; on a station, which does not pause, play/stop, as the encoder's press on the glass.
+Output off, Bluetooth without a phone, USB without a stream and AirPlay without a remote that is
+not playing do not have it. The Player has
+no top bar and is tinted with `ui.cover_rgb`. Above everything: login (`LoginModal`), the snackbar
+and the pairing dialog (`PairDialog.svelte`).
 
 ### Pages and what they read/write
 
 | page | state | own endpoints |
 |---|---|---|
-| Player | `stores/now.js` (the source's face, as in `screen_now.cpp`), `audio.volume`, `audio.mute`, transport `*.cmd`, `player.repeat/shuffle`, `*.seek_s`, `radio.fav_add` | `GET /api/cover?px=280` following `ui.cover` |
+| Player | `stores/now.js` (the source's face, as in `screen_now.cpp`), `audio.volume`, `audio.mute`, `audio.leveler`, transport `audio.transport`, `player.repeat/shuffle`, `*.seek_s`; a station: `radio.station`, `radio.list_rev`, `radio.web_*`, `radio.fav_add` | `GET /api/cover?px=280` following `ui.cover`; a station: `GET /api/stations`, Radio Browser's logos from the browser |
 | Source | `audio.sources`, `audio.source` (the same cards and order as on the panel) | — |
 | Settings | `airplay.enabled/mode`, `dlna.enabled`, `radio.covers`, captions | `POST /api/restart` |
-| Tone and volume | `audio.bass_db`, `treble_db`, `loudness`, `eq_enabled`, `vol_max`, `vol_start` | `/api/eq` (presets, `lib/eq.js`) |
+| Tone and volume | `audio.bass_db`, `treble_db`, `loudness` (switched on: `loud_back`), `eq_enabled`, `vol_max`, `vol_start`; "Volume leveling": `lev_sched` and, while it is on, `lev_from`/`lev_to` as time fields (5-minute step) | `/api/eq` (presets, `lib/eq.js`) |
 | Equalizer | `audio.eq_enabled`, `audio.eq_rev` | `GET/POST /api/eq` |
 | Speakers, wizard, calibration | `audio.spk_*`, `audio.port_*`, `audio.balance_db10`, `audio.tone_*` | — |
 | Screen | `ui.backlight`, `ui.standby_bl`, `ui.standby_min`, `ui.theme` | — |
@@ -504,16 +559,50 @@ the pairing dialog (`PairDialog.svelte`).
 The endpoint formats are in [NETWORK.md](NETWORK.md); the EQ document and calibration in
 [AUDIO.md](AUDIO.md).
 
+**The Player's station card** (`audio.source` = 5, `radio.mode` not `push`; a pushed DLNA track
+has the track's card) is the glass's station face: no transport, no progress, no buffer line.
+From the top:
+
+- where it plays from, then a tile as big as the screen's height leaves — `100svh` − 530 px, 96 to
+  260 px: 260 on a 390×844 phone, 210 at 360×740, 134 at 390×664 (Safari with its bars) — with the
+  cover (`/api/cover`), else the station's logo, else its stand-in: `lib/stationbadge.js`, a copy of
+  `station_badge.h` held to the header's pinned cases by `tools/tests/test_webui_station_badge.py`;
+- the station's name between ‹ and › (`radio.cmd` 4 and 3, greyed while the list has no other
+  station); beside the name, for a catalog station outside the list (`radio.station` = −1), ♥,
+  which keeps it there (`radio.fav_add`);
+- what it plays, or the state ("Connecting…", "Buffering…", "Reconnecting…", "Stopped"), and the
+  codec badge;
+- the six presets, 3×2 buttons 56 px tall: the station's disc and its name in up to two lines,
+  the playing one outlined in the accent colour, an empty one with its number and "Empty" — "Store
+  here" while a tap would store;
+- "All stations · N ›" to `#/stations`, the volume, "Sound" and the moon.
+
+At 390×844, 390×664 and 360×740 the card fits above the bottom bar, with no scrolling, in all four
+languages. The presets come from `GET /api/stations`, read again when `radio.list_rev` moves and
+kept between visits. They have the glass's rules: a tap tunes (`radio.station`; the tuned station,
+when it is not on, `radio.cmd` 1), a 500 ms hold or the context menu (the right button, the menu
+key) stores what plays, and so does a tap on an empty one. A store names the station in
+`radio.web_name`, `radio.web_url`, `radio.web_uuid` and the preset in `radio.web_act` 2–7 (the
+panel finds a station of the list by its stream and adds one from the catalog); for a catalog
+station `radio.fav_add` goes in the same request, so the stream that plays becomes the list's
+station, as on the glass. The logos are Radio Browser's favicons, which the browser asks for itself
+(`lib/radiobrowser.js`): one `/json/stations/byuuid?uuids=…` for the presets' and the playing
+station's uuids once the list is read, each uuid once in the tab's session (`sessionStorage`). A
+station without a uuid, or a picture that does not load, keeps its stand-in. On the other pages the
+mini-player's button for a station is play/stop.
+
 ### State: reading and writing
 
 **Reading.**
 
 1. Start: `GET /api/ui` (the generated `ui.json`), `GET /api/state` (the whole state).
-2. WebSocket `/ws`: a full snapshot on connect, then every 1.5 s a delta of the changed keys
-   (`stores/state.js` merges them into the `state` store). The server holds up to three clients; a
-   fourth, while three are alive, is closed with code 1013, and the web shows that the panel is busy
-   and tries every 5 s. Otherwise it reconnects with a 1 → 30 s delay. A hidden tab lets go of the
-   socket and reconnects as soon as it is shown.
+2. WebSocket `/ws`: a full snapshot on connect, then a delta of the changed keys as they change,
+   at most every 200 ms (`stores/state.js` merges them into the `state` store). The panel's
+   heartbeat `{"_hb":n}` every 5 s is not state; a socket that has carried one and then stays
+   silent for 15 s is dropped and opened again (`lib/websocket.js`). The server holds up to three
+   clients; a fourth, while three are alive, is closed with code 1013, and the web shows that the
+   panel is busy and tries every 5 s. Otherwise it reconnects with a 1 → 30 s delay. A hidden tab
+   lets go of the socket and reconnects as soon as it is shown.
 3. Keys that modules write without a change mark (`track_change = false`: levels, CPU and the audio
    limiter, heap, satellite link counters) do not get into the deltas. Pages that show them poll
    `GET /api/state` every 2 s while visible (`lib/live.js`); settings come from the WebSocket,
@@ -528,8 +617,9 @@ The endpoint formats are in [NETWORK.md](NETWORK.md); the EQ document and calibr
   the newest; otherwise, one after a `debounceMs` pause. There is never more than one request in
   flight. A refusal puts the device's value back on the page; `cleanup()` on leaving the page sends
   the delayed one.
-- `writeNow(keys)` — a write without delay for actions that close the page; on a refusal the page
-  shows the previous value and gets an error.
+- `writeNow(keys)` — a write without delay, for a one-off write a tap makes (a source, a queue mode,
+  a tone, a measurement) and for actions that close the page; on a refusal the page shows the
+  previous value and gets an error.
 
 **Documents with a revision** have endpoints of their own: EQ (`/api/eq`, an edit carries the
 revision, a stale one gets 409 and the page rereads; `audio.eq_rev` says that the panel changed the
@@ -537,7 +627,9 @@ document), stations (`/api/stations`, generation, 409; `radio.list_rev`), Blueto
 (`/api/bt`; `bt.cfg_rev`), the DLNA browser (a snapshot with a revision).
 
 **401** opens the login (except for a background image request, `apiBlob(…, {ask: false})`); the
-credentials are Basic, in the tab's `sessionStorage`, encoded from UTF-8 (`lib/api.js`).
+credentials are Basic, in the tab's `sessionStorage`, encoded from UTF-8 (`lib/api.js`). While the
+panel's login is locked (`429` for 30 s after five wrong attempts), the login says so rather than
+"wrong username or password" and does not keep credentials the panel could not check.
 
 **Errors**: the snackbar states them in words, in the page's language (`toastError` in
 `stores/toast.js` → `humanError` in `lib/errors.js`; an `Error` from `lib/api.js` keeps the raw
@@ -572,8 +664,9 @@ shown as `value`. `tools/tests/test_webui_service.py` keeps the lists in agreeme
   Language page has two settings: the panel language (`ui.lang`: the screen speaks it, and so does
   every browser without a choice of its own) and this browser's language.
 - Gestures (`lib/gesture.js`): a slider is taken after 8 px along (more than across), a tap changes
-  nothing, a mouse takes it at once; an EQ point moves after 300 ms or 8 px; "Undo" for 5 s
-  (`lib/undo.js`). Test `tools/tests/test_webui_gesture.py`.
+  nothing, a mouse takes it at once; an EQ point moves after 300 ms or 8 px; a preset stores after
+  a 500 ms hold, or from the context menu, and a finger that moved 8 px scrolls the page; "Undo"
+  for 5 s (`lib/undo.js`). Test `tools/tests/test_webui_gesture.py`.
 - Texts are in the system's `Roboto, system-ui, …` font; the web carries no text font file.
 - The title and the subtitle of an `m3/Row` take up to two lines each, then "…". Below 420 px the
   `m3/Tabs` tabs are 14 px with 10 px padding (the five Stations tabs on one line), and the top bar's

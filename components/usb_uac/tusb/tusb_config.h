@@ -71,7 +71,7 @@ extern "C" {
 /// 32 microframes of the widest format: 3.3 KB, ~4.3 ms at 96 kHz/24-bit. The producer empties it
 /// every millisecond into the player's ring, which is the elastic buffer (usb_uac.cpp); this only
 /// has to cover the producer's wake-up. Internal RAM: it was 64 (6.6 KB) while TinyUSB's own
-/// FIFO-count feedback needed it half full (U0).
+/// FIFO-count feedback needed it half full.
 /// At full speed a packet is a whole millisecond, so 8 of them (3.1 KB, 8 ms at 48 kHz/24-bit)
 /// give the producer the same internal RAM and twice the slack.
 #if USB_UAC_HIGH_SPEED

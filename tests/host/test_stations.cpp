@@ -93,8 +93,8 @@ TEST_CASE("a full list with uuids fits the tokens") {
 }
 
 TEST_CASE("a field the list does not know is skipped whole, however it nests") {
-    // Skipping counts a value's tokens in a loop rather than by recursion (deep review
-    // 2026-10-12, RP-2). One token too few or too many and what follows is misread.
+    // Skipping counts a value's tokens in a loop rather than by recursion. One token too few
+    // or too many and what follows is misread.
     const char* json =
         "{\"x\":[[1,{\"a\":[2,{}]}],[]],"
         "\"stations\":["
@@ -160,6 +160,65 @@ TEST_CASE("a quote in a name survives the round trip") {
     REQUIRE(radio_core::parse(buf, n, b));
     REQUIRE(b.count == 1);
     CHECK(std::string(b.station[0].name) == "Rock \"FM\"");
+}
+
+namespace {
+
+/// JSON allows no control character raw inside a string (RFC 8259, section 7); the file's own
+/// line breaks stand between the values.
+bool no_raw_control_in_strings(const std::string& json) {
+    bool in = false;
+    for (size_t i = 0; i < json.size(); i++) {
+        const unsigned char c = (unsigned char)json[i];
+        if (in && c < 0x20) return false;
+        if (in && c == '\\') { i++; continue; }
+        if (c == '"') in = !in;
+    }
+    return !in;
+}
+
+}  // namespace
+
+TEST_CASE("a control character is written escaped, so GET /api/stations stays JSON") {
+    // What the web's JSON.parse met in a name: written raw, the body was not JSON.
+    radio_core::StationList a;
+    REQUIRE(a.add("x", "http://a/1"));
+    snprintf(a.station[0].name, radio_core::NAME_LEN, "%s", "T\tN\nR\rB\bF\f\x01" "1\x1f");
+    snprintf(a.station[0].url, radio_core::URL_LEN, "%s", "http://a/\t1");
+    char buf[512];
+    const size_t n = radio_core::serialize(a, buf, sizeof(buf));
+    REQUIRE(n > 0);
+    const std::string out(buf, n);
+    CHECK(no_raw_control_in_strings(out));
+    CHECK(out.find(R"("name": "T\tN\nR\rB\bF\f\u00011\u001f")") != std::string::npos);
+    CHECK(out.find(R"("url": "http://a/\t1")") != std::string::npos);
+}
+
+TEST_CASE("a name is one line: a tab or a line break is a space, and the ends are trimmed") {
+    // As the web posts a name with a tab pasted into it: JSON.stringify writes it as \t.
+    const char* posted = R"({"stations":[{"name":"  Jazz\tFM\r\nKyiv ","url":"http://a/1"},)"
+                         R"({"name":"\t \n","url":"http://ice1.somafm.com/x"}],"presets":[0]})";
+    radio_core::StationList l;
+    REQUIRE(radio_core::parse(posted, strlen(posted), l));
+    REQUIRE(l.count == 2);
+    CHECK(std::string(l.station[0].name) == "Jazz FM  Kyiv");
+    CHECK(std::string(l.station[1].name) == "ice1.somafm.com/x");   // nothing left: the host
+
+    // and through the file and back, as JSON all the way
+    char buf[512];
+    const size_t n = radio_core::serialize(l, buf, sizeof(buf));
+    REQUIRE(n > 0);
+    CHECK(no_raw_control_in_strings(std::string(buf, n)));
+    radio_core::StationList b;
+    REQUIRE(radio_core::parse(buf, n, b));
+    CHECK(std::string(b.station[0].name) == "Jazz FM  Kyiv");
+
+    // A name from the catalog, kept or played, goes the same way (radio_catalog, catalog.cpp).
+    char name[radio_core::NAME_LEN] = "\tRadio\nOne  ";
+    radio_core::tidy_name(name);
+    CHECK(std::string(name) == "Radio One");
+    REQUIRE(l.add("Rock\tFM", "http://b/2"));
+    CHECK(std::string(l.station[2].name) == "Rock FM");
 }
 
 TEST_CASE("the list stops at its capacity instead of running past it") {

@@ -1,7 +1,7 @@
 """A finger that scrolls does not set anything: webui/src/lib/gesture.js and lib/undo.js in Node.
 
-The customer, 14.10.2026: scrolling a page of the web interface moved the equalizer, the tone or
-another setting. The rules: a press changes nothing; a slider is the finger's once it went 8 px
+Without them scrolling a page of the web interface moves the equalizer, the tone or another
+setting. The rules: a press changes nothing; a slider is the finger's once it went 8 px
 along, more along than across, and the page's if it went up or down first; a tap changes
 nothing; a mouse takes a slider at once. An EQ point moves once held 300 ms or once the finger
 went 8 px from it. After a slider or a drag moved a sound setting, a snackbar offers to put it
@@ -107,6 +107,33 @@ eq(p.end(), 'tap', 'held and let go where it was: picked, not moved');
 
 p = g.pointGesture('mouse');
 eq(p.down(100, 100, 0), 'drag', 'a mouse moves it at once');
+""")
+
+
+def test_a_preset_tunes_on_a_tap_and_stores_on_a_hold():
+    run("""
+eq(g.PRESS_HOLD_MS, 500, 'the hold: the glass\\'s long press');
+let p = g.holdGesture();
+p.down(100, 100);
+eq(p.end(), 'tap', 'let go at once: a tap');
+
+p = g.holdGesture();
+p.down(100, 100);
+eq(p.move(104, 105), 'press', '6 px: still a press');
+eq(p.end(), 'tap', 'and a tap');
+
+p = g.holdGesture();
+p.down(100, 100);
+eq(p.move(103, 104), 'press', 'a finger that shook');
+eq(p.held(), 'hold', 'long enough: the hold');
+eq(p.move(160, 100), 'hold', 'moving after it changes nothing');
+eq(p.end(), 'hold', 'and letting go is no tap');
+
+p = g.holdGesture();
+p.down(100, 100);
+eq(p.move(100, 92), 'scroll', '8 px up: the page scrolls');
+eq(p.held(), 'scroll', 'the time running out stores nothing');
+eq(p.end(), 'scroll', 'nor tunes');
 """)
 
 

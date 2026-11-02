@@ -1,25 +1,25 @@
 /**
  * @file screen_set.cpp
- * @brief «Налаштування» (until S1 «Система») — the few things set once, the state of the links,
+ * @brief «Налаштування» — the few things set once, the state of the links,
  *        and the ways into the equalizer, the screen and the service readout.
  *
- * Four groups, each a card of rows (plan §2, U5; Зв'язок and Служби split 25.09.2026; Звук and the
- * screen's own page from S1, 14.10.2026):
+ * Four groups, each a card of rows:
  *
  *   Звук      Тембр → its page (the sounds, Бас, Високі, the loudness and the equalizer:
- *             sound_sheet.cpp; the equalizer itself until S3), what plays on its second line;
+ *             sound_sheet.cpp), what plays on its second line;
  *             Колонки → its page (screen_speakers.cpp: the state and the balance), what has been
- *             done about them on its second line; Кросовер → its page (screen_xover.cpp, S8), the
- *             scheme that plays on its second line — the web's order
+ *             done about them on its second line; Кросовер → its page (screen_xover.cpp), the
+ *             scheme that plays on its second line — the web's order. Кросовер is hidden
+ *             (XOVER_ROW) until the outputs it chooses between exist.
  *   Зв'язок   Wi-Fi (network · address) and Bluetooth (phone · codec), each → its page
  *   Пристрій  Екран → its page (brightness, standby, scheme: screen_display.cpp); Мова → a dialog
  *             of the four languages; Сервіс → the diagnostics page, the firmware on its second line
  *   Служби    AirPlay and DLNA: announcement switches; a tap on AirPlay's row chooses its mode,
  *             which is on its second line and applies live
  *
- * Every row is a finger's 64 px (the glass for a finger, 20.10.2026: they were 50, 5.9 mm), five
- * to a column so the page stays whole: Звук and Зв'язок on the left, Пристрій and Служби on the
- * right, and «Режим AirPlay» folded into AirPlay's row — eleven rows did not fit.
+ * Every row is a finger's 64 px, five to a column so the page stays whole: Звук and Зв'язок on
+ * the left, Пристрій and Служби on the right, and «Режим AirPlay» folded into AirPlay's row —
+ * eleven rows did not fit.
  *
  * Only rows backed by something real are here — a settings page whose switches do nothing is
  * worse than a shorter one. The two service switches existed (airplay.enabled, dlna.enabled) but
@@ -44,20 +44,23 @@ namespace {
 
 using i18n::S;
 using i18n::tr;
+using modesp::gen::AIRPLAY_MODE_AIRPLAY2;
+using modesp::gen::AIRPLAY_MODE_WINDOWS;
+using modesp::gen::AUDIO_SOURCE_AIRPLAY;
 
 // ── geometry, all relative to the 752x384 content column ──
 constexpr int32_t COL_GAP = 16;
 constexpr int32_t COL_W   = (uig::CONT_W - COL_GAP) / 2;      // 368
 constexpr int32_t COL2_X  = COL_W + COL_GAP;
 // Ten rows in two columns, five to each: a finger's 64 px a row and a 24 px caption keep the page
-// whole, without a scroll (the customer's choice, 15.10.2026, over a scrolling page).
+// whole, without a scroll.
 constexpr int32_t CAP_H   = 24;
 constexpr int32_t RH      = 64;
 constexpr int32_t INSET   = 2;                                // the rows' inset in their card
 constexpr int32_t RW      = COL_W - 2 * INSET;
 constexpr int32_t GAP     = 8;                                // between one group and the next
 // body_l's 25 px line, then label_s's 21, 2 apart, in the middle of the row: their boxes must not
-// cross, or GET /api/i18n/overflow names every row "overlap" (15.10.2026).
+// cross, or GET /api/i18n/overflow names every row "overlap".
 constexpr int32_t TITLE_Y = (RH - 25 - 2 - 21) / 2;
 constexpr int32_t SUB_Y   = TITLE_Y + 25 + 2;
 
@@ -97,12 +100,14 @@ void ap_mode_chosen(int mode) {
     if (g.ctx && mode != g.ctx->s.ap_mode) post(UiLvglModule::Req::AIRPLAY_MODE, mode);
 }
 /// «Режим AirPlay» as a list of the two, the one on ticked (ui_pick.cpp), from a tap on AirPlay's
-/// row — its switch announces it. A row of its own until 20.10.2026; before that a tap on it
-/// switched the protocol at once, with «змінити дотиком» under it to say so.
+/// row — its switch announces it.
 void ap_mode_pick() {
-    if (!g.ctx || !(g.ctx->s.sources & (1 << 6))) return;
+    if (!g.ctx || !(g.ctx->s.sources & (1 << AUDIO_SOURCE_AIRPLAY))) return;
+    // a row per airplay.mode value, in its order: the row chosen is the mode
+    static_assert(AIRPLAY_MODE_AIRPLAY2 == 0 && AIRPLAY_MODE_WINDOWS == 1, "the rows are the modes");
     const char* items[] = {"AirPlay 2", tr(S::sys_airplay_1)};
-    ui_pick_show(tr(S::sys_airplay_mode), items, 2, g.ctx->s.ap_mode == 1 ? 1 : 0, ap_mode_chosen);
+    const int on = g.ctx->s.ap_mode == AIRPLAY_MODE_WINDOWS ? AIRPLAY_MODE_WINDOWS : AIRPLAY_MODE_AIRPLAY2;
+    ui_pick_show(tr(S::sys_airplay_mode), items, 2, on, ap_mode_chosen);
 }
 void ap_mode_cb(lv_event_t*) {
     ap_mode_pick();
@@ -112,6 +117,8 @@ void svc_cb(lv_event_t*)     { ui_shell_go("svc"); }
 void sound_cb(lv_event_t*)   { ui_shell_go("sound"); }
 void spk_cb(lv_event_t*)     { ui_shell_go("speakers"); }
 void xover_cb(lv_event_t*)   { ui_shell_go("xover"); }
+/// «Кросовер» in Звук: off until the outputs the page chooses between exist; its page stays.
+constexpr bool XOVER_ROW = false;
 void display_cb(lv_event_t*) { ui_shell_go("display"); }
 
 // ── the language: ui_pick's list, as the presets' and the filter types' ──
@@ -175,12 +182,11 @@ void opens(lv_obj_t* r, RowId id, lv_event_cb_t cb) {
     sub_width(id, 40);
 }
 
-/// A row that is a switch; returns the switch. `whole_row`: a tap anywhere on the row toggles it;
-/// otherwise the switch takes its own 84×64 and the row is the caller's.
-lv_obj_t* toggle(lv_obj_t* r, RowId id, lv_event_cb_t cb, bool whole_row = true) {
+/// A switch at a row's end; returns it. Only the switch, its own 84×64, toggles: the row is the
+/// caller's, or nothing.
+lv_obj_t* toggle(lv_obj_t* r, RowId id, lv_event_cb_t cb) {
     lv_obj_t* sw = m3w::switch_m3(r, RW - 52 - 14, (RH - 32) / 2, false);
     lv_obj_add_event_cb(sw, cb, LV_EVENT_VALUE_CHANGED, nullptr);
-    if (whole_row) m3w::switch_row(r, sw);
     sub_width(id, 70);
     return sw;
 }
@@ -204,15 +210,17 @@ lv_obj_t* build(lv_obj_t* parent, UiCtx& c) {
     g.root = root;
 
     // ── Звук ──
-    lv_obj_t* sound = group(root, 0, 0, tr(S::sys_sound), 3);
+    lv_obj_t* sound = group(root, 0, 0, tr(S::sys_sound), XOVER_ROW ? 3 : 2);
     lv_obj_t* r = row(sound, 0, R_SOUND, UI_SYM_EQ, tr(S::sys_timbre));
     opens(r, R_SOUND, sound_cb);
     r = row(sound, 1, R_SPK, UI_SYM_SPEAKER, tr(S::spk_title));
     opens(r, R_SPK, spk_cb);
-    r = row(sound, 2, R_XOVER, UI_SYM_SPLIT, tr(S::xover_title));
-    opens(r, R_XOVER, xover_cb);
-    // the scheme that plays: stereo until the outputs' profile says another (screen_xover.cpp)
-    lv_label_set_text(g.sub[R_XOVER], tr(S::xover_stereo));
+    if (XOVER_ROW) {
+        r = row(sound, 2, R_XOVER, UI_SYM_SPLIT, tr(S::xover_title));
+        opens(r, R_XOVER, xover_cb);
+        // the scheme that plays: stereo until the outputs' profile says another (screen_xover.cpp)
+        lv_label_set_text(g.sub[R_XOVER], tr(S::xover_stereo));
+    }
 
     // ── Пристрій ──
     lv_obj_t* dev = group(root, COL2_X, 0, tr(S::sys_device), 3);
@@ -226,7 +234,7 @@ lv_obj_t* build(lv_obj_t* parent, UiCtx& c) {
     const esp_app_desc_t* app = esp_app_get_description();
     char buf[96];
     // "0.1.0 · IDF 5.5.5 · C6 3.0.7": the long form ("IDF v5.5.5 · C6 esp_hosted 3.0.7") was
-    // cut in every language, Ukrainian too (U8.7, 276 px in a 250 px row).
+    // cut in every language, Ukrainian too (276 px in a 250 px row).
     const char* idf = app->idf_ver[0] == 'v' ? app->idf_ver + 1 : app->idf_ver;
     snprintf(buf, sizeof(buf), "%s · IDF %s · C6 3.0.7", app->version, idf);
     lv_label_set_text(g.sub[R_SVC], buf);
@@ -241,7 +249,7 @@ lv_obj_t* build(lv_obj_t* parent, UiCtx& c) {
     // ── Служби ──
     lv_obj_t* svcs = group(root, COL2_X, Y2, tr(S::sys_services), 2);
     r = row(svcs, 0, R_AIRPLAY, UI_SYM_AIRPLAY, tr(S::src_airplay));
-    g.ap_sw = toggle(r, R_AIRPLAY, ap_cb, false);
+    g.ap_sw = toggle(r, R_AIRPLAY, ap_cb);
     lv_obj_add_flag(r, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_add_event_cb(r, ap_mode_cb, LV_EVENT_CLICKED, nullptr);
     r = row(svcs, 1, R_DLNA, UI_SYM_CAST, tr(S::src_dlna));
@@ -286,11 +294,11 @@ void refresh(lv_obj_t*, UiCtx& c) {
     // AirPlay, only when this build has the receiver: the mode, what is happening to it while
     // something is (the receiver applies a new one live — its progress or failure, not the bare
     // selection), else the name it is announced by, or that it is not.
-    const bool ap_built = (s.sources & (1 << 6)) != 0;
+    const bool ap_built = (s.sources & (1 << AUDIO_SOURCE_AIRPLAY)) != 0;
     if (!ap_built) {
         snprintf(buf, sizeof(buf), "%s", tr(S::sys_not_built));
     } else {
-        const char* mode = s.ap_mode == 1 ? tr(S::sys_airplay_1) : "AirPlay 2";
+        const char* mode = s.ap_mode == AIRPLAY_MODE_WINDOWS ? tr(S::sys_airplay_1) : "AirPlay 2";
         if (s.ap_switching)       snprintf(buf, sizeof(buf), "%s · %s", mode, tr(S::sys_ap_switching));
         else if (s.ap_mode_error) snprintf(buf, sizeof(buf), "%s · %s", mode, tr(S::sys_ap_switch_failed));
         else if (s.ap_enabled)    snprintf(buf, sizeof(buf), "%s · %s", mode, s.ap_name[0] ? s.ap_name : "…");

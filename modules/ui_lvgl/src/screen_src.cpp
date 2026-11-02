@@ -2,12 +2,11 @@
  * @file screen_src.cpp
  * @brief "Джерело" — what to listen to: one card per source this build can play.
  *
- * One grid, the most listened to first (customer, 18.10.2026): Bluetooth, AirPlay and the radio
- * on the top row, the card, the media servers and USB under them. Each card only when its bit
- * is in audio.sources — bindings decide what exists, and a card for hardware that is not wired
- * is worse than a shorter page (plan §1.4). Off, the tone generator and AUX have no card: the
- * first two are not something anyone listens to, AUX left the hardware (15.10.2026), and all
- * three stay reachable through the API.
+ * One grid, the most listened to first: Bluetooth, AirPlay and the radio on the top row, the
+ * card, the media servers and USB under them. Each card only when its bit is in audio.sources —
+ * bindings decide what exists, and a card for hardware that is not wired is worse than a
+ * shorter page. Off, the tone generator and AUX have no card: the first two are not something
+ * anyone listens to, AUX is not in the hardware, and all three stay reachable through the API.
  *
  * Each card says what it would give you right now — the phone, the station, how many tracks,
  * what is playing — so the page answers "what is there" without a tap. A tap is choosing to
@@ -18,7 +17,7 @@
  * that plays.
  *
  * The presets are not here: a preset chooses a station, not a source — they are on the
- * Stations page (plan decision 7.11).
+ * Stations page.
  */
 
 #include "ui_common.h"
@@ -34,24 +33,28 @@ namespace {
 using i18n::P;
 using i18n::S;
 using i18n::tr;
+using modesp::gen::AUDIO_SOURCE_RADIO;
 
 enum Card : int { BT, AIRPLAY, RADIO, FILE_, SERVERS, USB, N_CARD };
 
-struct CardDef { S name; const char* sym; int32_t bit; };
-/// Order is the order on screen. `bit` is the audio.source value whose bit in audio.sources
-/// says the card exists; the media servers ride the radio's ring, so they exist when the radio
-/// does.
+struct CardDef { UiSrc src; S name; const char* sym; };
+/// A card for `src`, named and drawn as the glass names and draws that source (ui_src_def).
+constexpr CardDef card_of(UiSrc src) { return { src, ui_src_def(src).name, ui_src_def(src).sym }; }
+/// Order is the order on screen. A card exists when audio.sources has the bit of the audio.source
+/// value its source plays from (ui_src_value).
 /// The names are the cards' own (src.*), short enough for a card's headline in every language:
-/// «Serwery multimediów», the DLNA page's Polish, ran out of the card.
-/// USB took AUX's place (the customer, 24.10.2026): the line input left the hardware on
-/// 15.10.2026 and its card was never shown since, and the grid is two rows of three.
+/// «Serwery multimediów», the DLNA page's Polish, ran out of the card. The media servers' card
+/// plays DLNA, which rides the radio's ring — it exists when the radio does — but it is the way
+/// into the servers rather than a push, so it keeps their name and their icon where the Player
+/// says «DLNA».
+/// USB is where AUX was: the line input is not in the hardware, and the grid is two rows of three.
 constexpr CardDef CARDS[N_CARD] = {
-    { S::src_bt,       UI_SYM_BLUETOOTH, 3 },
-    { S::src_airplay,  UI_SYM_AIRPLAY,   6 },
-    { S::src_radio,    UI_SYM_RADIO,     5 },
-    { S::src_card,     UI_SYM_SD,        4 },
-    { S::src_servers,  UI_SYM_HUB,       5 },
-    { S::src_usb,      UI_SYM_USB,       7 },
+    card_of(UiSrc::BT),
+    card_of(UiSrc::AIRPLAY),
+    card_of(UiSrc::RADIO),
+    card_of(UiSrc::CARD),
+    { UiSrc::DLNA, S::src_servers, UI_SYM_HUB },
+    card_of(UiSrc::USB),
 };
 
 // ── geometry: a 3x2 grid over the whole content column ──
@@ -61,9 +64,9 @@ constexpr int32_t CW    = (uig::CONT_W - (COLS - 1) * GAP) / COLS;     // 242
 constexpr int32_t CH    = (uig::CONT_H - GAP) / 2;                      // 186
 static_assert(N_CARD <= 2 * COLS, "every card fits the two rows: the page does not scroll");
 /// Inside a card: the icon at the top, the name and two lines under it at the bottom. The
-/// text is a step above the design's (title_m / label_m): the customer found it too small to
-/// read from the sofa (11.10.2026), so the name is headline and the lines title_m, and the
-/// margins give back the few pixels that costs.
+/// text is a step above the design's (title_m / label_m), which is too small to read from the
+/// sofa, so the name is headline and the lines title_m, and the margins give back the few
+/// pixels that costs.
 constexpr int32_t IN    = 16;           ///< the card's top and bottom margin
 
 struct Page {
@@ -87,14 +90,10 @@ void post(UiLvglModule::Req kind, int32_t v) {
 }
 
 int active_card(const UiLvglModule::Snapshot& s) {
-    switch (s.source) {
-    case 3: return BT;
-    case 4: return FILE_;
-    case 5: return s.network_push ? SERVERS : RADIO;
-    case 6: return AIRPLAY;
-    case 7: return USB;
-    default: return -1;
-    }
+    const UiSrc playing = ui_src(s);
+    for (int c = 0; c < N_CARD; c++)
+        if (CARDS[c].src == playing) return c;
+    return -1;                                   // off, the tone, AUX: no card
 }
 
 /// Choose card `c`: take the output for it and go where it is heard.
@@ -103,14 +102,16 @@ void choose(int c) {
     const auto& s = g.ctx->s;
     const bool active = active_card(s) == c;
     switch (c) {
-    case BT:      if (!active) post(UiLvglModule::Req::SOURCE, 3); break;
-    case FILE_:   if (!active) post(UiLvglModule::Req::SOURCE, 4); break;
-    case AIRPLAY: if (!active) post(UiLvglModule::Req::SOURCE, 6); break;
-    case USB:     if (!active) post(UiLvglModule::Req::SOURCE, 7); break;
+    case BT:
+    case FILE_:
+    case AIRPLAY:
+    case USB:
+        if (!active) post(UiLvglModule::Req::SOURCE, ui_src_value(CARDS[c].src));
+        break;
     case RADIO:
         // The source first — the radio drops what it is sent while it does not own the
         // output — then play the station it is tuned to.
-        if (s.source != 5) post(UiLvglModule::Req::SOURCE, 5);
+        if (s.source != AUDIO_SOURCE_RADIO) post(UiLvglModule::Req::SOURCE, AUDIO_SOURCE_RADIO);
         if (!active || strcmp(s.radio_state, "idle") == 0) post(UiLvglModule::Req::RADIO_CMD, 1);
         break;
     case SERVERS:
@@ -185,7 +186,7 @@ void place(int32_t sources) {
     g.n_shown = 0;
     int slot = 0;
     for (int c = 0; c < N_CARD; c++) {
-        const bool has = (sources & (1 << CARDS[c].bit)) != 0;
+        const bool has = (sources & (1 << ui_src_value(CARDS[c].src))) != 0;
         uih::show(g.card[c], has);
         if (!has) continue;
         g.order[g.n_shown++] = c;

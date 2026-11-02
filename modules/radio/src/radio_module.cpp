@@ -31,6 +31,7 @@
 #include "http_body.h"
 #include "radio_art_task.h"
 #include "radio_catalog_task.h"
+#include "radio_logos.h"
 #include "next_stream.h"
 #include "stream_watch.h"
 #include "modesp/liveness.h"
@@ -57,6 +58,7 @@
 #include "freertos/queue.h"
 #include "freertos/semphr.h"
 #include "esp_task.h"
+#include "sdkconfig.h"        // CONFIG_COVER_DECODE_TILE: is there a Player to draw the logos
 
 #include <atomic>
 #include <cstdio>
@@ -120,8 +122,8 @@ constexpr size_t PCM_MAX = 256 * 1024;
 /// far past anything the cache holds.
 ///
 /// The absolute cost has since come down a long way — moving the phase arithmetic off
-/// soft-float doubles took a conversion from 55% of a core to 19% (bench 18.09.2026) — but
-/// the cache argument is about locality, not arithmetic, so the block size still matters.
+/// soft-float doubles took a conversion from 55% of a core to 19% — but the cache argument
+/// is about locality, not arithmetic, so the block size still matters.
 constexpr size_t CHUNK     = 1024;
 /// One read from the socket. Small enough to stay responsive to a stop, large enough that
 /// the TLS record overhead does not dominate.
@@ -186,7 +188,7 @@ struct RadioTaskState {
 
     radio_core::StationList list;
     std::atomic<int32_t> station{0};        ///< index into `list`, or TRANSIENT
-    /// A station played from the catalog without being in the list (stage 20б). Station
+    /// A station played from the catalog without being in the list. Station
     /// semantics — it reconnects for ever — which a pushed URL does not have. Written by the
     /// radio task from the CATALOG command that carries its URL, and by a web edit on main
     /// that parks a list station here (apply_station_edit) — both under list_guard(), which
@@ -196,12 +198,14 @@ struct RadioTaskState {
     /// (stopped, or playing a pushed URL). NOT `station`: on_update writes that the moment a
     /// tune is asked for, before the task has done anything, so "already on it" tested
     /// against `station` was always true and a tune while another station played was
-    /// dropped (24.09.2026).
+    /// dropped.
     std::atomic<int32_t> tuned{-1};
     std::atomic<uint8_t> state{ST_IDLE};
 
     esp_transport_handle_t tr = nullptr;
-    bool                   tr_ssl = false;
+    /// The last connection was TLS. Read by main (stream_tls): a station asked for over http://
+    /// can still end up on TLS, through a redirect or a playlist.
+    std::atomic<bool>      tr_ssl{false};
     esp_audio_simple_dec_handle_t dec = nullptr;
     audio_core::RateConverter conv;
 
@@ -268,6 +272,9 @@ struct RadioTaskState {
     /// The reader is inside a socket read right now, and the transport under it must not be
     /// destroyed. See park_reader().
     std::atomic<bool> in_read{false};
+    /// Bumped by every http_close(), which every new stream passes through: whatever the
+    /// reader reads next is another stream, and its timeouts count from none (reader_task).
+    std::atomic<uint32_t> stream_gen{0};
     char     url[PLAY_URL_LEN] = "";
     /// What was ASKED for, as opposed to `url`, which is what is playing. They differ while
     /// a playlist is being followed, and the request has to survive the trip through the
@@ -275,7 +282,7 @@ struct RadioTaskState {
     char     url_req[PLAY_URL_LEN] = "";
     /// The track as the task was asked for it, kept when `url` moves on to a playlist's
     /// stream. radio.url, completed_uri and promoted_uri carry this one, because a control
-    /// point knows its track only by the URL it pushed (deep review 2026-10-12, RP-3).
+    /// point knows its track only by the URL it pushed.
     /// Written by the radio task; main reads it for the report as it read `url`.
     char     asked[PLAY_URL_LEN] = "";
     /// How many times this track has been picked up again after a break.
@@ -426,11 +433,11 @@ esp_audio_simple_dec_type_t type_from_content(const char* ct, const char* url) {
         if (strstr(ct, "flac"))                       return ESP_AUDIO_SIMPLE_DEC_TYPE_FLAC;
         if (strstr(ct, "ogg") || strstr(ct, "opus"))  return ESP_AUDIO_SIMPLE_DEC_TYPE_OGG;
         // WAV, which no radio station sends and a media server sends often. It was missing
-        // here until the first track was pushed over DLNA (bench 18.09.2026): the type fell
-        // through to the MP3 default, the MP3 decoder found nothing it recognised in a RIFF
-        // header, and the log read "connected … playing" the whole way through four seconds
-        // of silence. The ConnectionManager sink list advertises this type, so refusing to
-        // decode it was a promise broken in the quietest possible way.
+        // here until the first track was pushed over DLNA: the type fell through to the MP3
+        // default, the MP3 decoder found nothing it recognised in a RIFF header, and the log
+        // read "connected … playing" the whole way through four seconds of silence. The
+        // ConnectionManager sink list advertises this type, so refusing to decode it was a
+        // promise broken in the quietest possible way.
         if (strstr(ct, "wav") || strstr(ct, "wave"))  return ESP_AUDIO_SIMPLE_DEC_TYPE_WAV;
         if (strstr(ct, "mp4") || strstr(ct, "m4a"))   return ESP_AUDIO_SIMPLE_DEC_TYPE_M4A;
     }
@@ -449,8 +456,14 @@ esp_audio_simple_dec_type_t type_from_content(const char* ct, const char* url) {
 
 /// Is this URL a playlist rather than a stream? Station directories hand out .m3u and .pls
 /// far more often than they hand out the stream itself.
+///
+/// The answer's type decides when it says anything. An audio type is a stream whatever the
+/// URL ends in: a hand-added .pls that redirects to the stream itself answers audio/mpeg, and
+/// read as a playlist it had "no stream in it" and reconnected for ever. Only a type that says
+/// neither — text/plain, octet-stream, none — leaves it to the extension.
 bool looks_like_playlist(const char* url, const char* ct) {
-    if (ct && (strstr(ct, "mpegurl") || strstr(ct, "scpls") || strstr(ct, "x-scpls"))) return true;
+    if (ct && (strstr(ct, "mpegurl") || strstr(ct, "scpls") || strstr(ct, "x-pls"))) return true;
+    if (ct && !strncasecmp(ct, "audio/", 6)) return false;
     const char* q = strchr(url, '?');
     const size_t n = q ? (size_t)(q - url) : strlen(url);
     auto ends = [&](const char* ext) {
@@ -541,6 +554,7 @@ void park_reader() {
 
 void http_close() {
     park_reader();
+    s.stream_gen.fetch_add(1, std::memory_order_release);
     if (s.tr) {
         esp_transport_close(s.tr);
         esp_transport_destroy(s.tr);
@@ -797,7 +811,7 @@ Hop http_open_hop(const char* url, char* ct, size_t ct_sz, int64_t range_from,
         } else if (header_is(line, len, "Location", v, vlen)) {
             // Cut short, a signed redirect fails as a 403 or 404 from a server that looks
             // fine (see PLAY_URL_LEN), so one that does not fit is refused, with the reason
-            // in the log (deep review 2026-10-12, RP-5).
+            // in the log.
             if (vlen >= sizeof(location) && code >= 300 && code < 400) {
                 ESP_LOGW(TAG, "redirect target too long (%u bytes)", (unsigned)vlen);
                 http_close();
@@ -851,12 +865,11 @@ Hop http_open_hop(const char* url, char* ct, size_t ct_sz, int64_t range_from,
 
 /// `redirects` bounds the Location chain; station directories hand out URLs that move.
 ///
-/// A loop, not recursion (04.10.2026). Each hop's frame holds the host, the path, the
-/// request and the Location — about 1.6 KB — and it used to call itself for every redirect.
-/// A CDN that answered with four of them (zeno.fm -> surfernetwork, http and https) took
-/// the 12 KB "radio" stack past its end inside the "opening" log line, and the panel
-/// rebooted on the stack guard (coredump, _local/bench/coredump-20261004-2323). Now the
-/// stack holds one hop whatever the chain's length.
+/// A loop, not recursion. Each hop's frame holds the host, the path, the request and the
+/// Location — about 1.6 KB — and it used to call itself for every redirect. A CDN that
+/// answered with four of them (zeno.fm -> surfernetwork, http and https) took the 12 KB
+/// "radio" stack past its end inside the "opening" log line, and the panel rebooted on the
+/// stack guard. Now the stack holds one hop whatever the chain's length.
 bool http_open(const char* url, char* ct, size_t ct_sz, int redirects = 4,
                int64_t range_from = -1) {
     char next[PLAY_URL_LEN];
@@ -990,7 +1003,7 @@ void ring_put(const float* stereo, size_t frames) {
             // Pause is intentional backpressure. Keep this decoded block until
             // Resume instead of silently dropping it after two seconds. It is also progress
             // as far as the liveness watch goes: a DLNA pause past 30 s was reported as a
-            // stuck task (deep review 2026-10-12, RP-7).
+            // stuck task.
             if (ring.paused()) { modesp::liveness::tick(s.beat); spins = 0; continue; }
             // The consumer is not reading: either the source moved away from radio or the
             // audio core is gone. Either way, dropping these frames is right — holding them
@@ -1073,11 +1086,11 @@ bool tune(const char* want_url) {
     s.wav = cfg.dec_type == ESP_AUDIO_SIMPLE_DEC_TYPE_WAV;
     // HE-AAC is off unless asked for (esp_aac_dec.h: aac_plus_enable defaults to false), and
     // without it an "AAC+" station plays its AAC-LC core only: half the sample rate, and mono
-    // where the stereo was carried as PS. That was one station in seven in Radio Browser on
-    // 04.10.2026. A station is ADTS; a track pushed over DLNA can be M4A, which has its own
-    // config with the same switch. The cost is small: the SBR path's deepest static call
-    // chain is about 1.5 KB of stack, under FLAC's 4 KB on this same task, and the decoder's
-    // state goes to PSRAM like the rest (malloc above 1 KB). The decoder copies the struct.
+    // where the stereo was carried as PS. That was one station in seven in Radio Browser. A
+    // station is ADTS; a track pushed over DLNA can be M4A, which has its own config with the
+    // same switch. The cost is small: the SBR path's deepest static call chain is about 1.5 KB
+    // of stack, under FLAC's 4 KB on this same task, and the decoder's state goes to PSRAM like
+    // the rest (malloc above 1 KB). The decoder copies the struct.
     esp_aac_dec_cfg_t aac = ESP_AAC_DEC_CONFIG_DEFAULT();
     esp_m4a_dec_cfg_t m4a = {};          // track_idx 0: the first audio track, as before
     aac.aac_plus_enable = m4a.aac_plus_enable = true;
@@ -1124,7 +1137,10 @@ bool promote_prepared() {
     s.src_ch = p->info.channel ? p->info.channel : 2;
     s.direct = direct;
     s.clock = clock;
-    s.wav = type_from_content(nullptr, s.url) == ESP_AUDIO_SIMPLE_DEC_TYPE_WAV;
+    // What the prepared stream's sniff found, not what the URL says: a WAV pushed as
+    // …/WAV-0/ORIGINAL or as .WAV was taken for something else, and seeking or resuming it
+    // from a byte fraction of the RIFF file turned 24-bit audio into full-scale noise.
+    s.wav = p->type == ESP_AUDIO_SIMPLE_DEC_TYPE_WAV;
     s.body_bytes = p->total;
     s.bitrate_bps = audio_core::stream_bps(p->info.bitrate, s.src_rate, s.src_ch, s.src_bits);
     s.bitrate = s.bitrate_bps / 1000;
@@ -1212,8 +1228,8 @@ Pump pump() {
     raw_drop(raw.consumed);
     if (err == ESP_AUDIO_ERR_BUFF_NOT_ENOUGH) {
         // The frame's PCM does not fit, and the decoder keeps it until it does. Read as
-        // "nothing decoded yet" it was asked again with the same buffer for ever, in silence
-        // (deep review 2026-10-12, RP-4). Grow as asked and try again, or give the track up.
+        // "nothing decoded yet" it was asked again with the same buffer for ever, in silence.
+        // Grow as asked and try again, or give the track up.
         if (out.needed_size > s.pcm_cap && out.needed_size <= PCM_MAX) {
             if (void* p = heap_caps_realloc(s.pcm, out.needed_size,
                                             MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT)) {
@@ -1406,7 +1422,7 @@ void save_stations() {
     radio_core::stations().copy(s.list);
     const size_t w = radio_core::serialize(s.list, buf.p, buf.n);
     if (!w) { ESP_LOGW(TAG, "station list too large to write"); return; }
-    // write -> read back -> rename (safe_file, plan item 11.2). The old fopen/fwrite left a
+    // write -> read back -> rename (safe_file). The old fopen/fwrite left a
     // truncated list on a power cut, and a truncated list is not a smaller list: radio_core
     // ::parse rejects it, and load_stations() then overwrites it with the built-in defaults.
     // Someone's stations were one badly timed reset away from being replaced by ours.
@@ -1422,9 +1438,9 @@ void load_stations() {
     // answer. UserStore::begin() has already run by now — ConfigService brings it up while
     // it mounts, and config is CRITICAL, so it is done before any module inits.
     //
-    // The scratch stays the PSRAM one from item 7.3. The persistence work arrived with a
-    // `static char buf[8192]` here, which is the 8 KB of .bss that item deleted; taking it
-    // back would have undone half that stage without a compiler saying a word.
+    // The scratch stays the PSRAM one. The persistence work arrived with a `static char
+    // buf[8192]` here: 8 KB of internal .bss, which this board is short of (docs/CONCEPT.md,
+    // "Board constraints"), and no compiler says a word about it.
     modesp::UserStore::write_path("stations.json", s_stations_path, sizeof(s_stations_path));
     StationScratch buf(STATIONS_JSON_MAX);
     size_t n = 0;
@@ -1441,7 +1457,7 @@ void load_stations() {
         if (w) safe_file::save(s_stations_path, buf.p, w);
     }
     // Hand it to the store the screen reads from; the list itself stays here, and the task
-    // that tunes copies a URL out of it under list_guard() (RP-6).
+    // that tunes copies a URL out of it under list_guard().
     radio_core::stations().set(s.list);
     ESP_LOGI(TAG, "%d stations", s.list.count);
 }
@@ -1451,9 +1467,9 @@ void load_stations() {
 /// The default parks the Wi-Fi radio between beacons and lets the access point buffer what
 /// arrives in between, which on this co-processor link shows up as loss rather than
 /// latency — 50% of pings dropped while a stream ran, and TCP down to a few hundred bytes
-/// a second (bench 17.09.2026). Keeping it off ALL the time is the wrong trade, though: it
-/// costs the co-processor continuous work on the same core the card player decodes on, and
-/// the card player must not pay for a feature it is not using.
+/// a second. Keeping it off ALL the time is the wrong trade, though: it costs the
+/// co-processor continuous work on the same core the card player decodes on, and the card
+/// player must not pay for a feature it is not using.
 void set_modem_sleep(bool allow) {
     static int8_t applied = -1;
     const int8_t want = allow ? 1 : 0;
@@ -1492,7 +1508,7 @@ const radio_core::Station* station_at(int idx) {
 
 /// The URL of the station at `idx`, copied while the list cannot change. A pointer into the
 /// list was held through the fade and the old stream's close — a second or more — and a web
-/// edit in that time put another station's URL under it (deep review 2026-10-12, RP-6).
+/// edit in that time put another station's URL under it.
 /// False if there is no such station. Radio task.
 bool station_url(int idx, char* out, size_t n) {
     xSemaphoreTake(list_guard(), portMAX_DELAY);
@@ -1516,14 +1532,6 @@ void start_station(int idx) {
     }
     // A server left for being too slow is left for that station only (stream_watch.h).
     s.avoid_ip.store(0, std::memory_order_release);
-    if (!s.net_up.load(std::memory_order_acquire)) {
-        // Asked for before the network is up: remember what was wanted and let the
-        // reconnect path bring it in as soon as there is a route.
-        s.station.store(idx, std::memory_order_release);
-        s.tuned.store(idx, std::memory_order_release);
-        s.state.store(ST_RECONNECTING, std::memory_order_release);
-        return;
-    }
     s.station.store(idx, std::memory_order_release);
     s.tuned.store(idx, std::memory_order_release);
     s.one_shot.store(false, std::memory_order_release);
@@ -1538,6 +1546,16 @@ void start_station(int idx) {
     s.pcm_generation = audio_core::pcm_ring().generation();
     audio_core::pcm_ring().set_paused(false);
     audio_core::pcm_ring().set_eos(audio_core::PcmRing::OWNER_RADIO, s.pcm_generation, false);
+    if (!s.net_up.load(std::memory_order_acquire)) {
+        // Asked for before the network is up: only the connecting waits for a route, and
+        // the reconnect path does it as soon as there is one. Everything above must happen
+        // now — that path only tunes, and a station tuned into a ring the radio had not
+        // claimed played silence while it said "playing", and a push's one_shot left set
+        // stopped it outright.
+        close_stream();
+        s.state.store(ST_RECONNECTING, std::memory_order_release);
+        return;
+    }
     if (!tune(url)) {
         s.state.store(ST_RECONNECTING, std::memory_order_release);
     }
@@ -1647,6 +1665,7 @@ void finish_or_resume() {
 void reader_task(void*) {
     uint8_t* chunk = s.net_chunk;
     int quiet = 0;
+    uint32_t stream = s.stream_gen.load(std::memory_order_acquire);
     while (s.run) {
         modesp::liveness::tick(s.reader_beat);
         xSemaphoreTake(io_guard(), portMAX_DELAY);
@@ -1654,6 +1673,10 @@ void reader_task(void*) {
         if ((st != ST_BUFFERING && st != ST_PLAYING) || (!s.tr && !s.prepared) || s.eof.load() || s.lost.load() || raw_space() < NET_CHUNK) {
             xSemaphoreGive(io_guard()); sleep_ms(20); continue;
         }
+        // The timeouts of the stream before do not count against this one: carried over,
+        // the eight that gave that one up gave up a reconnect on its first quiet second.
+        const uint32_t gen = s.stream_gen.load(std::memory_order_acquire);
+        if (gen != stream) { stream = gen; quiet = 0; }
         s.in_read.store(true, std::memory_order_release);
         const int r = stream_read(chunk, NET_CHUNK);
         if (r > 0) { quiet = 0; raw_write(chunk, (size_t)r); s.net_bytes.fetch_add(r); }
@@ -1682,7 +1705,7 @@ void radio_task(void*) {
             case Cmd::PLAY: start_station(s.station.load()); break;
             case Cmd::STOP: stop_station(); break;
             case Cmd::TUNE: start_station(m.value); break;
-            // Nothing sends NEXT/PREV since RP-1: on_update resolves the neighbour on main,
+            // Nothing sends NEXT/PREV: on_update resolves the neighbour on main,
             // publishes radio.station and sends TUNE. Resolving it here left radio.station
             // behind, and main's pick check tuned straight back.
             case Cmd::NEXT:
@@ -1805,14 +1828,30 @@ void radio_task(void*) {
     vTaskDeleteWithCaps(nullptr);
 }
 
+/// How long the radio waits after a start that failed (radio_up) before it tries again.
+constexpr uint32_t UP_RETRY_MS = 5000;
+
+/// The buffers radio_up() makes, given back; any of them may be missing. A start that failed
+/// half way frees what it did get: kept, the next attempt overwrote the pointers and leaked it.
+void free_buffers() {
+    free(s.raw);       s.raw = nullptr;
+    free(s.pcm);       s.pcm = nullptr;
+    free(s.net_chunk); s.net_chunk = nullptr;
+    free(s.feed);      s.feed = nullptr;
+    free(s.meta);      s.meta = nullptr;
+    free(s.icy_buf);   s.icy_buf = nullptr;
+    free(s.fbuf);      s.fbuf = nullptr;
+    free(s.rbuf);      s.rbuf = nullptr;
+}
+
 /// Everything the radio needs in order to play, made when it is asked to play.
 ///
 /// Nothing here exists while the card is the source, and that is the point. Measured on the
-/// bench (18.09.2026): with this module merely PRESENT and idle, the card player decoded at
-/// 0.6x real time with its ring at 6% and the audio task counting forty underruns a second;
-/// without it, 1.0x with the ring at 91%. Two sources are never wanted at once, so the one
-/// that is not selected should not be holding a filter bank, two task stacks and a
-/// megabyte of buffers, nor waking up eighty times a second to find there is nothing to do.
+/// bench: with this module merely PRESENT and idle, the card player decoded at 0.6x real
+/// time with its ring at 6% and the audio task counting forty underruns a second; without
+/// it, 1.0x with the ring at 91%. Two sources are never wanted at once, so the one that is
+/// not selected should not be holding a filter bank, two task stacks and a megabyte of
+/// buffers, nor waking up eighty times a second to find there is nothing to do.
 bool radio_up() {
     if (s.up) return true;
 
@@ -1835,13 +1874,13 @@ bool radio_up() {
     s.icy_buf   = (char*)heap_caps_malloc(16 * 255 + 1, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
     s.fbuf      = (float*)heap_caps_malloc(CHUNK * 2 * sizeof(float), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
     s.rbuf      = (float*)heap_caps_malloc(CHUNK * 2 * 2 * sizeof(float), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    if (!s.q) s.q = xQueueCreate(4, sizeof(CmdMsg));
     if (!s.raw || !s.pcm || !s.fbuf || !s.rbuf || !s.net_chunk || !s.feed || !s.meta ||
-        !s.icy_buf) {
+        !s.icy_buf || !s.q) {
         ESP_LOGE(TAG, "buffer allocation failed");
+        free_buffers();
         return false;
     }
-    if (!s.q) s.q = xQueueCreate(4, sizeof(CmdMsg));
-    if (!s.q) return false;
     xQueueReset(s.q);
     raw_clear();
 
@@ -1886,15 +1925,7 @@ void radio_down() {
     close_stream();
     audio_core::pcm_ring().release(audio_core::PcmRing::OWNER_RADIO);
     s.conv.free_bank();
-
-    free(s.raw);       s.raw = nullptr;
-    free(s.pcm);       s.pcm = nullptr;
-    free(s.net_chunk); s.net_chunk = nullptr;
-    free(s.feed);      s.feed = nullptr;
-    free(s.meta);      s.meta = nullptr;
-    free(s.icy_buf);   s.icy_buf = nullptr;
-    free(s.fbuf);      s.fbuf = nullptr;
-    free(s.rbuf);      s.rbuf = nullptr;
+    free_buffers();
     s.state.store(ST_IDLE, std::memory_order_release);
     s.up = false;
     ESP_LOGI(TAG, "down");
@@ -1938,6 +1969,30 @@ const char* current_uuid() {
     const radio_core::Station* st = s.list.at(idx);
     return st ? st->uuid : "";
 }
+
+/// The stream holds the panel's one TLS session (docs/NETWORK.md, "Stream"): the station was
+/// asked for over https://, or its connection ended up on TLS through a redirect or a playlist.
+/// While it does, a logo is fetched over plain HTTP or not at all.
+bool stream_tls() {
+    if (s.tr_ssl.load(std::memory_order_acquire)) return true;
+    const int32_t idx = s.station.load(std::memory_order_acquire);
+    const radio_core::Station* lst = idx == TRANSIENT ? nullptr : s.list.at(idx);
+    const char* url = idx == TRANSIENT ? cat_ask().shown.url : lst ? lst->url : "";
+    return strncmp(url, "https://", 8) == 0;
+}
+
+/// The presets' logos may be fetched now (src/logos.cpp): the stream holds no TLS session and
+/// is not starting — the radio is not the source, is stopped, or plays a station over plain
+/// HTTP that is past its buffering. A pushed track is left alone: near its end the next one is
+/// being fetched.
+#if CONFIG_COVER_DECODE_TILE
+bool logos_may_fetch(bool mine) {
+    if (!mine || !s.up) return true;
+    const uint8_t st = s.state.load(std::memory_order_acquire);
+    if (st == ST_IDLE) return true;
+    return st == ST_PLAYING && !s.one_shot.load(std::memory_order_acquire) && !stream_tls();
+}
+#endif
 
 #include "stations_http.inc"
 
@@ -2012,7 +2067,10 @@ RadioModule::RadioModule() : modesp::BaseModule("radio") {}
 
 bool RadioModule::on_init() {
     state_set("radio.state", "idle");
-    state_set("radio.station", (int32_t)0);
+    // What PersistService restored, not 0: this key is persisted, and writing 0 over it here
+    // put the first station back at every boot, so Play after a power cut tuned station 0
+    // instead of the last one. An index the list no longer has is caught where it is read.
+    state_set("radio.station", read_int("radio.station", 0));
     state_set("radio.name", "");
     state_set("radio.url", "");
     state_set("radio.uuid", "");
@@ -2059,10 +2117,31 @@ void RadioModule::on_update(uint32_t dt_ms) {
 
     // The source decides whether this module exists at all.
     const bool mine = (read_int("audio.source", 0) == AUDIO_SRC_RADIO);
+
+    // The presets' logos, whatever the source (src/logos.cpp): fetched only while the panel's
+    // one TLS session is free and no stream is starting, their files written only while
+    // nothing is heard — the audio task's word, for every source (pcm_ring.h, output_quiet).
+    // Only the panel's Player draws them: a board without a display keeps its covers as files
+    // (CONFIG_COVER_DECODE_TILE=n, components/cover) and neither fetches nor keeps the logos.
+#if CONFIG_COVER_DECODE_TILE
+    logos_ms_ += dt_ms;
+    if (logos_ms_ >= 500) {
+        radio_logos::update(logos_ms_, read_bool("wifi.connected", false), logos_may_fetch(mine),
+                            audio_core::pcm_ring().output_quiet());
+        logos_ms_ = 0;
+    }
+#endif
+
     if (!mine) {
         if (s.up) radio_down();
+        // Not what plays any more, whatever the radio was doing when the source moved on. The
+        // publish at the end of this function is not reached while another source owns the
+        // output, so without this radio.state kept its last value — "playing" — after a switch
+        // away. Once per switch: the key does not change again until the radio is chosen.
+        if (!idle_shown_) { state_set("radio.state", "idle"); idle_shown_ = true; }
         report_ms_ = 0;
         health_ms_ = 0;
+        up_wait_ms_ = 0;        // chosen again, the radio starts at once
         // Anything posted while another source owns the output is stale by the time this
         // one gets it back, and the rest of this function — which is where commands are
         // consumed — does not run. Drop them rather than let eight presses accumulate and
@@ -2072,8 +2151,15 @@ void RadioModule::on_update(uint32_t dt_ms) {
         while (next_command(drop)) {}
         return;
     }
+    idle_shown_ = false;
     if (s.up && !s.run) { radio_down(); if(s.up)return; }
-    if (!radio_up()) return;
+    // A start that failed is tried again a few seconds on, not on the next pass: memory that
+    // is not there now is not there ten milliseconds later either.
+    if (!s.up && up_wait_ms_) {
+        up_wait_ms_ = up_wait_ms_ > dt_ms ? up_wait_ms_ - dt_ms : 0;
+        return;
+    }
+    if (!radio_up()) { up_wait_ms_ = UP_RETRY_MS; return; }
     char next_url[PLAY_URL_LEN]{};
     read_string("radio.next_url", next_url, sizeof(next_url));
     const int32_t duration = s.dur_s.load();
@@ -2123,7 +2209,7 @@ void RadioModule::on_update(uint32_t dt_ms) {
             // Worked out HERE and published at once, as play_catalog does. Left to the task,
             // `station` moved there while radio.station still held the old index until the
             // next report, and the station pick below read that as a pick of the old station
-            // and tuned it straight back (deep review 2026-10-12, RP-1).
+            // and tuned it straight back.
             state_set("audio.source", AUDIO_SRC_RADIO);
             const int32_t count = s.list.count;
             if (!count) break;
@@ -2174,7 +2260,7 @@ void RadioModule::on_update(uint32_t dt_ms) {
     // A seek, from the screen, from MQTT, or from a DLNA control point's progress bar.
     // Consumed like play_url: it is a request, not a setting, and -1 means nothing pending.
     // Consumed only once the task's queue took it: with the queue full the position stays
-    // asked for and goes on the next pass, instead of being dropped (display review, item 4).
+    // asked for and goes on the next pass, instead of being dropped.
     {
         const int32_t want = read_int("radio.seek_s", -1);
         if (want >= 0 && send(Cmd::SEEK, want)) state_set("radio.seek_s", (int32_t)-1);
@@ -2225,8 +2311,8 @@ void RadioModule::on_update(uint32_t dt_ms) {
                 health_ms_ = 0;
 
                 // A station's server that cannot keep up is left for another of its addresses
-                // (stream_watch.h; the bench of 05.10.2026 had one ~200 ms away starve a 320k
-                // stream). Stations only: a pushed track is finished or resumed by its own rules.
+                // (stream_watch.h; on the bench one ~200 ms away starved a 320k stream).
+                // Stations only: a pushed track is finished or resumed by its own rules.
                 const uint32_t gen = s.track_generation.load(std::memory_order_acquire);
                 if (gen != starve_gen_) { starve_gen_ = gen; s_starve.reset(); }
                 if (!s.one_shot.load(std::memory_order_acquire) &&
@@ -2273,7 +2359,7 @@ void RadioModule::on_update(uint32_t dt_ms) {
     // "who owns the output" and stays 5 for both; the screen asks a different question and
     // needs a different answer, or a pushed track gets labelled as the radio. Everything
     // that arrives by being pushed — DLNA today, AirPlay or slimproto later — is "push",
-    // so none of them needs a source number of its own (customer, 18.09.2026).
+    // so none of them needs a source number of its own.
     const bool pushed = s.one_shot.load(std::memory_order_acquire);
     state_set("radio.mode", pushed ? "push" : "station");
     const uint32_t sr = s.src_rate ? s.src_rate : 0;
@@ -2309,11 +2395,8 @@ void RadioModule::on_update(uint32_t dt_ms) {
             if (s.one_shot.load(std::memory_order_acquire)) {
                 radio_art_task::station("", "", false);       // a pushed track: no station
             } else {
-                const bool cat = (idx == TRANSIENT);
-                const radio_core::Station* lst = cat ? nullptr : s.list.at(idx);
-                const char* url = cat ? cat_ask().shown.url : lst ? lst->url : "";
-                radio_art_task::station(current_uuid(), cat ? cat_ask().shown_favicon : "",
-                                        strncmp(url, "https://", 8) != 0);
+                radio_art_task::station(current_uuid(), idx == TRANSIENT ? cat_ask().shown_favicon : "",
+                                        !stream_tls());
             }
         }
     }

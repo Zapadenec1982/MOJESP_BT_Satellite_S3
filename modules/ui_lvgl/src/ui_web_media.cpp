@@ -10,7 +10,7 @@
  *   - the cover is the tile screen_now.cpp draws, chosen by the same cover_now() and named by
  *     ui.cover. The tile is all this firmware keeps of a picture, so that is what is sent —
  *     scaled to a thumbnail, as a BMP like GET /api/screenshot. Keeping each source's original
- *     JPEG as well (the plan's first idea) would hold up to five more pictures in PSRAM for a
+ *     JPEG as well would hold up to five more pictures in PSRAM for a
  *     56-pixel square.
  *
  * Bodies live in PSRAM for the length of a call, never on the 8 KB httpd stack: the internal
@@ -39,12 +39,7 @@ namespace {
 
 std::atomic<int> s_cover_tile{-1};
 
-esp_err_t send_json(httpd_req_t* req, const char* status, const char* body) {
-    httpd_resp_set_status(req, status);
-    httpd_resp_set_type(req, "application/json");
-    httpd_resp_set_hdr(req, "Cache-Control", "no-store");
-    return httpd_resp_send(req, body, HTTPD_RESP_USE_STRLEN);
-}
+using modesp::http_routes::send_json;
 
 /// `key` from the request's query as a number, or −1 when absent or not a number.
 long query_num(const char* query, const char* key) {

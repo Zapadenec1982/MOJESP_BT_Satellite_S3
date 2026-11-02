@@ -106,8 +106,8 @@ BT-супутник ── I2S, GPIO31 ──► BT-кільце ─────
                                                    → I2S0 TX ──► PCM5102A ──► TPA3255 ──► колонки
 ```
 
-`DspChain` (`components/audio_dsp`): вхідне підсилення (підрізання секції, гучність, запас під
-EQ) → сабсонік і підйом на частоті фазоінвертора → loudness → бас і високі → PEQ до 10 смуг →
+`DspChain` (`components/audio_dsp`): вирівнювання гучності (коли ввімкнене) → вхідне підсилення
+(підрізання секції, гучність, запас під EQ) → сабсонік і підйом на частоті фазоінвертора → loudness → бас і високі → PEQ до 10 смуг →
 ширина й моно-бас → баланс → бас-лімітер → брикволл із look-ahead. Усередині float; на шину йдуть 32-бітні слоти. Подробиці
 кожної ланки — [AUDIO.uk.md](AUDIO.uk.md).
 
@@ -177,7 +177,11 @@ EQ) → сабсонік і підйом на частоті фазоінвер�
 ### microSD
 
 Слот SDMMC 0, 4 біти, 20 МГц: CLK 43, CMD 44, D0–D3 39–42, без card-detect. Піни — типові IOMUX
-слота 0 (`soc/sdmmc_pins.h`). IO слота живиться від LDO P4, канал 4, 3,3 В. На P4 один
+слота 0 (`soc/sdmmc_pins.h`), і публічний проєкт
+buccaneer-jak/JC4880P443C-P4-to-C6-RS232-communication-and-SD-Card-connection монтує картку на цій
+самій панелі через `SD_MMC.begin()` без `setPins()`, тобто на цих типових пінах, у 4 бітах (§8б). 4 біти,
+а не 1: в 1-бітному режимі D3 лишається неналаштованим, а D3 ще й тримає SD-картку в режимі SD, тож
+якщо D3 ніхто не тримає, картка не відповідає ніколи. IO слота живиться від LDO P4, канал 4, 3,3 В. На P4 один
 контролер SDMMC із двома слотами, і слот 1 тримає ESP-Hosted для C6, тому драйвер картки
 (`drivers/sdmmc_card`) не ініціалізує й не деініціалізує контролер. FatFs налаштований під
 картку: сектор 512 Б, довгі імена, UTF-8 (`sdkconfig.board`). Монтує `modules/storage`, грає
@@ -357,6 +361,10 @@ AirPlay має свій номер, бо це окремий рушій (сві�
 
 - Ключі `*.cmd` — команди (`"command": true` у маніфесті): запис ставиться в чергу модуля
   (`BaseModule::post_command`, 8 команд), а не в сховище, і не розсилається.
+- Поверхня керування (скло, веб, MQTT, застосунок на телефоні) шле транспорт однією командою —
+  `audio.transport` кодами `player.cmd`; модуль audio передає її в командний ключ джерела, що
+  грає, а `audio.transport_caps` каже, які коди це джерело приймає зараз
+  ([AUDIO.uk.md](AUDIO.uk.md), «Джерела»).
 - Гучність одна: `audio.volume`, 0–100 %, `persist`. `audio.vol_max` (40–100 %) стискає шкалу,
   `audio.vol_eff` — що застосувало ядро. Bluetooth, AirPlay і USB переводять гучність телефона чи
   комп'ютера в `audio.volume`, поки їхнє джерело вибране. Закон гучності — [AUDIO.uk.md](AUDIO.uk.md).
@@ -412,6 +420,7 @@ PSRAM:
 | Проєкт | Що взято | Де в дереві |
 |---|---|---|
 | csvke/esp32_p4_jc4880p433c_bsp (Apache-2.0) | константи DSI і таблиця ініціалізації ST7701S цієї панелі | `drivers/dsi_st7701` |
+| buccaneer-jak/JC4880P443C-P4-to-C6-RS232-communication-and-SD-Card-connection | піни microSD (типові для слота 0) і ширина 4 біти, §3а | `board.json`, `sd_0` |
 | `esp_hosted`, приклад `examples/ota/coprocessor_ota/mcu_host` | оновлення C6 з P4 по SDIO | `tools/c6_updater` |
 | TinyUSB `examples/device/uac2_speaker_fb`; `espressif/usb_device_uac` — TinyUSB без `esp_tinyusb` | UAC2 з feedback-endpoint | `components/usb_uac` |
 | ESP-ADF, приклад DLNA (`release/v2.x`) | три сервіси DLNA-рендерера | `components/esp_dlna` (README) |
@@ -453,16 +462,19 @@ Control plane — форк [ModESP_Framework](https://github.com/Zapadenec1982/M
   (кількість записів генерується з маніфестів): ключ до 32 байт; значення int32, float, bool
   або рядок до 64 байт (ключі з `"long": true` — до 256). Доступ під м'ютексом; змінені ключі
   йдуть дельтою у WebSocket. `PersistService` пише ключі з `persist` у NVS (простір `persist`) із
-  затримкою 5 с і відновлює їх на старті.
+  затримкою 5 с, дописує те, що чекає, на кожному `esp_restart()` (shutdown handler) і відновлює
+  їх на старті.
 - **Хто читає і пише ключі.** Панель (`ui_lvgl`), вебінтерфейс (Svelte, `data/www/`) через HTTP
   REST і WebSocket `/ws`, MQTT з Home Assistant discovery (`components/modesp_mqtt`, типово
-  вимкнений) — усі працюють з тими самими ключами; запис перевіряється за `state_meta.h`.
+  вимкнений) — усі працюють з тими самими ключами; запис перевіряється за `state_meta.h` одним
+  правилом для HTTP, відновлення й MQTT (`modesp/net/key_write.h`).
   [NETWORK.uk.md](NETWORK.uk.md), [UI.uk.md](UI.uk.md).
 - **Файли.** Розділ `data` (LittleFS) несе вихід збірки: `board.json`, `bindings.json`,
   `ui.json`, вебінтерфейс, заводський `eq.json`. Файли користувача — `eq.json`,
   `eq_custom.json`, `stations.json`, `last_track`, `devices.json` — живуть у розділі
   `userdata`, який `idf.py flash` не переписує; доступ — через `UserStore`
-  (`components/user_store`).
+  (`components/user_store`). Поруч із ними `logos/` тримає логотипи пресетів — кеш, який радіо
+  саме наповнює й чистить ([NETWORK.uk.md](NETWORK.uk.md), «Обкладинки й логотипи»).
 
 ### Модулі продукту
 

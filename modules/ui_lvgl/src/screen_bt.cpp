@@ -37,7 +37,7 @@ using i18n::tr;
 constexpr int32_t COL_GAP = 16;
 constexpr int32_t COL_W   = (uig::CONT_W - COL_GAP) / 2;      // 368
 constexpr int32_t COL2_X  = COL_W + COL_GAP;
-// Rows, chips and buttons a finger's 64 px (the glass for a finger, 20.10.2026: 56, 32 and 40-48).
+// Rows, chips and buttons a finger's 64 px.
 constexpr int32_t CAP_H   = 24;
 constexpr int32_t RH      = 64;
 constexpr int32_t INSET   = 2;
@@ -151,7 +151,6 @@ lv_obj_t* row(lv_obj_t* card, int i, RowId id, const char* sym, const char* titl
 lv_obj_t* toggle(lv_obj_t* r, lv_event_cb_t cb) {
     lv_obj_t* sw = m3w::switch_m3(r, RW - 52 - 14, (RH - 32) / 2, false);
     lv_obj_add_event_cb(sw, cb, LV_EVENT_VALUE_CHANGED, nullptr);
-    m3w::switch_row(r, sw);
     return sw;
 }
 

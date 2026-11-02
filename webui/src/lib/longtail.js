@@ -16,11 +16,10 @@ export const SHOWN = [
   // Player, Source
   'audio.source', 'audio.volume', 'audio.mute',
   'radio.state', 'radio.name', 'radio.now_playing', 'radio.format', 'radio.fav_add',
-  'airplay.active_mode_label',
   // DSP, and the sound (Player's sheet, Налаштування › Звук)
   'audio.eq_enabled', 'audio.loudness', 'audio.loud_db', 'audio.bass_db', 'audio.treble_db',
   'audio.vol_max', 'audio.vol_start',
-  // Налаштування › Колонки (S6)
+  // Налаштування › Колонки
   'audio.balance_db10',
   // System
   'ui.backlight', 'ui.standby_bl', 'radio.covers',
@@ -31,7 +30,7 @@ export const SHOWN = [
   'audio.dsp_max_pct', 'audio.eq_headroom_db', 'audio.out_clamps', 'audio.dsp_faults',
   'audio.bt_clock_follow',
   'system.uptime', 'system.boot_reason', 'system.main_stack_min', 'system.stalled',
-  'system.safe_mode', 'system.main_loop_max_ms', 'system.heap_free', 'system.heap_min',
+  'system.safe_mode', 'system.main_loop_max_ms', 'system.heap_free',
   // Service › Calibration: the speakers' port
   'audio.port_hz', 'audio.port_meas', 'audio.port_meas_ch',
   'audio.port_meas_status', 'audio.port_meas_hz',
@@ -54,8 +53,8 @@ export const VIA = {
 /** Left out on purpose. */
 export const DROPPED = [
   // The cards "Відтворення", "DSP" and "Діагностика" of the generated Audio page carry nothing a
-  // person acts on (customer, 12.10.2026): the source and the volume are on the Player, the EQ
-  // on DSP, the load and the underruns in Service's figures.
+  // person acts on: the source and the volume are on the Player, the EQ on DSP, the load and the
+  // underruns in Service's figures.
   'audio.state', 'audio.eq_reload',
   'audio.in_l', 'audio.in_r', 'audio.level_l', 'audio.level_r', 'audio.in_rate', 'audio.asrc_ppm',
   // The generated catalog card's query language ("top:UA", "play row N"): Stations › catalog
@@ -65,9 +64,14 @@ export const DROPPED = [
   'radio.cat_play', 'radio.cat_fav',
   // Never written by the firmware (wifi_service.cpp); the Wi-Fi page shows the scan's signal.
   'wifi.rssi',
-  // The amplifier's ceiling, the drive into it and the bass power cap (customer, 18.10.2026):
-  // «Максимум» is the one limit a person sets, and these stay what the datasheet gives.
+  // The amplifier's ceiling, the drive into it and the bass power cap: «Максимум» is the one
+  // limit a person sets, and these stay what the datasheet gives.
   'audio.amp_clip_db10', 'audio.amp_cal', 'audio.ceiling_dbfs', 'audio.drive_db', 'audio.rms_cap_db10',
+  // The whole heap's minimum counts the free PSRAM too, tens of MB, so it can never warn:
+  // Service shows the lowest free internal RAM (system.heap_internal_min) in its place.
+  'system.heap_min',
+  // The mode the stopped receiver runs in: System's AirPlay row has the mode and its status.
+  'airplay.active_mode_label',
 ];
 
 /**

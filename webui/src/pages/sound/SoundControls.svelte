@@ -4,7 +4,7 @@
   // sheet and Налаштування › Звук (`page`), of which the sheet is a shortcut to the top. The
   // presets are the EQ document's (lib/eq.js), so a choice here is the panel's at once, and the
   // other way round; they are a dropdown (SoundPick), as on the equalizer's page. No captions,
-  // resets or notes beyond what a control needs (the customer, 15–16.10.2026).
+  // resets or notes beyond what a control needs.
   import { onMount, onDestroy } from 'svelte';
   import { state } from '../../stores/state.js';
   import { t, fmt } from '../../stores/i18n.js';
@@ -46,11 +46,15 @@
   const treble = createSettingSender('audio.treble_db', { debounceMs: 120, live: true });
   const loudness = createSettingSender('audio.loudness', { debounceMs: 0 });
   const eqEnabled = createSettingSender('audio.eq_enabled', { debounceMs: 0 });
-  // the volume's two (S4), on the page only
+  // the volume's two, on the page only
   const volMaxS = createSettingSender('audio.vol_max', { debounceMs: 150, live: true });
   const volStartS = createSettingSender('audio.vol_start', { debounceMs: 0 });
   const START_STEPS = [0, 10, 20, 30, 40, 50];     // 0: as it was
   let startOpen = false;
+  // «Вирівнювання гучності» by the clock, on the page only; the switch itself is the Player's moon
+  const levSchedS = createSettingSender('audio.lev_sched', { debounceMs: 0 });
+  const levFromS = createSettingSender('audio.lev_from', { debounceMs: 0 });
+  const levToS = createSettingSender('audio.lev_to', { debounceMs: 0 });
 
   $: eqOn = s['audio.eq_enabled'] ?? true;
   $: bassDb = s['audio.bass_db'] ?? 0;
@@ -59,20 +63,30 @@
   $: volMax = s['audio.vol_max'] ?? 100;
   $: volStart = s['audio.vol_start'] ?? 0;
   $: startText = volStart ? fmt($t['sound.vol_start_n'], { n: volStart }) : $t['sound.vol_start_any'];
+  $: levSched = !!s['audio.lev_sched'];
+  $: levFrom = s['audio.lev_from'] ?? 22 * 60;
+  $: levTo = s['audio.lev_to'] ?? 7 * 60;
+
+  // minutes of the day ↔ the time field's "HH:MM"; the manifest's step is 5 minutes
+  const hhmm = (m) => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
+  // The field is set to the time the schedule keeps: the typed one on the step, or the stored one
+  // when it was emptied. Svelte rewrites it only when the stored time changes, so a time that
+  // rounds to the one already kept, or an empty field, would otherwise stay as typed.
+  function sendTime(sender, field, stored) {
+    const [h, m] = String(field.value).split(':').map(Number);
+    let kept = stored;
+    if (Number.isFinite(h) && Number.isFinite(m)) {
+      kept = Math.min(1435, Math.round((h * 60 + m) / 5) * 5);
+      sender.send(kept);
+    }
+    field.value = hhmm(kept);
+  }
   $: eqValue = !eqOn ? $t['sys.eq_off'] : d ? soundName($t, d.preset) : '';
 
-  // The loudness off writes 0; the strength it had is kept in this browser and comes back with it
-  // on (as the Player's chip did before S3).
-  const LOUD_KEY = 'p4-loudness';
+  // The loudness off writes 0; on puts back the strength it had, which the panel keeps
+  // (audio.loud_back), so the glass and every browser put back the same one.
   function toggleLoudness(on) {
-    if (!on) {
-      try { localStorage.setItem(LOUD_KEY, String(loud)); } catch (e) { /* storage blocked */ }
-      loudness.send(0);
-      return;
-    }
-    let back = 70;
-    try { back = Number(localStorage.getItem(LOUD_KEY)) || 70; } catch (e) { /* storage blocked */ }
-    loudness.send(back);
+    loudness.send(on ? s['audio.loud_back'] || 70 : 0);
   }
 
   function hidden() {
@@ -87,7 +101,7 @@
     document.removeEventListener('visibilitychange', hidden);
     window.removeEventListener('pagehide', eq.keep);
     eq.keep();                      // a sound chosen here is written as the sheet closes
-    [bass, treble, loudness, eqEnabled, volMaxS, volStartS].forEach((x) => x.cleanup());
+    [bass, treble, loudness, eqEnabled, volMaxS, volStartS, levSchedS, levFromS, levToS].forEach((x) => x.cleanup());
   });
 </script>
 
@@ -120,7 +134,7 @@
 <div class="rule"></div>
 
 {#if page}
-  <!-- «Максимум» compresses the scale: 100 % from any client is this (S4) -->
+  <!-- «Максимум» compresses the scale: 100 % from any client is this -->
   <h3 class="cap">{$t['sound.volume']}</h3>
   <Slider name={$t['sound.vol_max']} label={$t['sound.vol_max']} min={40} max={100} step={5} value={volMax}
           format={(v) => `${v} %`} on:input={(e) => volMaxS.send(e.detail)} undo={(v) => volMaxS.send(v)} />
@@ -129,6 +143,23 @@
     <span class="eq-v">{startText}</span>
     <Icon name="chevron_right" size={20} />
   </button>
+  <div class="rule"></div>
+
+  <h3 class="cap">{$t['sound.leveler']}</h3>
+  <div class="sw">
+    <span class="sw-txt">{$t['sound.lev_sched']}</span>
+    <Switch checked={levSched} label={$t['sound.lev_sched']} on:change={(e) => levSchedS.send(e.detail)} />
+  </div>
+  {#if levSched}
+    <label class="eq">
+      <span class="eq-t">{$t['sound.lev_from']}</span>
+      <input class="time" type="time" step="300" value={hhmm(levFrom)} on:change={(e) => sendTime(levFromS, e.currentTarget, levFrom)} />
+    </label>
+    <label class="eq">
+      <span class="eq-t">{$t['sound.lev_to']}</span>
+      <input class="time" type="time" step="300" value={hhmm(levTo)} on:change={(e) => sendTime(levToS, e.currentTarget, levTo)} />
+    </label>
+  {/if}
   <div class="rule"></div>
 {/if}
 
@@ -192,6 +223,17 @@
   }
   .eq-t { flex: 1; font-size: 16px; }
   .eq-v { font-size: 15px; color: var(--on-surface-var); }
+  .time {
+    min-height: 40px;
+    padding: 0 12px;
+    border: 1px solid var(--outline-var);
+    border-radius: var(--r-s);
+    background: none;
+    color: var(--on-surface);
+    font: inherit;
+    font-size: 16px;
+    color-scheme: light dark;
+  }
   .eq :global(.ms) { color: var(--on-surface-var); }
   .card {
     display: flex;

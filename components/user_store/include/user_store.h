@@ -2,19 +2,18 @@
  * @file user_store.h
  * @brief Where a person's own files live, and how they got out of the build's way.
  *
- * Until 22.09.2026 the firmware wrote what someone makes — the EQ they tuned, their station
- * list, the track to resume, the BLE devices they subscribed — into `/data`, the same
- * LittleFS partition the build fills with board.json, ui.json and the web bundle. `idf.py
- * flash` rewrites that partition whole, and a board.json change needs a full flash because
- * board.json is not in the app. So every board.json change destroyed all of it. Measured on
- * 18.09.2026 (an EQ with two active bands and a six-station list, none of it in git) and
- * again on 22.09.2026 while fixing the I2S slot width.
+ * The firmware used to write what someone makes — the EQ they tuned, their station list,
+ * the track to resume, the BLE devices they subscribed — into `/data`, the same LittleFS
+ * partition the build fills with board.json, ui.json and the web bundle. `idf.py flash`
+ * rewrites that partition whole, and a board.json change needs a full flash because
+ * board.json is not in the app. So every board.json change destroyed all of it: twice on
+ * this panel, once an EQ with two active bands and a six-station list, none of it in git.
  *
  * `tools/user_data.py` made that survivable by reading the panel before a flash and seeding
  * the files back into the image. Its own docstring says what this class is: "the fix is to
  * stop storing user files next to build output."
  *
- * So there are two partitions now (plan item 11.1, partitions_p4_16mb.csv):
+ * So there are two partitions (partitions_p4_16mb.csv):
  *
  *   data      build output   rewritten by every `idf.py flash`
  *   userdata  a person's own NO image in the build, so a flash never touches it

@@ -4,6 +4,7 @@
  */
 
 #include "modesp/net/http_service.h"
+#include "modesp/net/http_routes.h"
 #include "modesp/shared_state.h"
 #include "modesp/module_manager.h"
 #include "modesp/app.h"                // MODESP_WDT_TIMEOUT_MS
@@ -23,6 +24,7 @@
 #include "esp_system.h"
 #include "nvs_flash.h"
 #include "modesp/services/device_id.h"
+#include "modesp/services/ota_handler.h"   // the one update at a time, shared with MQTT `_ota`
 #include "esp_ota_ops.h"
 #include "esp_app_format.h"
 #include "esp_sntp.h"
@@ -30,15 +32,22 @@
 #include "mbedtls/base64.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "freertos/semphr.h"
 #include "esp_heap_caps.h"
+#include "esp_rom_crc.h"
 
 #include "state_meta.h"
 #include "jsmn.h"
+#include "jsmn_util.h"           // player-fork: span(), a value stepped over whole
 #include "modesp/net/json_escape.h"
+#include "modesp/net/key_write.h"
+#include "modesp/net/state_json.h"
 
 #include <cstdio>
 #include <cstring>
 #include <ctime>
+#include <initializer_list>
+#include <strings.h>
 #include <new>
 #include <sys/time.h>
 #include <sys/stat.h>
@@ -76,7 +85,33 @@ void HttpService::save_auth_to_nvs() {
     ESP_LOGI(TAG, "Auth saved (user='%s', enabled=%d)", s_auth_user, s_auth_enabled);
 }
 
+// A page on another site can make the browser POST here without reading the answer, but only
+// with the content types an HTML form can send (a CORS "simple" request) or with none at all -
+// enough to reset or reflash the panel while the login is off. So a POST must name
+// application/json, or application/octet-stream (the OTA upload): with either the browser asks
+// first with a preflight, which this server never grants. Answered 415 here when it does not.
+static bool post_type_ok(httpd_req_t* req) {
+    if (req->method != HTTP_POST) return true;
+    char type[40] = {};
+    const esp_err_t err = httpd_req_get_hdr_value_str(req, "Content-Type", type, sizeof(type));
+    if (err == ESP_OK || err == ESP_ERR_HTTPD_RESULT_TRUNC) {
+        for (const char* ok : {"application/json", "application/octet-stream"}) {
+            const size_t n = strlen(ok);
+            if (strncasecmp(type, ok, n) == 0 &&
+                (type[n] == '\0' || type[n] == ';' || type[n] == ' ')) {
+                return true;
+            }
+        }
+    }
+    ESP_LOGW(TAG, "POST %s refused: Content-Type '%s'", req->uri, type);
+    http_routes::send_json(req, "415 Unsupported Media Type", "{\"error\":\"content_type\"}");
+    return false;
+}
+
 bool HttpService::check_auth(httpd_req_t* req) {
+    // Every route that changes something comes through here first, the login or not.
+    if (!post_type_ok(req)) return false;
+
     // Якщо auth вимкнено — пропускаємо
     if (!s_auth_enabled) return true;
 
@@ -181,12 +216,6 @@ void HttpService::set_cors_headers(httpd_req_t* req) {
     (void)req;
 }
 
-esp_err_t HttpService::handle_options(httpd_req_t* req) {
-    set_cors_headers(req);
-    httpd_resp_send(req, nullptr, 0);
-    return ESP_OK;
-}
-
 // Helper: read a file from LittleFS into buffer, return bytes read or -1
 static int read_file_to_buf(const char* path, char* buf, size_t buf_size) {
     FILE* f = fopen(path, "r");
@@ -197,42 +226,8 @@ static int read_file_to_buf(const char* path, char* buf, size_t buf_size) {
     return len;
 }
 
-// A value outside the manifest range is clamped, never silently: the range is the manifest's
-// word, and a request past it is either a client bug or a manifest that lags the code (an
-// audio.source of 4 landed on 3 for a while because the options stopped at Bluetooth).
-static void log_clamp(const char* where, const char* key, double requested, double clamped,
-                      const gen::StateMeta* meta) {
-    ESP_LOGW(TAG, "%s: %s=%g is outside [%g..%g], clamped to %g",
-             where, key, requested, (double)meta->min_val, (double)meta->max_val, clamped);
-}
-
-// Context for SharedState serialization
-struct SerCtx {
-    char* buf;
-    size_t size;
-    size_t pos;
-    bool first;
-    bool failed;
-
-    size_t remaining() const { return (pos < size) ? size - pos : 0; }
-};
-
 /// Deliver a write to a command key to the module the manifest says owns it. Returns false
 /// when the key is an ordinary state key, and the caller stores it as before.
-/// A serialisation buffer, from PSRAM, allocated once and kept.
-///
-/// It has to be 8 KB now (a `long` value is up to 256 characters rather than the 63 the old
-/// escape buffer allowed), and 8 KB of internal .bss would give back a chunk of what stage 7
-/// just freed. Nothing here is DMA: the send copies out of it. Allocated on first use rather
-/// than per request, so a request never pays for an allocation, and never on the stack - the
-/// tasks that reach this have 8 KB of it.
-static char* json_scratch(size_t bytes) {
-    static char* p = static_cast<char*>(heap_caps_calloc_prefer(
-        1, bytes, 2, MALLOC_CAP_SPIRAM  | MALLOC_CAP_8BIT,
-                     MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT));
-    return p;
-}
-
 static bool post_if_command(modesp::ModuleManager* modules, const char* key, int32_t value) {
     const auto* cmd = gen::find_state_command(key);
     if (!cmd) return false;
@@ -250,41 +245,30 @@ static bool post_if_command(modesp::ModuleManager* modules, const char* key, int
     return true;
 }
 
-static void serialize_state_entry(const StateKey& key, const StateValue& value,
-                                  const char* text, void* ud) {
-    auto* ctx = static_cast<SerCtx*>(ud);
-    if (ctx->failed) return;
+/// How a jsmn value token reaches key_write(). False for an object or an array: no key takes one,
+/// and the keys inside it are not settings.
+static bool json_value_from(const jsmntok_t& tok, net::ValueFrom& from) {
+    if (tok.type == JSMN_STRING)    { from = net::ValueFrom::JSON_STRING;    return true; }
+    if (tok.type == JSMN_PRIMITIVE) { from = net::ValueFrom::JSON_PRIMITIVE; return true; }
+    return false;
+}
 
-    const char* sep = ctx->first ? "" : ",";
-    int n = -1;
-
-    if (etl::holds_alternative<float>(value)) {
-        n = snprintf(ctx->buf + ctx->pos, ctx->remaining(),
-                             "%s\"%s\":%.2f", sep, key.c_str(),
-                             static_cast<double>(etl::get<float>(value)));
-    } else if (etl::holds_alternative<int32_t>(value)) {
-        n = snprintf(ctx->buf + ctx->pos, ctx->remaining(),
-                             "%s\"%s\":%ld", sep, key.c_str(),
-                             (long)etl::get<int32_t>(value));
-    } else if (etl::holds_alternative<bool>(value)) {
-        n = snprintf(ctx->buf + ctx->pos, ctx->remaining(),
-                             "%s\"%s\":%s", sep, key.c_str(),
-                             etl::get<bool>(value) ? "true" : "false");
-    } else if (etl::holds_alternative<StringValue>(value)) {
-        // AUDIT-004: ескейпимо string значення для коректного JSON
-        // From `text`, not from the variant: for a long key the variant holds the inline
-        // prefix only. The buffer is the side table's capacity plus room for the escapes,
-        // so a track path reaches the browser whole — it used to stop at 63 characters.
-        char escaped[net::json_escaped_capacity(MODESP_MAX_LONG_STRING_LENGTH)];
-        if (!net::json_escape(escaped, sizeof(escaped), text ? text : "")) {
-            ctx->failed = true;
-            return;
-        }
-        n = snprintf(ctx->buf + ctx->pos, ctx->remaining(),
-                             "%s\"%s\":\"%s\"", sep, key.c_str(), escaped);
+/// Store what key_write() made of a value — or, with `commands`, post it when the key is a
+/// command. False when it was refused.
+static bool store_write(SharedState* state, ModuleManager* modules, const char* key,
+                        const net::KeyWrite& w, bool commands) {
+    switch (w.kind) {
+    case net::KeyWrite::INT:
+        // A command key is an event for a module, not a value in the store: it goes to that
+        // module's queue after the same range check (STATE_COMMANDS, BaseModule::post_command()).
+        if (commands && post_if_command(modules, key, w.i)) return true;
+        state->set(key, w.i);
+        return true;
+    case net::KeyWrite::FLOAT:  state->set(key, w.f); return true;
+    case net::KeyWrite::BOOL:   state->set(key, w.b); return true;
+    case net::KeyWrite::STRING: state->set(key, w.s); return true;
+    default:                    return false;
     }
-    if (n < 0 || static_cast<size_t>(n) >= ctx->remaining()) ctx->failed = true;
-    else { ctx->pos += static_cast<size_t>(n); ctx->first = false; }
 }
 
 // ── API Handlers ────────────────────────────────────────────────
@@ -293,30 +277,21 @@ esp_err_t HttpService::handle_get_state(httpd_req_t* req) {
     if (!check_auth(req)) return ESP_OK;
     auto* self = static_cast<HttpService*>(req->user_ctx);
 
-    // Room for every declared long value even when every byte needs six JSON bytes,
-    // plus the short keys. Overflow is still an explicit 500, never partial JSON.
-    // The HTTP server has one task; json_scratch() keeps this buffer in PSRAM.
-    constexpr size_t BUF_SIZE = 81920;
-    char* buf = json_scratch(BUF_SIZE);
+    char* buf = net::state_json_buffer_httpd();
     if (!buf) {
         httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Out of memory");
         return ESP_FAIL;
     }
-    SerCtx ctx = {buf, BUF_SIZE, 0, true, false};
-    ctx.pos += snprintf(buf, BUF_SIZE, "{");
-
-    self->state_->for_each(serialize_state_entry, &ctx);
-
-    if (ctx.failed || ctx.remaining() < 2) {
+    net::StateJson ctx = net::state_json_begin(buf, net::STATE_JSON_SIZE);
+    self->state_->for_each(net::state_json_entry, &ctx);
+    if (!net::state_json_end(ctx)) {
         // Say so rather than send half an object: whoever added the key that overflowed it
         // needs to see this line, not a JSON error in a browser console.
         ESP_LOGE(TAG, "GET /api/state: %u keys did not fit %u bytes",
-                 (unsigned)self->state_->size(), (unsigned)BUF_SIZE);
+                 (unsigned)self->state_->size(), (unsigned)net::STATE_JSON_SIZE);
         httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "state too large");
         return ESP_FAIL;
     }
-    buf[ctx.pos++] = '}';
-    buf[ctx.pos] = '\0';
 
     set_cors_headers(req);
     httpd_resp_set_type(req, "application/json");
@@ -324,6 +299,7 @@ esp_err_t HttpService::handle_get_state(httpd_req_t* req) {
     return ESP_OK;
 }
 
+#if CONFIG_MODESP_HTTP_FRAMEWORK_ROUTES   // the ModESP framework's routes (Kconfig)
 esp_err_t HttpService::handle_get_board(httpd_req_t* req) {
     if (!check_auth(req)) return ESP_OK;
     FILE* f = fopen("/data/board.json", "rb");
@@ -356,9 +332,105 @@ esp_err_t HttpService::handle_get_board(httpd_req_t* req) {
     heap_caps_free(buf);
     return rc;
 }
+#endif  // CONFIG_MODESP_HTTP_FRAMEWORK_ROUTES
+
+// ── Files from the data partition ───────────────────────────────
+//
+// Sent in 4 KB pieces, each piece being three send() calls (httpd's chunked encoding), and
+// validated: the answer carries an ETag and `Cache-Control: no-cache`, so a browser or the phone
+// app asks again every time and gets 304 with no body while the file is the one it holds. The
+// files change only with a flash of the partition, which restarts the panel, so a file's tag is
+// worked out once per boot.
+
+static constexpr size_t FILE_CHUNK = 4096;
+static constexpr size_t MAX_FILE_TAGS = 64;
+struct FileTag { uint32_t path_hash; uint32_t crc; };
+static FileTag s_file_tags[MAX_FILE_TAGS];
+static size_t s_file_tag_count = 0;
+
+/// A file's chunk buffer: PSRAM, allocated on first use. Only the httpd task sends files, one
+/// request at a time, so one buffer serves them all; null when PSRAM is out.
+static char* file_chunk() {
+    static char* p = nullptr;
+    if (!p) {
+        p = static_cast<char*>(heap_caps_malloc_prefer(FILE_CHUNK, 2, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT,
+                                                       MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT));
+    }
+    return p;
+}
+
+static uint32_t path_hash(const char* path) {
+    uint32_t h = 2166136261u;   // FNV-1a
+    for (; *path; ++path) h = (h ^ static_cast<uint8_t>(*path)) * 16777619u;
+    return h;
+}
+
+/// The CRC-32 of the file's contents, read through `buf` and rewound; from the table after the
+/// first time. False when the file could not be read whole, or the table is full and the file
+/// is not in it — the answer then goes out without a tag.
+static bool file_tag(const char* path, FILE* f, char* buf, size_t size, uint32_t& crc) {
+    const uint32_t h = path_hash(path);
+    for (size_t i = 0; i < s_file_tag_count; i++) {
+        if (s_file_tags[i].path_hash == h) { crc = s_file_tags[i].crc; return true; }
+    }
+    if (s_file_tag_count >= MAX_FILE_TAGS) return false;
+    crc = 0;
+    size_t n;
+    while ((n = fread(buf, 1, size, f)) > 0) crc = esp_rom_crc32_le(crc, reinterpret_cast<uint8_t*>(buf), n);
+    const bool whole = !ferror(f);
+    rewind(f);
+    if (!whole) return false;
+    s_file_tags[s_file_tag_count++] = {h, crc};
+    return true;
+}
+
+/// Send the open file `f` (closed here) as the answer: 304 when the client already holds it,
+/// otherwise the whole file, gzip-encoded when `gz`. The caller has set the content type.
+static esp_err_t send_file(httpd_req_t* req, FILE* f, const char* path, bool gz) {
+    char small[512];
+    char* buf = file_chunk();
+    const size_t size = buf ? FILE_CHUNK : sizeof(small);
+    if (!buf) buf = small;
+
+    char etag[12] = {};
+    uint32_t crc;
+    if (file_tag(path, f, buf, size, crc)) snprintf(etag, sizeof(etag), "\"%08lx\"", (unsigned long)crc);
+    httpd_resp_set_hdr(req, "Cache-Control", "no-cache");
+    if (etag[0]) {
+        httpd_resp_set_hdr(req, "ETag", etag);
+        char held[48];
+        if (httpd_req_get_hdr_value_str(req, "If-None-Match", held, sizeof(held)) == ESP_OK &&
+            strstr(held, etag)) {
+            fclose(f);
+            httpd_resp_set_status(req, "304 Not Modified");
+            return httpd_resp_send(req, nullptr, 0);
+        }
+    }
+    if (gz) httpd_resp_set_hdr(req, "Content-Encoding", "gzip");
+
+    size_t n;
+    while ((n = fread(buf, 1, size, f)) > 0) {
+        if (httpd_resp_send_chunk(req, buf, n) != ESP_OK) {
+            fclose(f);
+            httpd_resp_send_chunk(req, nullptr, 0);
+            return ESP_FAIL;
+        }
+    }
+    fclose(f);
+    return httpd_resp_send_chunk(req, nullptr, 0);
+}
 
 esp_err_t HttpService::handle_get_ui(httpd_req_t* req) {
-    FILE* f = fopen("/data/ui.json", "r");
+    // The build writes ui.json.gz beside ui.json (CMakeLists.txt): about 12 KB for 86, on the
+    // load of every page and every start of the phone app.
+    const char* path = "/data/ui.json.gz";
+    bool gz = true;
+    FILE* f = fopen(path, "r");
+    if (!f) {
+        path = "/data/ui.json";
+        gz = false;
+        f = fopen(path, "r");
+    }
     if (!f) {
         httpd_resp_send_err(req, HTTPD_404_NOT_FOUND, "ui.json not found");
         return ESP_FAIL;
@@ -366,20 +438,7 @@ esp_err_t HttpService::handle_get_ui(httpd_req_t* req) {
 
     set_cors_headers(req);
     httpd_resp_set_type(req, "application/json");
-
-    // Стрімінг файлу чанками — ui.json може бути >4KB
-    char buf[512];
-    size_t read_bytes;
-    while ((read_bytes = fread(buf, 1, sizeof(buf), f)) > 0) {
-        if (httpd_resp_send_chunk(req, buf, read_bytes) != ESP_OK) {
-            fclose(f);
-            httpd_resp_send_chunk(req, nullptr, 0);
-            return ESP_FAIL;
-        }
-    }
-    fclose(f);
-    httpd_resp_send_chunk(req, nullptr, 0);
-    return ESP_OK;
+    return send_file(req, f, path, gz);
 }
 
 esp_err_t HttpService::handle_get_bindings(httpd_req_t* req) {
@@ -456,7 +515,7 @@ esp_err_t HttpService::handle_post_bindings(httpd_req_t* req) {
     // rename it over the old one: a rejected upload leaves bindings.json as it was, and a
     // power cut mid-write leaves a .new file instead of a half-written config.
     //
-    // The sequence itself now lives in components/safe_file (plan item 11.2) so that the EQ,
+    // The sequence itself lives in components/safe_file so that the EQ,
     // the station list and the resume point get the same one instead of three near-copies.
     // What stays here is the part that is specific to this endpoint: the validator IS the
     // boot parser, so a file this handler accepts is a file the next boot can read.
@@ -489,6 +548,7 @@ esp_err_t HttpService::handle_post_bindings(httpd_req_t* req) {
     return ESP_OK;
 }
 
+#if CONFIG_MODESP_HTTP_FRAMEWORK_ROUTES   // the ModESP framework's routes (Kconfig)
 // Runtime device registry (/data/devices.json). User-subscribed remote devices (BLE by MAC
 // today; transport-generic) — the runtime-writable sibling of board.json remote_devices. GET/POST
 // mirror the bindings handlers; ConfigService merges the file into the device inventory at boot
@@ -600,7 +660,7 @@ esp_err_t HttpService::handle_post_devices(httpd_req_t* req) {
         return ESP_FAIL;
     }
 
-    // Same write -> read back -> rename as bindings (plan item 11.2). This one used to be a
+    // Same write -> read back -> rename as bindings. This one used to be a
     // plain fopen("w") + fwrite: it truncated the live registry before the first byte of the
     // new one arrived, so a reset in between left a half-written file. ConfigService only
     // WARNs about an unusable devices.json and carries on, so the loss would have been
@@ -621,8 +681,10 @@ esp_err_t HttpService::handle_post_devices(httpd_req_t* req) {
     httpd_resp_sendstr(req, "{\"ok\":true,\"needs_restart\":true}");
     return ESP_OK;
 }
+#endif  // CONFIG_MODESP_HTTP_FRAMEWORK_ROUTES
 
 // Callback context for module serialization
+#if CONFIG_MODESP_HTTP_FRAMEWORK_ROUTES   // the ModESP framework's routes (Kconfig)
 struct ModSerCtx {
     char* buf;
     size_t size;
@@ -674,20 +736,17 @@ esp_err_t HttpService::handle_get_modules(httpd_req_t* req) {
     httpd_resp_send(req, buf, (ssize_t)ctx.pos);
     return ESP_OK;
 }
+#endif  // CONFIG_MODESP_HTTP_FRAMEWORK_ROUTES
 
 esp_err_t HttpService::handle_post_settings(httpd_req_t* req) {
     if (!check_auth(req)) return ESP_OK;
     auto* self = static_cast<HttpService*>(req->user_ctx);
 
-    // 512B: один ключ до 32 chars + float = ~40B → вміщує до ~12 пар за раз.
-    // 32 tokens: 1 об'єкт + 2 tokens/пара × 15 пар = 31 tokens — з запасом.
-    char buf[512];
-    int len = httpd_req_recv(req, buf, sizeof(buf) - 1);
-    if (len <= 0) {
-        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Empty body");
-        return ESP_FAIL;
-    }
-    buf[len] = '\0';
+    // 1 KB: up to 15 pairs (32 tokens: the object + 2 per pair) even with long string values -
+    // a station preset (four radio.web_* keys and the command) is ~420 B.
+    char buf[1024];
+    const int len = http_routes::read_small_body(req, buf, sizeof(buf));
+    if (len < 0) return ESP_FAIL;
 
     // Parse with jsmn
     jsmn_parser parser;
@@ -702,8 +761,19 @@ esp_err_t HttpService::handle_post_settings(httpd_req_t* req) {
     int accepted = 0;
     int rejected = 0;
 
-    for (int i = 1; i + 1 < r; i += 2) {
+    // player-fork: each value stepped over whole (jsmn_util::span), as /api/restore does. Two
+    // tokens per key fitted only plain values: past an object or an array the walk took the keys
+    // inside it for settings of their own ({"x":["audio.volume",7]} set the volume to 7). Such a
+    // value is refused with its key (json_value_from() takes no object or array); a key jsmn let
+    // close with no value, as in {"a":}, is refused alone.
+    for (int i = 1, next = 1; i < r; i = next) {
+        const bool has_value = tokens[i].size == 1 && i + 1 < r;
+        next = has_value ? i + 1 + jsmn_util::span(tokens, r, i + 1) : i + 1;
         if (tokens[i].type != JSMN_STRING) continue;
+        if (!has_value) {
+            rejected++;
+            continue;
+        }
 
         const char* key_str = buf + tokens[i].start;
         const jsmntok_t& val_tok = tokens[i + 1];
@@ -711,7 +781,6 @@ esp_err_t HttpService::handle_post_settings(httpd_req_t* req) {
         // Null-terminate key and value in-place
         buf[tokens[i].end] = '\0';
         buf[val_tok.end] = '\0';
-        const char* val_str = buf + val_tok.start;
 
         // Валідація через state_meta — тільки відомі writable ключі
         const auto* meta = gen::find_state_meta(key_str);
@@ -720,38 +789,18 @@ esp_err_t HttpService::handle_post_settings(httpd_req_t* req) {
             rejected++;
             continue;
         }
-
-        if (val_tok.type == JSMN_PRIMITIVE) {
-            // BUG-023 fix: використовуємо meta->type замість евристики з крапкою.
-            // JavaScript може відправити "5" (без крапки) для float параметра,
-            // що ламало persist (etl::get_if<float> на int32_t = nullptr).
-            if (val_str[0] == 't' || val_str[0] == 'f') {
-                self->state_->set(key_str, val_str[0] == 't');
-                accepted++;
-            } else if (strcmp(meta->type, "float") == 0) {
-                float fval = static_cast<float>(atof(val_str));
-                const float f_req = fval;
-                if (fval < meta->min_val) fval = meta->min_val;
-                if (fval > meta->max_val) fval = meta->max_val;
-                if (fval != f_req) log_clamp("POST /settings", key_str, (double)f_req, (double)fval, meta);
-                self->state_->set(key_str, fval);
-                accepted++;
-            } else {
-                int32_t ival = static_cast<int32_t>(atoi(val_str));
-                const int32_t i_req = ival;
-                if (static_cast<float>(ival) < meta->min_val) ival = static_cast<int32_t>(meta->min_val);
-                if (static_cast<float>(ival) > meta->max_val) ival = static_cast<int32_t>(meta->max_val);
-                if (ival != i_req) log_clamp("POST /settings", key_str, (double)i_req, (double)ival, meta);
-                // A command key is an event for a module, not a value in the store: it goes
-                // to that module's queue after the same range check. See STATE_COMMANDS in
-                // the generated state_meta.h, and BaseModule::post_command().
-                if (post_if_command(self->modules_, key_str, ival)) { accepted++; continue; }
-                self->state_->set(key_str, ival);
-                accepted++;
-            }
-        } else if (val_tok.type == JSMN_STRING) {
-            self->state_->set(key_str, val_str);
+        net::ValueFrom from;
+        if (!json_value_from(val_tok, from)) {
+            ESP_LOGW(TAG, "POST /settings: rejected '%s' (an object or an array)", key_str);
+            rejected++;
+            continue;
+        }
+        if (store_write(self->state_, self->modules_, key_str,
+                        net::key_write(*meta, key_str, buf + val_tok.start, from, "POST /settings"),
+                        true)) {
             accepted++;
+        } else {
+            rejected++;
         }
     }
 
@@ -772,12 +821,8 @@ esp_err_t HttpService::handle_post_wifi(httpd_req_t* req) {
     auto* self = static_cast<HttpService*>(req->user_ctx);
 
     char buf[256];
-    int len = httpd_req_recv(req, buf, sizeof(buf) - 1);
-    if (len <= 0) {
-        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Empty body");
-        return ESP_FAIL;
-    }
-    buf[len] = '\0';
+    const int len = http_routes::read_small_body(req, buf, sizeof(buf));
+    if (len < 0) return ESP_FAIL;
 
     jsmn_parser parser;
     jsmntok_t tokens[8];
@@ -824,9 +869,14 @@ esp_err_t HttpService::handle_post_wifi(httpd_req_t* req) {
         httpd_resp_sendstr(req, "{\"ok\":true,\"forget\":true}");
         return ESP_OK;
     }
+    // player-fork: what a wifi_config_t holds — an SSID of 32 bytes, a password of up to 64 (64
+    // is a raw hex PSK) — for a save as for a join. A save took any length: an SSID over 32 bytes
+    // then failed to load at boot, which brought the access point up, and a longer password read
+    // back empty.
+    const bool fits = ssid && ssid[0] && strlen(ssid) < sizeof(self->wifi_join_ssid_) &&
+                      (!pass || strlen(pass) < sizeof(self->wifi_join_pass_));
     if (self->wifi_ && join) {
-        if (!ssid || !ssid[0] || strlen(ssid) >= sizeof(self->wifi_join_ssid_) ||
-            (pass && strlen(pass) >= sizeof(self->wifi_join_pass_))) {
+        if (!fits) {
             httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "ssid 1..32, password up to 64");
             return ESP_FAIL;
         }
@@ -850,6 +900,10 @@ esp_err_t HttpService::handle_post_wifi(httpd_req_t* req) {
 
     if (!ssid || !self->wifi_) {
         httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Missing ssid");
+        return ESP_FAIL;
+    }
+    if (!fits) {
+        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "ssid 1..32, password up to 64");
         return ESP_FAIL;
     }
 
@@ -918,22 +972,25 @@ esp_err_t HttpService::handle_get_wifi_scan(httpd_req_t* req) {
     // Serialize to JSON.
     // player-fork: twenty names escaped (up to six bytes for one) do not fit the 2 KB this had,
     // and a name with " in it broke the whole list, so the names are escaped and every entry
-    // goes in whole or not at all. Static: the server runs one handler at a time, and this is
-    // more than its stack should carry.
-    static char buf[64 + WiFiService::MAX_SCAN_RESULTS * (net::json_escaped_capacity(32) + 48)];
-    size_t pos = (size_t)snprintf(buf, sizeof(buf), "{\"ok\":true,\"networks\":[");
+    // goes in whole or not at all. In PSRAM (http_routes::scratch()): more than the stack
+    // should carry, and more than internal RAM should keep for a page opened now and then.
+    constexpr size_t BUF_SIZE = 64 + WiFiService::MAX_SCAN_RESULTS * (net::json_escaped_capacity(32) + 48);
+    static char* buf_slot = nullptr;
+    char* buf = http_routes::scratch(buf_slot, BUF_SIZE);
+    if (!buf) return http_routes::send_json(req, "503 Service Unavailable", "{\"error\":\"no_memory\"}");
+    size_t pos = (size_t)snprintf(buf, BUF_SIZE, "{\"ok\":true,\"networks\":[");
 
     for (int i = 0; i < count; i++) {
         char ssid[net::json_escaped_capacity(sizeof(results[i].ssid) - 1)];
         if (!net::json_escape(ssid, sizeof(ssid), results[i].ssid)) continue;
-        const size_t room = sizeof(buf) - pos - 3;          // "]}" and the NUL stay free
+        const size_t room = BUF_SIZE - pos - 3;             // "]}" and the NUL stay free
         const int w = snprintf(buf + pos, room, "%s{\"ssid\":\"%s\",\"rssi\":%d,\"auth\":\"%s\"}",
                                i == 0 ? "" : ",", ssid, results[i].rssi,
                                wifi_auth_name(results[i].authmode));
         if (w < 0 || (size_t)w >= room) break;
         pos += (size_t)w;
     }
-    pos += (size_t)snprintf(buf + pos, sizeof(buf) - pos, "]}");
+    pos += (size_t)snprintf(buf + pos, BUF_SIZE - pos, "]}");
 
     set_cors_headers(req);
     httpd_resp_set_type(req, "application/json");
@@ -957,10 +1014,11 @@ esp_err_t HttpService::handle_get_wifi_ap(httpd_req_t* req) {
     }
 
     // Перевірити чи є збережений пароль (не повертаємо сам пароль)
-    char ap_pass[65] = {};
-    if (nvs_helper::read_str("wifi", "ap_pass", ap_pass, sizeof(ap_pass))) {
-        has_password = (strlen(ap_pass) >= 8);
-    }
+    // player-fork: read as start_ap() reads it, so a password too long for the old 65 bytes is
+    // reported as set — the access point is WPA2 with it.
+    char ap_pass[64];
+    WiFiService::read_ap_password(ap_pass);
+    has_password = (strlen(ap_pass) >= 8);
 
     char buf[256];
     char escaped_ssid[net::json_escaped_capacity(sizeof(ap_ssid) - 1)];
@@ -983,12 +1041,8 @@ esp_err_t HttpService::handle_get_wifi_ap(httpd_req_t* req) {
 esp_err_t HttpService::handle_post_wifi_ap(httpd_req_t* req) {
     if (!check_auth(req)) return ESP_OK;
     char buf[256];
-    int len = httpd_req_recv(req, buf, sizeof(buf) - 1);
-    if (len <= 0) {
-        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Empty body");
-        return ESP_FAIL;
-    }
-    buf[len] = '\0';
+    const int len = http_routes::read_small_body(req, buf, sizeof(buf));
+    if (len < 0) return ESP_FAIL;
 
     jsmn_parser parser;
     jsmntok_t tokens[12];
@@ -1023,15 +1077,18 @@ esp_err_t HttpService::handle_post_wifi_ap(httpd_req_t* req) {
         else if (strcmp(key, "channel") == 0) channel = atoi(val);
     }
 
-    if (!ssid || strlen(ssid) == 0) {
-        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Missing or empty ssid");
+    // player-fork: an SSID the access point can carry (32 bytes), and a WPA2 passphrase of 8..63
+    // or none. A longer password was stored and answered ok, start_ap() could not read it back,
+    // and the access point came up open while its owner believed it was WPA2.
+    if (!ssid || strlen(ssid) == 0 || strlen(ssid) > 32) {
+        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "SSID must be 1-32 bytes");
         return ESP_FAIL;
     }
 
-    // Пароль: або порожній (open), або >= 8 символів (WPA2)
-    if (password && strlen(password) > 0 && strlen(password) < 8) {
+    // Пароль: або порожній (open), або 8..63 символи (WPA2)
+    if (password && strlen(password) > 0 && (strlen(password) < 8 || strlen(password) > 63)) {
         httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST,
-                            "Password must be empty (open) or at least 8 chars");
+                            "Password must be empty (open) or 8-63 characters");
         return ESP_FAIL;
     }
 
@@ -1151,27 +1208,34 @@ esp_err_t HttpService::handle_get_backup(httpd_req_t* req) {
         size_t rem = sizeof(buf) - pos;
         if (rem < 64) break;
 
+        // player-fork: the separator goes with a value that is written. A key whose value is not
+        // of its manifest type is left out, and it used to take a "," with it: as the first key
+        // that made `{"keys":{,` — a backup nothing could read back.
         const char* sep = first ? "" : ",";
-        first = false;
+        int n = 0;
 
         if (strcmp(meta.type, "float") == 0) {
             const auto* fp = etl::get_if<float>(&val.value());
             if (fp) {
-                pos += snprintf(buf + pos, rem, "%s\"%s\":%.2f",
-                                sep, meta.key, static_cast<double>(*fp));
+                n = snprintf(buf + pos, rem, "%s\"%s\":%.2f",
+                             sep, meta.key, static_cast<double>(*fp));
             }
         } else if (strcmp(meta.type, "int") == 0) {
             const auto* ip = etl::get_if<int32_t>(&val.value());
             if (ip) {
-                pos += snprintf(buf + pos, rem, "%s\"%s\":%ld",
-                                sep, meta.key, (long)*ip);
+                n = snprintf(buf + pos, rem, "%s\"%s\":%ld",
+                             sep, meta.key, (long)*ip);
             }
         } else if (strcmp(meta.type, "bool") == 0) {
             const auto* bp = etl::get_if<bool>(&val.value());
             if (bp) {
-                pos += snprintf(buf + pos, rem, "%s\"%s\":%s",
-                                sep, meta.key, *bp ? "true" : "false");
+                n = snprintf(buf + pos, rem, "%s\"%s\":%s",
+                             sep, meta.key, *bp ? "true" : "false");
             }
+        }
+        if (n > 0 && (size_t)n < rem) {
+            pos += (size_t)n;
+            first = false;
         }
     }
 
@@ -1190,12 +1254,8 @@ esp_err_t HttpService::handle_post_restore(httpd_req_t* req) {
     auto* self = static_cast<HttpService*>(req->user_ctx);
 
     char buf[2048];
-    int len = httpd_req_recv(req, buf, sizeof(buf) - 1);
-    if (len <= 0) {
-        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Empty body");
-        return ESP_FAIL;
-    }
-    buf[len] = '\0';
+    const int len = http_routes::read_small_body(req, buf, sizeof(buf));
+    if (len < 0) return ESP_FAIL;
 
     // Парсимо JSON — шукаємо об'єкт "keys"
     jsmn_parser parser;
@@ -1208,18 +1268,19 @@ esp_err_t HttpService::handle_post_restore(httpd_req_t* req) {
     }
 
     // Знаходимо "keys" об'єкт
+    // player-fork: stepping over each value whole (jsmn_util::span). A skip of size * 2 tokens
+    // fitted only an object of plain values: past an array of three it went six tokens on, and
+    // "keys" after it was never found. A key's value is its one child: a key jsmn let close with
+    // no value, as in {"a":}, owns no token after it.
     int keys_tok = -1;
-    for (int i = 1; i + 1 < r; i += 2) {
-        if (tokens[i].type != JSMN_STRING) continue;
+    for (int i = 1, next = 1; i < r; i = next) {
+        const bool has_value = tokens[i].size == 1 && i + 1 < r;
+        next = has_value ? i + 1 + jsmn_util::span(tokens, r, i + 1) : i + 1;
+        if (!has_value || tokens[i].type != JSMN_STRING) continue;
         int klen = tokens[i].end - tokens[i].start;
         if (klen == 4 && strncmp(buf + tokens[i].start, "keys", 4) == 0) {
             keys_tok = i + 1;
             break;
-        }
-        // Пропускаємо значення (може бути вкладений об'єкт)
-        if (tokens[i + 1].type == JSMN_OBJECT || tokens[i + 1].type == JSMN_ARRAY) {
-            int skip = tokens[i + 1].size * 2;
-            i += skip;
         }
     }
 
@@ -1233,14 +1294,24 @@ esp_err_t HttpService::handle_post_restore(httpd_req_t* req) {
     int key_count = tokens[keys_tok].size;
 
     // Ітеруємо пари ключ:значення всередині "keys"
+    // player-fork: each value stepped over whole, as above. Two tokens per key fitted only plain
+    // values: past an object or an array the walk read keys out of it (a backup with
+    // "x":["audio.volume",5] restored the volume to 5) and never reached the keys after it. Such a
+    // value is skipped with its key (json_value_from() takes no object or array); a key with no
+    // value is skipped alone.
     int j = keys_tok + 1;
-    for (int k = 0; k < key_count && j + 1 < r; k++, j += 2) {
+    for (int k = 0, next = j; k < key_count && j < r; k++, j = next) {
+        const bool has_value = tokens[j].size == 1 && j + 1 < r;
+        next = has_value ? j + 1 + jsmn_util::span(tokens, r, j + 1) : j + 1;
         if (tokens[j].type != JSMN_STRING) continue;
+        if (!has_value) {
+            skipped++;
+            continue;
+        }
 
         buf[tokens[j].end] = '\0';
         buf[tokens[j + 1].end] = '\0';
         const char* key_str = buf + tokens[j].start;
-        const char* val_str = buf + tokens[j + 1].start;
 
         // Валідація: тільки persist ключі
         const auto* meta = gen::find_state_meta(key_str);
@@ -1248,30 +1319,18 @@ esp_err_t HttpService::handle_post_restore(httpd_req_t* req) {
             skipped++;
             continue;
         }
-
-        if (tokens[j + 1].type == JSMN_PRIMITIVE) {
-            if (val_str[0] == 't' || val_str[0] == 'f') {
-                self->state_->set(key_str, val_str[0] == 't');
-                restored++;
-            } else if (strcmp(meta->type, "float") == 0) {
-                float fval = static_cast<float>(atof(val_str));
-                const float f_req = fval;
-                if (fval < meta->min_val) fval = meta->min_val;
-                if (fval > meta->max_val) fval = meta->max_val;
-                if (fval != f_req) log_clamp("POST /restore", key_str, (double)f_req, (double)fval, meta);
-                self->state_->set(key_str, fval);
-                restored++;
-            } else {
-                int32_t ival = static_cast<int32_t>(atoi(val_str));
-                const int32_t i_req = ival;
-                if (static_cast<float>(ival) < meta->min_val)
-                    ival = static_cast<int32_t>(meta->min_val);
-                if (static_cast<float>(ival) > meta->max_val)
-                    ival = static_cast<int32_t>(meta->max_val);
-                if (ival != i_req) log_clamp("POST /restore", key_str, (double)i_req, (double)ival, meta);
-                self->state_->set(key_str, ival);
-                restored++;
-            }
+        // player-fork: of the key's type, as POST /api/settings takes it (key_write()). A true for
+        // an int key (a hand-edited backup) was answered "restored" while PersistService had no
+        // int to write, and a null went in as 0.
+        net::ValueFrom from;
+        if (json_value_from(tokens[j + 1], from) &&
+            store_write(self->state_, self->modules_, key_str,
+                        net::key_write(*meta, key_str, buf + tokens[j + 1].start, from,
+                                       "POST /restore"),
+                        false)) {
+            restored++;
+        } else {
+            skipped++;
         }
     }
 
@@ -1350,6 +1409,20 @@ esp_err_t HttpService::handle_post_ota(httpd_req_t* req) {
     if (req->content_len < 256) {
         ESP_LOGE(TAG, "OTA: File too small (%d bytes)", req->content_len);
         httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "File too small");
+        return ESP_FAIL;
+    }
+
+    // player-fork: the partition is claimed against the MQTT `_ota` download (ota_handler):
+    // esp_ota_begin() gives a second writer the same partition, and the two erase each other's
+    // sectors. Given back on every way out but success — the image then waits for the restart,
+    // and nothing may write the slot until it comes.
+    struct Claim {
+        bool held = ota_handler::try_begin();
+        ~Claim() { if (held) ota_handler::end(); }
+    } claim;
+    if (!claim.held) {
+        ESP_LOGW(TAG, "OTA: refused, another update is being written");
+        httpd_resp_send_custom_err(req, "409 Conflict", "Another firmware update is in progress");
         return ESP_FAIL;
     }
 
@@ -1460,13 +1533,21 @@ esp_err_t HttpService::handle_post_ota(httpd_req_t* req) {
     }
 
     ESP_LOGI(TAG, "OTA: Success! Wrote %d bytes to '%s'", received_total, update_partition->label);
+    claim.held = false;   // kept through the restart below
 
     httpd_resp_set_type(req, "application/json");
     httpd_resp_sendstr(req, "{\"status\":\"ok\",\"message\":\"Firmware updated. Restarting...\"}");
 
-    // Graceful shutdown: flush log sources to flash
+    // The same shutdown as handle_post_restart(): the debounced settings are written before and
+    // after the module stop, or a setting changed in the last seconds is lost with the restart.
     auto* self = static_cast<HttpService*>(req->user_ctx);
+    if (self->persist_) {
+        self->persist_->flush_now();
+    }
     stop_modules_on_main(self->modules_);
+    if (self->persist_) {
+        self->persist_->flush_now();
+    }
 
     // Дати HTTP response дійти до клієнта перед restart
     vTaskDelay(pdMS_TO_TICKS(1000));
@@ -1517,12 +1598,8 @@ esp_err_t HttpService::handle_post_time(httpd_req_t* req) {
     set_cors_headers(req);
 
     char buf[256];
-    int len = httpd_req_recv(req, buf, sizeof(buf) - 1);
-    if (len <= 0) {
-        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Empty body");
-        return ESP_FAIL;
-    }
-    buf[len] = '\0';
+    const int len = http_routes::read_small_body(req, buf, sizeof(buf));
+    if (len < 0) return ESP_FAIL;
 
     jsmn_parser parser;
     jsmntok_t tokens[12];
@@ -1587,6 +1664,7 @@ esp_err_t HttpService::handle_post_time(httpd_req_t* req) {
     return ESP_OK;
 }
 
+#if CONFIG_MODESP_HTTP_FRAMEWORK_ROUTES   // the ModESP framework's routes (Kconfig)
 // ── OneWire Scan Handler ────────────────────────────────────────
 
 esp_err_t HttpService::handle_get_ow_scan(httpd_req_t* req) {
@@ -1820,8 +1898,9 @@ esp_err_t HttpService::handle_get_log_summary(httpd_req_t* req) {
     httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Serialize failed");
     return ESP_FAIL;
 }
+#endif  // CONFIG_MODESP_HTTP_FRAMEWORK_ROUTES
 
-// ── Runtime log verbosity (plan item 11.4) ──────────────────────
+// ── Runtime log verbosity ───────────────────────────────────────
 //
 // The panel ships at WARN with the INFO strings still in the binary, and a short allowlist
 // of tags held at INFO because their INFO lines have each already settled a fault
@@ -1935,7 +2014,27 @@ static const char* get_content_type(const char* path) {
     return "application/octet-stream";
 }
 
+// An API path nothing serves is answered in JSON, never with the web page: a client asking for a
+// route this firmware does not have (or one lost to a full handler table) gets a status it can
+// act on, not a 200 that fails to parse.
+static bool is_api_path(const char* uri) {
+    return strncmp(uri, "/api/", 5) == 0;
+}
+
+static esp_err_t send_api_not_found(httpd_req_t* req) {
+    return http_routes::send_json(req, "404 Not Found", "{\"error\":\"not_found\"}");
+}
+
+// A path no handler takes under any method: only while the GET wildcard is off (http_routes.h).
+static esp_err_t handle_not_found(httpd_req_t* req, httpd_err_code_t err) {
+    if (is_api_path(req->uri)) send_api_not_found(req);
+    else httpd_resp_send_err(req, err, nullptr);
+    return ESP_FAIL;   // the body, if any, is unread: the connection cannot carry another request
+}
+
 esp_err_t HttpService::handle_static(httpd_req_t* req) {
+    if (is_api_path(req->uri)) return send_api_not_found(req);
+
     // Copy URI to local fixed-size buffer (silences -Wformat-truncation)
     char uri[52];
     strlcpy(uri, req->uri, sizeof(uri));
@@ -1975,31 +2074,14 @@ esp_err_t HttpService::handle_static(httpd_req_t* req) {
             return ESP_FAIL;
         }
         snprintf(filepath, sizeof(filepath), "/data/www/index.html");
+        actual_path = filepath;
         use_gz = false;
     }
 
     httpd_resp_set_type(req, get_content_type(filepath));
-    if (use_gz) {
-        httpd_resp_set_hdr(req, "Content-Encoding", "gzip");
-        // no-store: браузер завжди запитує свіжу версію (важливо при OTA/flash)
-        httpd_resp_set_hdr(req, "Cache-Control", "no-store");
-    } else {
-        httpd_resp_set_hdr(req, "Cache-Control", "no-cache");
-    }
-
-    // Stream file in chunks
-    char buf[512];
-    size_t read_bytes;
-    while ((read_bytes = fread(buf, 1, sizeof(buf), f)) > 0) {
-        if (httpd_resp_send_chunk(req, buf, read_bytes) != ESP_OK) {
-            fclose(f);
-            httpd_resp_send_chunk(req, nullptr, 0);
-            return ESP_FAIL;
-        }
-    }
-    fclose(f);
-    httpd_resp_send_chunk(req, nullptr, 0);
-    return ESP_OK;
+    // Validated on every load rather than kept (no-cache + ETag, send_file()): a flash of the
+    // web must reach an open tab at its next load, and an unchanged file costs a 304.
+    return send_file(req, f, actual_path, use_gz);
 }
 
 // ── Auth settings (GET + POST) ──────────────────────────────────
@@ -2007,11 +2089,18 @@ esp_err_t HttpService::handle_static(httpd_req_t* req) {
 esp_err_t HttpService::handle_get_auth(httpd_req_t* req) {
     // GET /api/auth — публічний (без auth), ніколи не повертає пароль
     set_cors_headers(req);
-    char buf[128];
+    // player-fork: the name escaped, as POST unescapes it on the way in — a name holding a quote
+    // or a backslash came back as broken JSON, and the Access page could not load at all.
+    char user[net::json_escaped_capacity(sizeof(s_auth_user) - 1)];
+    if (!net::json_escape(user, sizeof(user), s_auth_user)) {
+        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Invalid username");
+        return ESP_FAIL;
+    }
+    char buf[64 + sizeof(user)];
     snprintf(buf, sizeof(buf),
              "{\"enabled\":%s,\"username\":\"%s\"}",
              s_auth_enabled ? "true" : "false",
-             s_auth_user);
+             user);
     httpd_resp_set_type(req, "application/json");
     httpd_resp_send(req, buf, HTTPD_RESP_USE_STRLEN);
     return ESP_OK;
@@ -2022,12 +2111,8 @@ esp_err_t HttpService::handle_post_auth(httpd_req_t* req) {
     set_cors_headers(req);
 
     char buf[384];
-    int len = httpd_req_recv(req, buf, sizeof(buf) - 1);
-    if (len <= 0) {
-        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Empty body");
-        return ESP_FAIL;
-    }
-    buf[len] = '\0';
+    const int len = http_routes::read_small_body(req, buf, sizeof(buf));
+    if (len < 0) return ESP_FAIL;
 
     // Parse JSON: enabled, username, current_pass, new_pass, reset
     jsmn_parser parser;
@@ -2150,13 +2235,15 @@ void HttpService::register_api_handlers() {
         esp_err_t (*handler)(httpd_req_t*);
     } endpoints[] = {
         {"/api/state",    HTTP_GET,  handle_get_state},
-        {"/api/board",    HTTP_GET,  handle_get_board},
         {"/api/ui",       HTTP_GET,  handle_get_ui},
         {"/api/bindings", HTTP_GET,  handle_get_bindings},
         {"/api/bindings", HTTP_POST, handle_post_bindings},
+#if CONFIG_MODESP_HTTP_FRAMEWORK_ROUTES
+        {"/api/board",    HTTP_GET,  handle_get_board},
         {"/api/devices",  HTTP_GET,  handle_get_devices},
         {"/api/devices",  HTTP_POST, handle_post_devices},
         {"/api/modules",  HTTP_GET,  handle_get_modules},
+#endif
         {"/api/settings",   HTTP_POST, handle_post_settings},
         {"/api/wifi",       HTTP_POST, handle_post_wifi},
         {"/api/wifi/scan",  HTTP_GET,  handle_get_wifi_scan},
@@ -2169,64 +2256,70 @@ void HttpService::register_api_handlers() {
         {"/api/ota",        HTTP_GET,  handle_get_ota},
         {"/api/time",       HTTP_GET,  handle_get_time},
         {"/api/time",       HTTP_POST, handle_post_time},
+#if CONFIG_MODESP_HTTP_FRAMEWORK_ROUTES
         {"/api/onewire/scan", HTTP_GET, handle_get_ow_scan},   // legacy alias
         {"/api/drivers/scan", HTTP_GET, handle_get_ow_scan},   // generic: ?driver=<type>&bus=<hw>  (OneWire ROM discovery)
         {"/api/ble/scan",     HTTP_GET, handle_get_ble_scan},  // unified BLE scan: all identified nearby devices + readings
         {"/api/log",         HTTP_GET, handle_get_log},
         {"/api/log/summary", HTTP_GET, handle_get_log_summary},
+#endif
         {"/api/auth", HTTP_GET,  handle_get_auth},
         {"/api/auth", HTTP_POST, handle_post_auth},
-        // The panel ships quiet (plan item 11.4). This is how it is made to talk again
+        // The panel ships quiet. This is how it is made to talk again
         // without a reflash, for a fault that only happens where the bench is not.
         {"/api/loglevel", HTTP_GET,  handle_get_loglevel},
         {"/api/loglevel", HTTP_POST, handle_post_loglevel},
     };
 
-    // Реєструємо handlers + OPTIONS для CORS preflight
-    // Використовуємо масив для відстеження URI, де OPTIONS вже зареєстрований
-    const char* options_registered[24] = {};
-    int options_count = 0;
-
+    // No OPTIONS routes: the web is served from the panel itself, and a cross-site preflight
+    // must fail (check_auth(), the POST content types).
     for (auto& ep : endpoints) {
         httpd_uri_t uri_handler = {};
         uri_handler.uri      = ep.uri;
         uri_handler.method   = ep.method;
         uri_handler.handler  = ep.handler;
         uri_handler.user_ctx = this;
-        httpd_register_uri_handler(server_, &uri_handler);
-
-        // OPTIONS для CORS — лише один раз per URI
-        bool already = false;
-        for (int j = 0; j < options_count; j++) {
-            if (strcmp(options_registered[j], ep.uri) == 0) {
-                already = true;
-                break;
-            }
-        }
-        if (!already && options_count < 16) {
-            httpd_uri_t options = {};
-            options.uri      = ep.uri;
-            options.method   = HTTP_OPTIONS;
-            options.handler  = handle_options;
-            options.user_ctx = this;
-            httpd_register_uri_handler(server_, &options);
-            options_registered[options_count++] = ep.uri;
+        if (httpd_register_uri_handler(server_, &uri_handler) != ESP_OK) {
+            ESP_LOGE(TAG, "route %s not registered: max_uri_handlers too small?", ep.uri);
         }
     }
 
-    // OTA POST registered separately (OPTIONS вже від GET /api/ota)
     httpd_uri_t ota_post = {};
     ota_post.uri      = "/api/ota";
     ota_post.method   = HTTP_POST;
     ota_post.handler  = handle_post_ota;
     ota_post.user_ctx = this;
-    httpd_register_uri_handler(server_, &ota_post);
+    if (httpd_register_uri_handler(server_, &ota_post) != ESP_OK) {
+        ESP_LOGE(TAG, "route /api/ota POST not registered: max_uri_handlers too small?");
+    }
 
     ESP_LOGI(TAG, "API handlers registered (%d endpoints + OTA upload)",
              (int)(sizeof(endpoints) / sizeof(endpoints[0])));
 }
 
+// player-fork: httpd keeps its routes in a plain array that its own task walks for every request,
+// with no lock. httpd_register_uri_handler() puts a slot in the array before filling it in, and
+// httpd_unregister_uri_handler() frees one and shifts the rest down, so routes changed from
+// another task while the server runs (http_routes::wildcard(): the DLNA renderer coming up) could
+// hand a lookup a half-built or a freed slot, and every page asked for in between got a 404. The
+// server's task is held still for the length of the change instead: a work item parks it between
+// two requests until register_static_handler() puts the wildcard back, and a request that comes
+// meanwhile waits for the routes to be whole.
+static SemaphoreHandle_t s_parked = nullptr;   // given by the server's task once it holds still
+static SemaphoreHandle_t s_resume = nullptr;   // given when the routes are whole again
+static bool s_held = false;                    // the pair below runs on its one caller's task
+
+static void hold_server(void*) {
+    xSemaphoreGive(s_parked);
+    xSemaphoreTake(s_resume, portMAX_DELAY);
+}
+
 void HttpService::unregister_static_handler() {
+    if (!s_parked) s_parked = xSemaphoreCreateBinary();
+    if (!s_resume) s_resume = xSemaphoreCreateBinary();
+    s_held = s_parked && s_resume && httpd_queue_work(server_, hold_server, nullptr) == ESP_OK &&
+             xSemaphoreTake(s_parked, portMAX_DELAY) == pdTRUE;
+    if (!s_held) ESP_LOGW(TAG, "Server not held still: its routes change while it serves");
     httpd_unregister_uri_handler(server_, "/*", HTTP_GET);
     ESP_LOGI(TAG, "Static file handler removed (a late subsystem is registering routes)");
 }
@@ -2239,9 +2332,13 @@ void HttpService::register_static_handler() {
     static_handler.user_ctx       = this;
     static_handler.is_websocket   = false;
     esp_err_t err = httpd_register_uri_handler(server_, &static_handler);
+    if (s_held) {                  // player-fork: the routes are whole again; the server goes on
+        s_held = false;
+        xSemaphoreGive(s_resume);
+    }
     if (err != ESP_OK) {
         // Without the wildcard every page is a 404 while the API still answers. It went
-        // unnoticed once (W4, 12.10.2026: the handler table was full when DLNA put it back).
+        // unnoticed once: the handler table was full when DLNA put it back.
         ESP_LOGE(TAG, "Static file handler NOT registered (%s): no page will load - "
                       "raise max_uri_handlers", esp_err_to_name(err));
         return;
@@ -2260,7 +2357,7 @@ bool HttpService::start_server() {
     // the wildcard). UPnP adds seven more when the renderer is on — the device description
     // plus two per service — and 56 left exactly one spare, which is not headroom, it is a
     // coincidence waiting to be spent.
-    // 72 was spent by W4 (12.10.2026): 67 at boot with the wildcard, and the renderer's seven
+    // 72 was spent too: 67 at boot with the wildcard, and the renderer's seven
     // need 74. The last UPnP route and the wildcard's return failed, and every page was a 404.
     // 88 leaves 14 spare; a slot is one pointer until a handler takes it.
     config.max_uri_handlers = 88;
@@ -2289,6 +2386,7 @@ bool HttpService::start_server() {
     }
 
     register_api_handlers();
+    httpd_register_err_handler(server_, HTTPD_404_NOT_FOUND, handle_not_found);
     // NOTE: register_static_handler() must be called from main.cpp
     // AFTER all other handlers (WS, etc.) to avoid wildcard shadowing.
 

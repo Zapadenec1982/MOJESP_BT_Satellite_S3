@@ -207,7 +207,7 @@ struct PlayerTaskState {
     /// A seek asked for before the track's length is known, to be made once it is. The length
     /// comes from the decoder's first answer, so a SEEK sent right behind a PLAY — the track
     /// put back where it was lent — found none, was dropped, and the track restarted from
-    /// its first second (24.09.2026). −1 = none.
+    /// its first second. −1 = none.
     int32_t  pending_seek = -1;
     char     path[PATH_MAX_LEN] = "";
     char     fmt[32] = "";
@@ -318,10 +318,10 @@ uint8_t* read_blob(FILE* f, uint64_t off, uint32_t len) {
 /// One track's artwork search, handed from this task to a worker of its own.
 ///
 /// It used to run here, and a hardware decode is milliseconds - but a PNG or a progressive
-/// JPEG goes to stb_image at about 1.1 us a source pixel (bench, 05.10.2026), and this task
-/// waited for it with half a second of audio in the ring. A 1000 px progressive cover was an
-/// audible gap a moment into every track of its album, and the UI froze for as long, because
-/// the decoder runs at its caller's priority and this one's is 5 (audit 2026-09-17, item 4).
+/// JPEG goes to stb_image at about 1.1 us a source pixel, and this task waited for it with
+/// half a second of audio in the ring. A 1000 px progressive cover was an audible gap a
+/// moment into every track of its album, and the UI froze for as long, because the decoder
+/// runs at its caller's priority and this one's is 5.
 struct CoverJob {
     uint8_t* jpg;                   ///< the picture inside the track, or null; the worker frees it
     uint32_t len;
@@ -882,8 +882,8 @@ Pump pump() {
     if (err == ESP_AUDIO_ERR_BUFF_NOT_ENOUGH) {
         // The frame's PCM does not fit, and the decoder keeps it until it does: 24-bit FLAC
         // at 96 kHz or in 5.1 runs past 32 KB. Read as "nothing decoded yet" it was asked
-        // again with the same buffer for ever, in silence (deep
-        // review 2026-10-12, RP-4). Grow as asked and try again, or end the track.
+        // again with the same buffer for ever, in silence. Grow as asked and try again, or
+        // end the track.
         if (out.needed_size > s.pcm_cap && out.needed_size <= PCM_MAX) {
             if (void* p = heap_caps_realloc(s.pcm, out.needed_size,
                                             MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT)) {
@@ -1009,12 +1009,16 @@ void player_task(void*) {
     int64_t report_at      = 0;
     int64_t busy_us        = 0;
     uint64_t report_base   = 0;
+    int      silent_run    = 0;    // tracks in a row that ended without a frame (Pump::DONE)
     for (;;) {
         modesp::liveness::tick(s.beat);
         const bool got = (xQueueReceive(s.q, &m, pdMS_TO_TICKS(s.state == 1 ? 0 : 50)) == pdTRUE);
         if (!s.run) break;
         if (got) {
-            if (interrupts_pcm(m.type)) s.command_generation = m.generation;
+            if (interrupts_pcm(m.type)) {
+                s.command_generation = m.generation;
+                silent_run = 0;
+            }
             switch (m.type) {
             case Cmd::PLAY:
                 cue_path(m.path);
@@ -1149,8 +1153,21 @@ void player_task(void*) {
             case Pump::DONE: {
                 ESP_LOGI(TAG, "end of %s", s.path);
                 if (!release_tail()) { finish_cancelled_write(); break; }
+                // Not one frame came out of it: an empty file, or one the decoder cannot
+                // read. It must not be what plays next — repeat one, or repeat all over a
+                // single track, reopened it at once with no card read to wait on, and the
+                // task watchdog rebooted the panel — and a card of nothing but such files
+                // must not go round for ever, playing silence.
+                const bool silent = s.frames_out == 0;
+                silent_run = silent ? silent_run + 1 : 0;
                 close_file();                  // the ring keeps the tail; it has not played
-                const int nxt = player_core::playlist().advance(s.shuffle.load(), s.repeat.load());
+                auto& q = player_core::playlist();
+                int nxt = q.advance(s.shuffle.load(), s.repeat.load());
+                if (silent && nxt == q.cursor()) nxt = q.next(s.shuffle.load(), s.repeat.load());
+                if (silent && silent_run >= q.count()) {
+                    ESP_LOGW(TAG, "nothing played in the last %d tracks: stopped", silent_run);
+                    nxt = -1;
+                }
                 if (nxt >= 0 && open_index(nxt, false)) {
                     s.state = 1;
                 } else {
@@ -1159,6 +1176,9 @@ void player_task(void*) {
                     audio_core::pcm_ring().set_eos(audio_core::PcmRing::OWNER_FILE, s.ring_generation, true);
                     s.state = 0;
                 }
+                // A tick between one track and the next, whatever happened: the next pass may
+                // end at once again, and only a voluntary block lets main run (see Pump).
+                sleep_at_least_a_tick(1);
                 yield_deadline = 0;
                 break;
             }
@@ -1188,8 +1208,10 @@ bool PlayerModule::on_init() {
     state_set("player.dur_s", (int32_t)0);
     state_set("player.index", (int32_t)0);
     state_set("player.count", (int32_t)0);
-    state_set("player.repeat", (int32_t)0);
-    state_set("player.shuffle", false);
+    // What PersistService restored, not the defaults: both keys are persisted, and writing
+    // them here undid repeat and shuffle at every boot. on_update range-checks the repeat.
+    state_set("player.repeat", read_int("player.repeat", 0));
+    state_set("player.shuffle", read_bool("player.shuffle", false));
     state_set("player.seek_s", (int32_t)-1);
 
     if (!player_core::playlist().init()) {
@@ -1343,14 +1365,14 @@ void PlayerModule::on_update(uint32_t dt_ms) {
         playing_ = true;
         // Static, not a local: a CmdMsg carries a 257-byte path, this runs on the main task's
         // 8 KB stack, and each such local in a branch of on_update() is another 270 bytes of
-        // the margin the service page grades (it went red at 808 B on 25.09.2026). Only the
-        // main task runs this, and xQueueSend copies the message out before returning.
+        // the margin the service page grades (it went red at 808 B). Only the main task runs
+        // this, and xQueueSend copies the message out before returning.
         static CmdMsg m;
         m = CmdMsg{};
         m.type = Cmd::PLAY;
         // PLAY opens what it is given with fopen, so it needs the whole path; the remembered
         // track is relative to the card, which is what survives a rescan. Passing it as it
-        // was said "cannot open" and the card came back silent (24.09.2026).
+        // was said "cannot open" and the card came back silent.
         auto& q = player_core::playlist();
         const int at = q.find(yield_track_);
         if (at >= 0 && q.path_at(at, m.path, sizeof(m.path))) {
@@ -1363,8 +1385,8 @@ void PlayerModule::on_update(uint32_t dt_ms) {
         // Chosen with nothing lent out to give back — on the Source page, over MQTT, from the
         // web — and choosing the card is choosing to listen to it: the track the cursor is on,
         // from its start. Not at power-on: the source found on the first pass is not a choice,
-        // and turning the panel on still makes no noise (restored_, above). Before this, the
-        // card chosen on the Source page sat silent until a track was picked (24.09.2026).
+        // and turning the panel on still makes no noise (restored_, above). Without this, the
+        // card chosen on the Source page would sit silent until a track was picked.
         auto& q = player_core::playlist();
         static CmdMsg m;                          // static for the reason given above
         m = CmdMsg{};
@@ -1436,7 +1458,7 @@ void PlayerModule::on_update(uint32_t dt_ms) {
         state_set("player.dir", rel);
         if (rel[0] && strcmp(rel, last_dir_) != 0) {
             snprintf(last_dir_, sizeof(last_dir_), "%.*s", (int)sizeof(last_dir_) - 1, rel);
-            // write -> read back -> rename (safe_file, plan item 11.2). A truncated resume
+            // write -> read back -> rename (safe_file). A truncated resume
             // point is a path to a file that does not exist, and the queue is rebuilt from
             // it at boot — so the failure mode is "the card comes up empty", not "the
             // cursor is in the wrong place".

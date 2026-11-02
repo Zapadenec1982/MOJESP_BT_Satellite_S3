@@ -476,6 +476,11 @@ int rtsp_dispatch(int socket, rtsp_conn_t *conn, const uint8_t *raw_request,
   // Update DACP client session when both identifiers are available
   if (conn->dacp_id[0] != '\0' && conn->active_remote[0] != '\0') {
     dacp_set_session(conn->dacp_id, conn->active_remote, conn->client_ip);
+  } else if (strcasecmp(req.method, "SETUP") == 0) {
+    // A session set up without them has no remote. A session still set is a
+    // previous sender's: an AirPlay 1 slot replaced in its grace period leaves
+    // it (rtsp_server.c), and the panel's buttons would drive that device.
+    dacp_clear_session();
   }
 
   // Find handler in dispatch table
@@ -550,6 +555,39 @@ static void plist_dict_real(plist_t *p, const char *key, double value) {
   }
 }
 
+// Appends n bytes if they fit with the terminator; false, and nothing, if not.
+static bool plist_put(plist_t *p, const char *text, size_t n) {
+  if (n >= p->capacity - p->size) {
+    return false;
+  }
+  memcpy(p->buffer + p->size, text, n);
+  p->size += n;
+  p->buffer[p->size] = '\0';
+  return true;
+}
+
+// upstream/plist/plist_xml.c prints a <string> as it is given. The device name
+// is the owner's own text, and an & or < in it ("Living & Dining") left the
+// whole answer ill-formed: here it is escaped, and written whole or not at all.
+static void plist_dict_text(plist_t *p, const char *key, const char *value) {
+  const size_t start = p->size;
+  bool fits = plist_put(p, "<key>", 5) && plist_put(p, key, strlen(key)) &&
+              plist_put(p, "</key>\n<string>", 15);
+  for (const char *c = value; fits && *c; c++) {
+    const char *entity = *c == '&'    ? "&amp;"
+                         : *c == '<'  ? "&lt;"
+                         : *c == '>'  ? "&gt;"
+                         : *c == '"'  ? "&quot;"
+                         : *c == '\'' ? "&apos;"
+                                      : NULL;
+    fits = entity ? plist_put(p, entity, strlen(entity)) : plist_put(p, c, 1);
+  }
+  if (!fits || !plist_put(p, "</string>\n", 10)) {
+    p->size = start;
+    p->buffer[start] = '\0';
+  }
+}
+
 static void handle_get(int socket, rtsp_conn_t *conn, const rtsp_request_t *req,
                        const uint8_t *raw, size_t raw_len) {
   (void)raw;
@@ -611,7 +649,7 @@ static void handle_get(int socket, rtsp_conn_t *conn, const rtsp_request_t *req,
     plist_dict_real(&p, "initialVolume", initial_volume);
     plist_dict_data(&p, "pk", pk, 32);
     plist_dict_string(&p, "pi", "00000000-0000-0000-0000-000000000000");
-    plist_dict_string(&p, "name", device_name);
+    plist_dict_text(&p, "name", device_name);
 
     // Audio formats array
     plist_dict_array_begin(&p, "audioFormats");
@@ -875,7 +913,8 @@ static void handle_post(int socket, rtsp_conn_t *conn,
 // The decode buffer and every PCM ring slot hold AUDIO_MAX_CHANNELS 16-bit
 // channels, the decode buffer MAX_SAMPLES_PER_FRAME frames of them
 // (audio_buffer.h). An SDP outside that is refused before anything is set: the
-// decoder would be handed a capacity the buffer behind it does not have.
+// decoder would be handed a capacity the buffer behind it does not have. So is
+// a rate outside AIRPLAY_RATE_MIN_HZ..AIRPLAY_RATE_MAX_HZ (airplay2_port.h).
 static bool parse_sdp(rtsp_conn_t *conn, const char *sdp, size_t len) {
   (void)len;
 
@@ -903,6 +942,11 @@ static bool parse_sdp(rtsp_conn_t *conn, const char *sdp, size_t len) {
         ESP_LOGW(TAG, "SDP refused: rtpmap has %d channels", ch);
         return false;
       }
+      if (fields >= 1 &&
+          (sr < AIRPLAY_RATE_MIN_HZ || sr > AIRPLAY_RATE_MAX_HZ)) {
+        ESP_LOGW(TAG, "SDP refused: rtpmap rate %d Hz", sr);
+        return false;
+      }
       if (fields >= 1) {
         if (sr > 0) {
           format.sample_rate = sr;
@@ -928,6 +972,11 @@ static bool parse_sdp(rtsp_conn_t *conn, const char *sdp, size_t len) {
          frame_len > MAX_SAMPLES_PER_FRAME || bit_depth != 16)) {
       ESP_LOGW(TAG, "SDP refused: fmtp frame %u, %u-bit, %u channels",
                frame_len, bit_depth, num_ch);
+      return false;
+    }
+    if (matched >= 11 &&
+        (rate < AIRPLAY_RATE_MIN_HZ || rate > AIRPLAY_RATE_MAX_HZ)) {
+      ESP_LOGW(TAG, "SDP refused: fmtp rate %u Hz", rate);
       return false;
     }
     if (matched >= 7) {
@@ -1144,6 +1193,16 @@ static void handle_setup(int socket, rtsp_conn_t *conn,
             }
           }
 
+          // As ANNOUNCE refuses it (parse_sdp), before the receiver's format.
+          if (sample_rate < AIRPLAY_RATE_MIN_HZ ||
+              sample_rate > AIRPLAY_RATE_MAX_HZ) {
+            ESP_LOGW(TAG, "SETUP refused: stream at %lld Hz",
+                     (long long)sample_rate);
+            rtsp_send_response(socket, conn, 400, "Bad Request", req->cseq,
+                               NULL, NULL, 0);
+            return;
+          }
+
           // Use codec registry to configure audio format
           audio_format_t format = {0};
           rtsp_codec_configure(codec_type, &format, sample_rate,
@@ -1194,10 +1253,18 @@ static void handle_setup(int socket, rtsp_conn_t *conn,
       uint8_t decrypted_key[32];
       unsigned long long decrypted_len;
 
-      if (crypto_aead_chacha20poly1305_ietf_decrypt(
-              decrypted_key, &decrypted_len, NULL, ekey_encrypted, ekey_len,
-              NULL, 0, nonce, conn->hap_session->shared_secret) == 0 &&
-          decrypted_len >= 16) {
+      // libsodium writes ekey_len - 16 bytes into decrypted_key, and zeroes as
+      // many when the tag does not verify: 48 from a 64-byte ekey, past the end
+      // of the array. One longer than a 32-byte key and its tag holds no key
+      // this receiver could use, so it is treated as one that did not decrypt.
+      if (ekey_len > sizeof(decrypted_key) +
+                         crypto_aead_chacha20poly1305_ietf_ABYTES) {
+        ESP_LOGW(TAG, "SETUP: ekey of %zu bytes ignored", ekey_len);
+      } else if (crypto_aead_chacha20poly1305_ietf_decrypt(
+                     decrypted_key, &decrypted_len, NULL, ekey_encrypted,
+                     ekey_len, NULL, 0, nonce,
+                     conn->hap_session->shared_secret) == 0 &&
+                 decrypted_len >= 16) {
         audio_encrypt.type = AUDIO_ENCRYPT_CHACHA20_POLY1305;
         memcpy(audio_encrypt.key, decrypted_key,
                decrypted_len > 32 ? 32 : decrypted_len);
@@ -1288,6 +1355,14 @@ static void handle_setup(int socket, rtsp_conn_t *conn,
     }
 
     ESP_LOGI(TAG, "SETUP: Initial connection setup (no streams)");
+
+    // This session is timed by PTP, which an AirPlay 1 SETUP stops (above).
+    // The cleanup of a slot this connection replaced does not restart it
+    // (rtsp_server.c), so it is started here; running, it is left as it is.
+    esp_err_t ptp_err = ptp_clock_init();
+    if (ptp_err != ESP_OK && ptp_err != ESP_ERR_INVALID_STATE) {
+      ESP_LOGW(TAG, "PTP clock not started: %s", esp_err_to_name(ptp_err));
+    }
 
     if (is_bplist) {
       uint8_t plist_body[128];

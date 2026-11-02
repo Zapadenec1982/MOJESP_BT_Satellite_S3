@@ -63,7 +63,7 @@ TEST_CASE("cover guard: a 10-scan 1400 px progressive cover is counted right and
 }
 
 TEST_CASE("cover guard: a file of empty DC refinement scans is refused at any size") {
-    // The review's file: 2000 x the 10-byte scan header (Ss = Se = 0, Ah = 1), no data at all.
+    // A crafted file: 2000 x the 10-byte scan header (Ss = Se = 0, Ah = 1), no data at all.
     Bytes b = progressive_head(2048, 2048, 1);
     for (int i = 0; i < 2000; i++) put(b, {0xFF, 0xDA, 0x00, 0x08, 0x01, 0x01, 0x00, 0x00, 0x00, 0x10});
     put(b, {0xFF, 0xD9});
@@ -152,7 +152,7 @@ cover_guard::Frame frame(bool progressive, std::initializer_list<uint8_t> hv) {
     return f;
 }
 
-/// The largest free PSRAM block the bench reported with the player running (05.10.2026).
+/// The largest free PSRAM block the bench reported with the player running.
 constexpr size_t BENCH_LARGEST = 23068672;
 
 }  // namespace
@@ -178,7 +178,7 @@ TEST_CASE("cover guard: stb's peak follows sampling, padding and progressive") {
     CHECK(cover_guard::jpeg_soft_peak(p420, 1000, 1000) == 7575387);
     CHECK(cover_guard::jpeg_soft_peak(p444, 1000, 1000) == 12003099);   // 12 bytes a pixel
     CHECK(cover_guard::jpeg_soft_peak(frame(false, {0x22, 0x11, 0x11}), 1000, 1000) == 4527150);
-    // The review's figure: 1750 px progressive 4:2:0 holds about 23 MB.
+    // 1750 px progressive 4:2:0 holds about 23 MB.
     CHECK(cover_guard::jpeg_soft_peak(p420, 1750, 1750) == 23132049);
     // A frame that was not read is costed as four full-size progressive components.
     CHECK(cover_guard::jpeg_soft_peak(cover_guard::Frame{}, 100, 100) == 160324);
@@ -189,13 +189,12 @@ TEST_CASE("cover guard: stb's peak follows sampling, padding and progressive") {
 
 TEST_CASE("cover guard: at the bench's free memory, big progressive covers are refused up front") {
     const auto p420 = frame(true, {0x22, 0x11, 0x11});
-    using cover_guard::soft_memory_ok;
+    using cover_guard::soft_memory_need;
     using cover_guard::jpeg_soft_peak;
-    CHECK(soft_memory_ok(jpeg_soft_peak(p420, 1000, 1000), BENCH_LARGEST));
-    CHECK(soft_memory_ok(jpeg_soft_peak(p420, 1664, 1664), BENCH_LARGEST));
-    CHECK_FALSE(soft_memory_ok(jpeg_soft_peak(p420, 1672, 1672), BENCH_LARGEST));   // the reserve
-    CHECK_FALSE(soft_memory_ok(jpeg_soft_peak(p420, 1750, 1750), BENCH_LARGEST));
-    CHECK_FALSE(soft_memory_ok(jpeg_soft_peak(p420, 2048, 2048), BENCH_LARGEST));
-    CHECK(soft_memory_ok(1000, 1000 + cover_guard::SOFT_RESERVE));
-    CHECK_FALSE(soft_memory_ok(1001, 1000 + cover_guard::SOFT_RESERVE));
+    CHECK(soft_memory_need(jpeg_soft_peak(p420, 1000, 1000)) <= BENCH_LARGEST);
+    CHECK(soft_memory_need(jpeg_soft_peak(p420, 1664, 1664)) <= BENCH_LARGEST);
+    CHECK(soft_memory_need(jpeg_soft_peak(p420, 1672, 1672)) > BENCH_LARGEST);   // the reserve
+    CHECK(soft_memory_need(jpeg_soft_peak(p420, 1750, 1750)) > BENCH_LARGEST);
+    CHECK(soft_memory_need(jpeg_soft_peak(p420, 2048, 2048)) > BENCH_LARGEST);
+    CHECK(soft_memory_need(1000) == 1000 + cover_guard::SOFT_RESERVE);
 }

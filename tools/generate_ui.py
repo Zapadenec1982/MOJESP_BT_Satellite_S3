@@ -70,6 +70,7 @@ def schema_errors(data, schema_name, label):
     return out
 
 
+# player-fork: project.json's per-board overlay (boards.<board>), applied by main() after --board.
 def apply_board_overlay(project, board):
     """project.json's boards.<board> overlay applied to `project` (a new dict; the input is left
     alone): exclude_modules leaves modules out, add_modules puts modules in — in the place of
@@ -271,6 +272,8 @@ class ManifestValidator:
             if "access" not in info:
                 self.errors.append(f"[{name}] State key '{key}' missing 'access'")
 
+            # player-fork: checks for the fork's manifest flags `command` and `long` (emitted
+            # as STATE_COMMANDS / STATE_LONG_KEYS by StateMetaGenerator).
             # A command is an event delivered to the owning module's queue, so it must be
             # writable, it must be a number (the queue carries int32_t), and it cannot be
             # persisted — restoring "next track" on boot would press the button again.
@@ -445,7 +448,7 @@ class ManifestValidator:
                         f"[{name}] Constraint '{c_key}' value '{val_str}' "
                         f"requires_feature '{rf}' not found in features")
 
-        # An option `id` becomes a C identifier in generated/state_enums.h.
+        # player-fork: an option `id` becomes a C identifier in generated/state_enums.h.
         for key, info in state.items():
             for opt in info.get("options", []):
                 oid = opt.get("id")
@@ -1249,11 +1252,11 @@ def validate_bindings(board, bindings, all_driver_manifests, errors, warnings,
         addr = b.get("address", "") or ""
         tag = role or hw_id or f"#{idx}"
 
+        # player-fork: 'driver' is optional, a binding without one is a hardware assignment.
         # (i) required fields present. NOT 'driver': a binding with no driver is a plain
         # hardware ASSIGNMENT — it says which board resource plays a role for a module, and
-        # the module uses the HAL resource directly. That is how the satellite UART and the
-        # card slot stopped being literals inside their modules (item 8.8). The driver
-        # checks below are skipped for those, and DriverManager creates nothing.
+        # the module uses the HAL resource directly. The driver checks below are skipped for
+        # those, and DriverManager creates nothing.
         missing = [name for name, val in
                    (("hardware", hw_id), ("role", role), ("module", module)) if not val]
         if missing:
@@ -1277,6 +1280,7 @@ def validate_bindings(board, bindings, all_driver_manifests, errors, warnings,
             continue
 
         # (d) driver manifest exists — only when there is a driver to check.
+        # player-fork: a driverless binding records its hardware use and role, then stops.
         if not drv_name:
             hw_usage.setdefault(hw_id, []).append((role, "", addr))
             seen = roles_by_module.setdefault(module, set())
@@ -2071,6 +2075,7 @@ class StateMetaGenerator:
         ])
 
         # —— Command keys ——
+        # player-fork: STATE_COMMANDS, for the fork's `command` flag.
         # `"command": true` in a manifest means the key is an EVENT for that module, not a
         # value in the store. The writers (HTTP, MQTT, BLE, the screen) look the key up here
         # and post it to the owning module's queue; nothing is written to SharedState, so a
@@ -2113,6 +2118,7 @@ class StateMetaGenerator:
         ])
 
         # —— Long string keys ——
+        # player-fork: STATE_LONG_KEYS, for the fork's `long` flag.
         # A path or a URI does not fit the inline string in StateValue, and that inline
         # string is what every one of the map slots pays for. Keys flagged `"long": true`
         # keep their value in a side table instead. The list is generated so the manifests
@@ -2155,6 +2161,8 @@ class StateMetaGenerator:
         return "\n".join(lines)
 
 
+# player-fork: generated/state_enums.h, the option values as named constants that modules
+# include instead of keeping their own copies of the numbers.
 class StateEnumsGenerator:
     """Generates generated/state_enums.h — the values behind a state key with `options`.
 
@@ -2848,6 +2856,7 @@ def main():
     parser.add_argument("--output-gen", type=Path,
                         default=PROJECT_ROOT / "generated",
                         help="Output path for generated C++ headers")
+    # player-fork: the board whose overlay applies (apply_board_overlay).
     parser.add_argument("--board", default=None,
                         help="Active board folder (boards/<name>/): applies project.json's "
                              "boards.<name> overlay (modules left out, system overrides)")
@@ -2870,6 +2879,7 @@ def main():
     with open(args.project, "r", encoding="utf-8") as f:
         project = json.load(f)
 
+    # player-fork: the board overlay.
     # The board overlay is applied HERE, before anything reads the module list, so every
     # artifact below — modules.cmake, the registration headers, ui.json, state_meta.h, the
     # i18n bundles — sees one list. The schema check further down runs on the overlaid
@@ -3068,7 +3078,7 @@ def main():
     print(f"  + {meta_path}")
     files_written += 1
 
-    # 2b. state_enums.h
+    # 2b. state_enums.h (player-fork: StateEnumsGenerator)
     enums_gen = StateEnumsGenerator()
     enums_h = enums_gen.generate(manifests)
     enums_path = gen_dir / "state_enums.h"
@@ -3095,9 +3105,10 @@ def main():
     print(f"  + {display_path}")
     files_written += 1
 
-    # 4b. project_info.h — the project's name for the device, after the board overlay, for the
-    # firmware's own fallbacks (modules/bt/include/device_name.h: what Bluetooth, AirPlay, DLNA
-    # and the USB sound card call the player until somebody names it). C as well as C++.
+    # 4b. project_info.h (player-fork) — the project's name for the device, after the board
+    # overlay, for the firmware's own fallbacks (modules/bt/include/device_name.h: what Bluetooth,
+    # AirPlay, DLNA and the USB sound card call the player until somebody names it). C as well
+    # as C++.
     _sys = project.get("system", {}) or {}
     def _c_str(v):
         return '"' + str(v).replace("\\", "\\\\").replace('"', '\\"') + '"'
@@ -3714,8 +3725,9 @@ def main():
     other_langs = sorted(l for l in available_langs if l != source_lang)
     i18n_manifest = {"languages": [source_lang] + other_langs, "default": source_lang}
     manifest_path = i18n_out / "manifest.json"
-    # newline="\n": the file is tracked and .gitattributes says LF; on Windows the default
-    # text mode wrote CRLF, and every build then showed a modified file with an empty diff.
+    # player-fork: newline="\n" — the file is tracked and .gitattributes says LF; on Windows
+    # the default text mode wrote CRLF, and every build then showed a modified file with an
+    # empty diff.
     with open(manifest_path, "w", encoding="utf-8", newline="\n") as f:
         json.dump(i18n_manifest, f, ensure_ascii=False, indent=2)
     print(f"  + {manifest_path} (languages: {i18n_manifest['languages']})")

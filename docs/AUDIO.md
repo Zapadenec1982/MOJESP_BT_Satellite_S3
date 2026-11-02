@@ -110,7 +110,10 @@ interleaved stereo float between the producers and the audio task; lock-free on 
 - `set_consumer(prime, downstream)`: the cushion after a reset (100 ms) and the frames between the
   ring and the pins (TX DMA + block + limiter look-ahead). From these AirPlay computes when what it
   wrote will be heard, and USB its fill target for feedback. `set_consumer_live` — whether the
-  ring is heard right now.
+  ring is heard right now. `set_output_quiet` — whether nothing at all is heard, whatever the
+  source: the output gate shut and the TX queue played out, the moment the amplifier may go off
+  (section "Edges of sound"); the radio writes its preset logos' files only then
+  (`docs/NETWORK.md`, "Covers and logos").
 - After a reset the consumer waits for the 100 ms cushion (`PRIME_S`); `eos` lifts the wait. While
   the amplifier settles, the ring is not read — except for AirPlay and USB, which pace by the fill
   (`paces_by_fill`).
@@ -155,13 +158,22 @@ interleaved stereo float between the producers and the audio task; lock-free on 
   The tone is not in the mask, but `audio.source = 1` always works.
 - A saved source that is not in the mask becomes `off` at start; a ring source whose owner has not
   initialised yet waits for the ring.
-- An unavailable source is refused before the transition begins — what is playing does not go
-  quiet. Switching goes through the gates: the old source plays until both gates are closed, and
-  only in silence does `apply_source()` switch the routes and reset the chain. Selecting the same
-  source again before the transition ends cancels it.
+- An unavailable source is refused before the transition begins: `audio.source` goes back to the
+  source that plays, and that does not go quiet. Switching goes through the gates: the old source
+  plays until both gates are closed, and only in silence does `apply_source()` switch the routes
+  and reset the chain. Selecting the same source again before the transition ends cancels it.
 - Who switches `audio.source` on their own: radio, DLNA, the player, AirPlay — when they are given
   something to play; USB — when the computer started playing and the panel did not (section "USB
   audio"). Bluetooth does not take the source on its own.
+- `audio.transport` is the transport of whatever plays, in `player.cmd`'s codes (1 play, 2 pause,
+  3 stop, 4 next, 5 previous, 6 play/pause): the glass, the web and MQTT send it, and the audio
+  module passes it to the source's own command key in that module's codes —
+  `components/audio_dsp/include/transport_route.h`, test `tests/host/test_transport_route.cpp`.
+  The card takes them all; a DLNA track (`radio.mode` = `push`) gets `dlna.cmd`; a station
+  `radio.cmd`, without pause, its toggle starting and stopping the stream; Bluetooth with a phone
+  `bt.cmd`, AirPlay with a remote `airplay.cmd`; the tone, AUX, USB and off take nothing.
+  `audio.transport_caps` says which codes the source takes now: bit `1 << code`, and bit 128 when
+  the position can be moved. A code the source does not take is dropped.
 
 ### Test tone
 
@@ -203,15 +215,16 @@ interleaved stereo float between the producers and the audio task; lock-free on 
 `audio_core::DspChain` (`components/audio_dsp/src/dsp_chain.cpp`), float, in blocks, no heap
 after start. The order in `DspChain::process`:
 
-1. input gain: trim · volume · EQ headroom;
-2. subsonic and the lift at the port;
-3. loudness compensation;
-4. "Bass" and "Treble";
-5. PEQ, up to 10 bands;
-6. width / mono bass (mid/side);
-7. balance;
-8. bass limiter;
-9. brickwall.
+1. volume leveler (only while it is on);
+2. input gain: trim · volume · EQ headroom;
+3. subsonic and the lift at the port;
+4. loudness compensation;
+5. "Bass" and "Treble";
+6. PEQ, up to 10 bands;
+7. width / mono bass (mid/side);
+8. balance;
+9. bass limiter;
+10. brickwall.
 
 Inside the chain **1.0 = the amplifier ceiling**, not the DAC's full scale (section "Amplifier
 ceiling"). The filters are trapezoidal SVFs (Simper), one section per band for both channels
@@ -229,6 +242,9 @@ block.
 | `audio.vol_max` | 40…100 %, 100 | "Maximum": plays `volume × vol_max / 100` of the same law |
 | `audio.vol_start` | 0…100 %, 0 | after power-on the volume is no higher than this (0 — as it was) |
 | `audio.mute` | bool | 10 ms ramp |
+| `audio.leveler` | bool, false | "Volume leveling" (section below) |
+| `audio.lev_sched` | bool, false | the leveler by the schedule |
+| `audio.lev_from`, `audio.lev_to` | 0…1435 min of the day, step 5; 1320 (22:00), 420 (07:00) | the schedule's window |
 | `audio.drive_db` | 0…6 dB, 0 | how far 100 % drives into the limiters above the clean ceiling |
 | `audio.hp_hz` | 0 off / 20…80 Hz, 40 | subsonic, 4th-order Butterworth |
 | `audio.spk_type` | 0 not set / 1 ported / 2 sealed | sealed — the port has no effect, whatever number is saved |
@@ -236,6 +252,7 @@ block.
 | `audio.port_lift_db` | 0…6 dB, 3 | peak at the port frequency, Q 1.4 |
 | `audio.port_src` | 0 not set / 1 by hand / 3 measured | where the port frequency came from |
 | `audio.loudness` | 0…100 %, 70 | loudness compensation strength, 0 — off |
+| `audio.loud_back` | 1…100 %, 70, read-only | what switching loudness compensation on puts back: the last non-zero `audio.loudness`, kept by the audio module when it goes to 0 |
 | `audio.loud_ref` | 20…100 %, 100 | "Usual volume": where loudness compensation adds nothing |
 | `audio.bass_db`, `audio.treble_db` | −6…+6 dB, 0 | shelves at 100 Hz and 10 kHz, Q 0.71 |
 | `audio.eq_enabled` | bool, true | PEQ bypass (crossfade) |
@@ -246,8 +263,8 @@ block.
 | `audio.rms_cap_db10` | −120…0 (tenths of dB), 0 off | bass power ceiling, dB below a full-scale sine in both channels |
 | `audio.amp_clip_db10` | −240…0 (tenths of dBFS), −98 | amplifier ceiling C |
 
-All of them are saved (persist). Shelves at 0 dB ("Bass", "Treble"), balance 0, loudness compensation 0 (and at the top of the scale), width 100 are a
-bit-exact "wire".
+All of them are saved (persist). Shelves at 0 dB ("Bass", "Treble"), balance 0, loudness compensation 0 (and at the top of the scale), width 100,
+the leveler off are a bit-exact "wire".
 
 ### Volume
 
@@ -268,6 +285,33 @@ bit-exact "wire".
 - `audio.volume` is written by: the panel (encoder — 2 % per click; `docs/UI.md`), the web and the
   API, DLNA RenderingControl, AirPlay (through a reference point, `docs/NETWORK.md`), the phone
   over AVRCP and the computer over USB (sections below).
+
+### Volume leveling
+
+For a film mixed quiet with loud advertising in its breaks (`components/audio_dsp/src/leveler.cpp`,
+`audio_core::Leveler`). It acts on the source before the volume, so what it holds does not depend on
+where the volume is.
+
+- Loudness as ITU-R BS.1770 measures it: the K-weighting (its pre-filter shelf and the RLB
+  high-pass, from the analogue prototypes, so at every rate; at 48 kHz within 0.05 dB of the
+  standard's own filters), mean square of the mono sum (L + R)/2, in LUFS. Decorrelated content reads
+  3 dB lower than the standard would make it.
+- Two levels: over ~0.4 s (one-pole, BS.1770's momentary window is 400 ms) and over ~50 ms. The
+  gain wanted is −20 LUFS minus the slow level, and no more than −12 LUFS minus the fast one (a bang
+  after a quiet scene), within −20…+6 dB.
+- Down: a one-pole on the gain in dB, τ 100 ms — a break 16 dB over the film is down by half in
+  0.3 s and to within a dB in a second. Up: only after 1.5 s without a cut, then at 3 dB/s at most —
+  back from that break in about 7 s.
+- A 5 ms block under −60 LUFS is a pause: it is not measured, and the gain stays where it is.
+- The gain is applied as a straight line across each block, decided by the block before.
+- Off is a wire, bit-exact. Switched off while it holds a gain, it goes back to 0 dB at 3 dB/s
+  first. A chain reset (source switch, new rate) restarts the measurement and keeps the gain.
+- The current gain is `audio.lev_db`.
+- **Schedule** (`AudioModule::leveler_schedule`, once a second): while `audio.lev_sched` is on and
+  SNTP has set the clock, `audio.leveler` is switched on when the minute of the day enters
+  [`lev_from`, `lev_to`) and off when it leaves; the window may cross midnight, equal ends are an
+  empty window. When the schedule starts to apply (switched on, moved, the clock set at boot) it
+  sets the switch to what it says now. Between the edges the switch on the Player is left alone.
 
 ### Subsonic and port
 
@@ -302,16 +346,18 @@ bit-exact "wire".
 ### PEQ and `eq.json`
 
 - Up to 10 bands: `peak`, `lowshelf`, `highshelf`, `lowpass`, `highpass`, `notch`; fields `type`,
-  `f`, `gain`, `q`, `on`. Shelf Q ≤ 1.0 (above that a shelf overshoots its own gain).
+  `f`, `gain`, `q`, `on`. `f` 20 Hz…20 kHz, `gain` ±12 dB, `q` 0.3…8, shelf Q ≤ 1.0 (above that a
+  shelf overshoots its own gain): what the editors reach, and a band read from a file is held to it
+  too.
 - A band change is crossfaded over 20 ms: the old design plays out on its own copy of the state;
   an edit during the fade waits, and the last one wins. Filter state is reset only behind a closed
   output gate (pause, stop, source change, retune).
 - The EQ document is `audio_core::EqStore` (`components/audio_dsp/include/eq_store.h`): `eq.json`
   (what plays) and `eq_custom.json` ("Custom") in `/userdata` through `UserStore`, with the factory
   `data/eq.json` as the fallback. Both files are read once at start; schema `version` 2, a file of a
-  newer schema is not read (EQ flat). Before the first write over a file from an older build, a
-  copy `<name>.v2` is left next to it; a file that cannot be read moves to `<name>.bad` on the
-  first write.
+  newer schema is not read (EQ flat), nor is one with a number no float holds (`inf`, `nan`,
+  `1e39`). Before the first write over a file from an older build, a copy `<name>.v2` is left next
+  to it; a file that cannot be read moves to `<name>.bad` on the first write.
 - The editors are the panel's EQ page and the web (`GET`/`POST /api/eq`: `{"rev",bands}`,
   `{"rev",preset}`, `{"keep":true}`; an edit from a stale revision → 409). The document's owner is
   `AudioModule::own_eq()` on the main task: it passes the bands to the audio task through `EqBus`
@@ -554,7 +600,8 @@ the I2S line GPIO33/30/31, everything else over the UART link; the byte contract
   asked for is not cancelled.
 - Metadata: `bt.state`, `bt.peer`, `bt.title`, `bt.artist`, `bt.album`, `bt.pos_s`, `bt.dur_s`,
   `bt.play_state`; the cover — `modules/bt/src/bt_cover.cpp` (`docs/LINK_PROTOCOL.md`,
-  "Cover art"). Disconnecting the phone clears the track and the format.
+  "Cover art"). Disconnecting the phone clears the track and the format; losing or refusing the
+  link to the satellite clears them too, with `bt.state`, `bt.peer` and `bt.codec`.
 - Settings and pairing (a satellite with `DEV_CAP_BT_SETTINGS`): `GET`/`POST /api/bt`,
   `bt.cfg_rev`, `bt.pair_*`. The satellite's first name becomes the panel's name if that is not set
   yet; after that a satellite with a different name is given the panel's name
@@ -577,16 +624,17 @@ Class 2 device on the HS port. The port's hardware limits: `docs/CONCEPT.md`, "U
 - The computer started playing (peak above −60 dBFS within the last 300 ms) and the selected
   source is not playing → `audio.source` = 7. Host mute → zeros.
 - The host volume (−80…0 dB, spread evenly over 0…100) goes into `audio.volume` through a reference
-  point (`modules/usb_audio/include/usb_volume.h`): at the start of a stream the room keeps its
-  level; for 3 s after the start and while USB is not the source the level only sets the
-  reference; after that piecewise-linear (the top of the slider is the top of the panel, the bottom
-  is silence); a move of the knob or the web becomes the new reference.
+  point (`components/audio_dsp/include/volume_follow.h`, the rule AirPlay keeps too): at the start
+  of a stream the room keeps its level; for 3 s after the start and while USB is not the source the
+  level only sets the reference; after that piecewise-linear (the top of the slider is the top of
+  the panel, the bottom is silence); a move of the knob or the web becomes the new reference.
 - The controller's interrupt and both tasks are on core 1 (`usb_audio.core`, 0 or 1, after a
   restart): the interrupt comes every microframe, and a delay over 125 µs loses a packet. The
   TinyUSB task — priority 20, control requests only.
 - Keys: `usb_audio.state` (off | waiting | ready | playing), `usb_audio.rate`, `usb_audio.bits`,
   `usb_audio.diag` (phase, frames, fill, feedback, packets, losses, level, tone, gaps),
-  `usb_audio.losses` (the latest packet losses).
+  `usb_audio.losses` (the latest packet losses), `usb_audio.name` (the name the computer lists the
+  panel by, the panel's one name as it stood at boot; the Player's "Choose “…”" line names it).
 
 ## Spectrum
 

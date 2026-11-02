@@ -9,6 +9,7 @@
 #include "eq_config.h"
 #include "eq_store.h"
 #include "out_caps.h"
+#include "transport_route.h"
 #include "eq_web.h"
 #include "spectrum.h"
 #include "i2s_clock.h"
@@ -32,6 +33,7 @@
 #include <cstring>
 #include <cstdlib>
 #include <cmath>
+#include <ctime>
 
 #ifndef MODESP_AUDIO_DIAGNOSTIC_BT_DIRECT
 #define MODESP_AUDIO_DIAGNOSTIC_BT_DIRECT 0
@@ -105,7 +107,7 @@ constexpr int      ASRC_TAPS    = 48, ASRC_FILTERS = 48;   // dbry preset -1 (~1
 // stream now, so the ratio is 1.0 +-500 ppm, and a 48-tap 4-term Blackman-Harris transition
 // is already a sixth of the band wide: at 0.92 the corner sat at 20.3 kHz for a 44.1 kHz
 // stream and cost about 2 dB at 20 kHz; at 0.98 it sits at 21.6 kHz and the top octave is
-// flat. Nothing else in the converter moves — 256 phases wait for the customer's WIP.
+// flat.
 constexpr double   ASRC_LOWPASS = 0.98;
 // The servo exists to absorb the difference between two crystals, which is tens of ppm —
 // the satellite measured its own APLL at +40 ppm. It was given +-1 %, fifty times wider than
@@ -129,7 +131,7 @@ constexpr double   ASRC_CAPTURE = 0.02;                    // +-2 % while recove
 //
 // There are two of these loops in the chain now — the satellite catches the phone, this
 // panel catches the satellite — and a cascade is only stable while the inner loop is the
-// faster one. The satellite steps once a second (plan item 10.1); this steps four times in
+// faster one. The satellite steps once a second; this steps four times in
 // that second, so by the time the satellite has moved once this loop has already settled
 // against the move rather than chasing it.
 //
@@ -144,7 +146,8 @@ constexpr uint32_t BT_SERVO_MS = 250;
 // coefficients and then RECALIBRATES, spinning on clk_ll_apll_calibration_is_done()
 // (esp32p4/rtc_clk.c) — so every step is a moment of analogue settling on the clock the DAC
 // locks its own PLL to. One of those is what a track-boundary retune costs, and the whole
-// reason stage 14 exists is that the customer's bench can hear it.
+// reason the output clock is set once per source session (docs/AUDIO.md, "Output rate and
+// sessions") is that it can be heard.
 //
 // Two parts per million of hysteresis makes the difference between a loop that writes four
 // times a second forever and one that writes when something actually changed. The drift it
@@ -162,7 +165,7 @@ constexpr int32_t  BT_TRIM_HYST_PPM = 2;
 // eighty seconds of correction, which is where tracking stops being enough.
 constexpr float    I32_SCALE    = 2147483648.0f;
 // The amplifier's clean ceiling until someone calibrates it, in tenths of dBFS: −9.8 dBFS.
-// TPA3255 at the customer's 24 V PVDD (30.09.2026): each half-bridge swings at most ~0.95·PVDD/2
+// TPA3255 at this unit's 24 V PVDD: each half-bridge swings at most ~0.95·PVDD/2
 // = 11.4 V either side of mid-rail and its gain is 21.5 dB (SLASEA8A §7.5), so the PCM5102A's
 // 2.97 V peak (2.1 Vrms, SLAS859C §8.5) clips it 9.8 dB under the DAC's full scale. That holds
 // both for a DAC driving one input (INPUT_A, "input signal for half bridge A") and for the
@@ -312,22 +315,6 @@ void AudioModule::on_bind(modesp::DriverManager& drivers,
 // Init: ports, EQ file, ASRC, tasks
 // ═══════════════════════════════════════════════════════════════
 
-bool AudioModule::load_eq_file(audio_core::EqBand* bands, int& count) {
-    count = 0;
-    audio_core::EqConfig cfg;
-    // Through UserStore: the EQ someone tuned lives in /userdata since 22.09.2026, and the
-    // image's /data/eq.json is the factory-flat fallback a panel boots with before anyone
-    // has touched a slider (plan item 11.1).
-    char path[160];
-    modesp::UserStore::read_path("eq.json", path, sizeof(path));
-    if (!audio_core::eq_load(path, cfg)) {
-        ESP_LOGW(TAG, "%s missing or unreadable — EQ flat", path);
-        return false;
-    }
-    take_eq(cfg, bands, count);
-    return true;
-}
-
 void AudioModule::take_eq(const audio_core::EqConfig& cfg, audio_core::EqBand* bands, int& count) {
     snprintf(out_mode_, sizeof(out_mode_), "%s", cfg.mode);
     if (strcmp(out_mode_, "2.0") != 0) {
@@ -354,7 +341,7 @@ void AudioModule::take_eq(const audio_core::EqConfig& cfg, audio_core::EqBand* b
 /// producer, and audio.eq_rev tells the web (and the page, through the store) that it moved.
 ///
 /// Kept at a moment that is not in the way. A LittleFS write stops both cores' caches and the
-/// speakers click (customer, 04.10.2026), so nothing is written while the DSP page is in front
+/// speakers click, so nothing is written while the DSP page is in front
 /// — it is written when the user leaves it, or in standby — nor while the web is still sending
 /// edits: EQ_WEB_QUIET_MS after the last one, or at once when the web page is left
 /// ({"keep":true}).
@@ -376,8 +363,8 @@ void AudioModule::own_eq() {
     const int64_t now = esp_timer_get_time() / 1000;
     if (!st.take_keep() && web != 0 && now - web < EQ_WEB_QUIET_MS) return;
 
-    // Always to the store: an edit must survive the next full flash (plan item 11.1).
-    // Static: the main task had 468 bytes of stack to spare at its deepest (11.10.2026).
+    // Always to the store: an edit must survive the next full flash.
+    // Static: the main task had 468 bytes of stack to spare at its deepest.
     static char eq_path[160], custom_path[160];
     modesp::UserStore::write_path("eq.json", eq_path, sizeof(eq_path));
     modesp::UserStore::write_path("eq_custom.json", custom_path, sizeof(custom_path));
@@ -542,7 +529,7 @@ void AudioModule::port_meter_loop() {
         const int32_t f = (int32_t)lroundf(fit.hz);
         switch (fit.status) {
         case PortFit::OK:
-            // Found, and offered — never written (S6): «Прийняти» in the speakers' wizard or
+            // Found, and offered — never written: «Прийняти» in the speakers' wizard or
             // «Застосувати» on the calibration page writes audio.port_hz, as measured. Until then
             // nothing about the sound has changed.
             state_set("audio.port_meas_hz", fit.hz);
@@ -687,7 +674,7 @@ bool AudioModule::on_init() {
     dsp_.set_pre_gain_db(eq_trim_db_);
     dsp_.set_eq_enabled(read_bool("audio.eq_enabled", true));
     {
-        // After power-on no louder than audio.vol_start (S4). The saved value itself comes down,
+        // After power-on no louder than audio.vol_start. The saved value itself comes down,
         // not just the level, so every client shows what plays — and /api/restore, which saves
         // and restarts, lands here too.
         const int32_t saved = read_int("audio.volume", 30);
@@ -706,9 +693,10 @@ bool AudioModule::on_init() {
     last_hp_hz_ = read_int("audio.hp_hz", 40);
     dsp_.set_subsonic((float)last_hp_hz_);
     {
-        // Where the port came from (audio.port_src, S6). Before that key the meter wrote what it
+        // Where the port came from (audio.port_src). Before that key the meter wrote what it
         // found by itself, and a number typed in looked the same: one that is set was set by
-        // somebody, and nothing shows it was measured — as audio.amp_src at S0a.
+        // somebody, and nothing shows it was measured — as audio.amp_src does for the
+        // amplifier's ceiling.
         const int32_t src = read_int("audio.port_src", modesp::gen::AUDIO_PORT_SRC_UNSET);
         if (src == modesp::gen::AUDIO_PORT_SRC_UNSET && read_int("audio.port_hz", 0) > 0)
             state_set("audio.port_src", (int32_t)modesp::gen::AUDIO_PORT_SRC_MANUAL);
@@ -723,6 +711,8 @@ bool AudioModule::on_init() {
     dsp_.set_tone((float)(int8_t)(last_timbre_ >> 8), (float)(int8_t)last_timbre_);
     last_balance_ = read_int("audio.balance_db10", 0);
     dsp_.set_balance_db((float)last_balance_ / 10.0f);
+    last_leveler_ = read_bool("audio.leveler", false) ? 1 : 0;
+    dsp_.set_leveler(last_leveler_ != 0);
     log_bass("boot");
     // The bass limiter's look-ahead: up to 8 KB, read and written once a frame in order — PSRAM
     // through the cache serves that well, and internal RAM is what the TLS radio runs short of.
@@ -738,7 +728,7 @@ bool AudioModule::on_init() {
     last_amp_clip_ = read_int("audio.amp_clip_db10", AMP_CLIP_DEFAULT_DB10);
     set_amp_clip(last_amp_clip_);
     {
-        // Where the ceiling came from (audio.amp_src, 14.10.2026). Before that key, "write" marked
+        // Where the ceiling came from (audio.amp_src). Before that key, "write" marked
         // any ceiling calibrated, the untouched datasheet one included, and a ceiling set any other
         // way still said "datasheet". Only the number can be trusted: one that is not the
         // datasheet's was set by somebody, and nothing shows it was measured. audio.amp_cal stays
@@ -810,8 +800,8 @@ bool AudioModule::on_init() {
         if (is_ring_source(persisted) && audio_core::pcm_ring().capacity() == 0) {
             // Not "unavailable" — not offered YET: the ring's owner initialises after this
             // module. Keep the choice and settle it in the report loop once the ring exists.
-            // Falling back here brought every boot with the radio persisted up silent, and
-            // the same for AirPlay (24.09.2026).
+            // Falling back here would bring every boot with the radio persisted up silent,
+            // and the same for AirPlay.
             pending_source_ = persisted;
             ESP_LOGI(TAG, "source %s waits for the PCM ring", source_name(persisted));
         } else {
@@ -834,6 +824,7 @@ bool AudioModule::on_init() {
     if (bt_ && xTaskCreatePinnedToCore(bt_rx_task_entry, "audio_bt", 4096, this, 23, &bt_task_, 1) != pdPASS) {
         ESP_LOGW(TAG, "BT reader task not created — BT source unavailable");
         bt_ = nullptr;
+        source_gone(SRC_BT);   // audio.sources offered it above
     }
 
     ESP_LOGI(TAG, "Initialized: main %lu Hz %u-bit%s%s, BT %s, amp %s, heap DMA %u",
@@ -855,11 +846,53 @@ void AudioModule::send(CmdType t, int32_t v) {
     if (xQueueSend(cmd_q_, &c, 0) != pdTRUE) ESP_LOGW(TAG, "command queue full");
 }
 
-void AudioModule::on_update(uint32_t dt_ms) {
-    own_eq();
-    if (!main_ || !run_) return;
+void AudioModule::leveler_schedule(uint32_t dt_ms) {
+    lev_sched_ms_ += dt_ms;
+    if (lev_sched_ms_ < 1000) return;
+    lev_sched_ms_ = 0;
+    int now_min = -1;
+    const time_t now = time(nullptr);
+    struct tm t;
+    localtime_r(&now, &t);
+    if (t.tm_year + 1900 >= 2020) now_min = t.tm_hour * 60 + t.tm_min;   // SNTP has set the clock
+    const int32_t from = read_int("audio.lev_from", 22 * 60), to = read_int("audio.lev_to", 7 * 60);
+    const int r = lev_sched_.tick(now_min, read_bool("audio.lev_sched", false), (int)from, (int)to);
+    if (r < 0 || (r == 1) == read_bool("audio.leveler", false)) return;
+    ESP_LOGI(TAG, "leveler %s by the schedule (%02d:%02d–%02d:%02d)", r ? "on" : "off",
+             (int)(from / 60), (int)(from % 60), (int)(to / 60), (int)(to % 60));
+    state_set("audio.leveler", r == 1);
+}
 
-    const int32_t src  = read_int("audio.source", SRC_OFF);
+bool AudioModule::source_on_offer(int32_t src) {
+    switch (src) {
+    case SRC_AUX:
+    case SRC_BT:      return (read_int("audio.sources", 0) & (1 << src)) != 0;   // source_gone() clears BT
+    case SRC_AIRPLAY:
+    case SRC_USB:     return (ring_sources_offered() & (1 << src)) != 0;
+    default:          return true;      // off, the tone, the card and the radio
+    }
+}
+
+void AudioModule::source_gone(int32_t src) {
+    gone_source_.store((src << 8) | (pend_source_ >= 0 ? pend_source_ : source_), std::memory_order_release);
+}
+
+/// The settings, from the store to the audio task: each one that changed since the last call
+/// is sent. on_update() calls it only when the store has moved. True when anything about the
+/// test tone changed, which restarts the clock of a tone through the chain.
+bool AudioModule::follow_settings() {
+    int32_t src = read_int("audio.source", SRC_OFF);
+    // A source this board cannot play goes back to the one that plays rather than on to the
+    // task, which would refuse it and play on while every producer read audio.source as no
+    // longer its own and stopped: silence, with the refused number saved. The panel and the web
+    // offer only what audio.sources has; the API and MQTT take any 0…7.
+    if (src != last_source_ && !source_on_offer(src)) {
+        const int32_t keep = last_source_ >= 0 ? last_source_ : (int32_t)SRC_OFF;
+        ESP_LOGW(TAG, "source %s is not on offer — staying %s", source_name(src), source_name(keep));
+        if (src == pending_source_) pending_source_ = -1;   // judged here, not again below
+        state_set("audio.source", keep);
+        src = keep;
+    }
     int32_t       vol  = read_int("audio.volume", 30);
     const int32_t tone = read_int("audio.tone_hz", 1000);
     const bool    mute = read_bool("audio.mute", false);
@@ -874,7 +907,7 @@ void AudioModule::on_update(uint32_t dt_ms) {
         if (read_bool("audio.cal_port_off", false)) state_set("audio.cal_port_off", false);
         if (read_int("audio.cal_vol_cap", 0) != 0) state_set("audio.cal_vol_cap", (int32_t)0);
     }
-    // anything that changes the tone restarts the clock of a tone through the chain (below)
+    // anything that changes the tone restarts the clock of a tone through the chain (on_update)
     bool tone_touched = (src == SRC_TONE && last_source_ != SRC_TONE) || tone != last_tone_;
 
     if (src != last_source_)  { last_source_ = src;  send(CmdType::SOURCE, src); }
@@ -885,15 +918,165 @@ void AudioModule::on_update(uint32_t dt_ms) {
         level_.put(vol, vmax);          // the last value, read at the next block: never dropped
         vol_published_ = false;
     }
-    if (!vol_published_ && level_.applied()) {
-        vol_published_ = true;
-        state_set("audio.vol_eff", audio_core::LevelLatch::effective(vol, vmax));
-    }
     if (tone != last_tone_)   { last_tone_ = tone;   send(CmdType::TONE_HZ, tone); }
     if (mute != last_mute_)   { last_mute_ = mute;   send(CmdType::MUTE, mute); }
     if (eq != last_eq_)       { last_eq_ = eq;       send(CmdType::EQ_ENABLE, eq); }
     const bool btclk = read_bool("audio.bt_clock_follow", true);
     if (btclk != last_bt_clock_) { last_bt_clock_ = btclk; send(CmdType::BT_CLOCK, btclk); }
+    const int32_t width = read_int("audio.width", 100);
+    const int32_t mbass = read_int("audio.mono_bass_hz", 0);
+    if (width != last_width_) { last_width_ = width; send(CmdType::WIDTH, width); }
+    if (mbass != last_mono_bass_) { last_mono_bass_ = mbass; send(CmdType::MONO_BASS, mbass); }
+    const int32_t clip = read_int("audio.amp_clip_db10", AMP_CLIP_DEFAULT_DB10);
+    if (clip != last_amp_clip_) {
+        last_amp_clip_ = clip;
+        send(CmdType::AMP_CLIP, clip);
+        state_set("audio.ceiling_dbfs", ceiling_dbfs((float)clip / 10.0f));
+    }
+    const int32_t drive = read_int("audio.drive_db", 0);
+    if (drive != last_drive_) { last_drive_ = drive; send(CmdType::DRIVE, drive); }
+    const int32_t hp = read_int("audio.hp_hz", 40);
+    bool bass_moved = false;
+    if (hp != last_hp_hz_) { last_hp_hz_ = hp; send(CmdType::SUBSONIC, hp); bass_moved = true; }
+    const int32_t xo = read_int("audio.bass_xo_hz", 120);
+    if (xo != last_bass_xo_) { last_bass_xo_ = xo; send(CmdType::BASS_XO, xo); }
+    const int32_t cap = read_int("audio.rms_cap_db10", 0);
+    if (cap != last_rms_cap_) { last_rms_cap_ = cap; send(CmdType::RMS_CAP, cap); }
+    const int32_t loud = read_int("audio.loudness", 70);
+    if (loud != last_loud_) {
+        // Off is 0, and switching it on puts back the strength it had: kept here, where every
+        // change of it arrives, and saved, so the glass and every browser put back the same one.
+        if (loud == 0 && last_loud_ > 0) state_set("audio.loud_back", last_loud_);
+        last_loud_ = loud;
+        send(CmdType::LOUDNESS, loud);
+        bass_moved = true;
+    }
+    const int32_t ref = loud_ref();
+    if (ref != last_loud_ref_) { last_loud_ref_ = ref; send(CmdType::LOUD_REF, ref); bass_moved = true; }
+    const int32_t port = read_port();
+    if (port != last_port_) { last_port_ = port; send(CmdType::PORT, port); bass_moved = true; }
+    if (bass_moved) log_bass("changed");
+    const int32_t tim = timbre();
+    if (tim != last_timbre_) { last_timbre_ = tim; send(CmdType::TIMBRE, tim); }
+    const int32_t bal = read_int("audio.balance_db10", 0);
+    if (bal != last_balance_) { last_balance_ = bal; send(CmdType::BALANCE, bal); }
+    const int32_t lev = read_bool("audio.leveler", false) ? 1 : 0;
+    if (lev != last_leveler_) { last_leveler_ = lev; send(CmdType::LEVELER, lev); }
+    {
+        const int32_t mode = read_int("audio.tone_mode", TONE_CHAIN);
+        const int32_t db10 = read_int("audio.tone_db10", -260);
+        const int32_t ch   = read_int("audio.tone_ch", 3);
+        if (mode != last_tone_mode_ || db10 != last_tone_db10_ || ch != last_tone_ch_) tone_touched = true;
+        if (mode != last_tone_mode_) {
+            last_tone_mode_ = mode;
+            send(CmdType::TONE_MODE, mode);
+            if (mode != TONE_CHAIN)
+                ESP_LOGW(TAG, "calibration tone: %s, past the DSP chain at an exact DAC level",
+                         mode == TONE_BURSTS ? "bursts" : "steady");
+        }
+        if (db10 != last_tone_db10_) { last_tone_db10_ = db10; send(CmdType::TONE_DB10, db10); }
+        if (ch != last_tone_ch_)     { last_tone_ch_ = ch;     send(CmdType::TONE_CH, ch); }
+    }
+    if (read_bool("audio.eq_reload", false)) {
+        state_set("audio.eq_reload", false);
+        send(CmdType::EQ_RELOAD, 0);
+    }
+    // The analyser is a 1024-point FFT every 512 frames, and nobody needs it while the
+    // panel shows a screen without a spectrum row. ui.screen is the UI's own record of what
+    // it is showing; "now" and the standby face draw the row ("radio" did once, and costs
+    // nothing to keep). The standby face shows it only while music plays, and with nothing
+    // playing the analyser is fed silence or not at all (source off) — not worth a second key.
+    {
+        char screen[16] = "";
+        read_string("ui.screen", screen, sizeof(screen));
+        const int want = (strcmp(screen, "now") == 0 || strcmp(screen, "radio") == 0 ||
+                          strcmp(screen, "standby") == 0) ? 1 : 0;
+        if (want != last_spectrum_) { last_spectrum_ = want; send(CmdType::SPECTRUM, want); }
+    }
+
+    return tone_touched;
+}
+
+static_assert(audio_core::TS_BT == modesp::gen::AUDIO_SOURCE_BT &&
+              audio_core::TS_FILE == modesp::gen::AUDIO_SOURCE_FILE &&
+              audio_core::TS_RADIO == modesp::gen::AUDIO_SOURCE_RADIO &&
+              audio_core::TS_AIRPLAY == modesp::gen::AUDIO_SOURCE_AIRPLAY,
+              "transport_route.h names audio.source values");
+
+void AudioModule::follow_transport(bool moved) {
+    Command c;
+    bool asked = false;
+    int32_t codes[COMMAND_QUEUE_DEPTH];
+    size_t n = 0;
+    while (next_command(c)) {
+        if (strcmp(c.key, "audio.transport") == 0 && n < COMMAND_QUEUE_DEPTH) codes[n++] = c.value;
+        asked = true;
+    }
+    if (!moved && !asked) return;
+
+    // Read fresh for a command: the toggle depends on whether the stream sounds this moment.
+    audio_core::TransportInputs in;
+    in.source = read_int("audio.source", SRC_OFF);
+    char s[16] = {};
+    read_string("radio.mode", s, sizeof(s));
+    in.radio_push = strcmp(s, "push") == 0;
+    read_string("radio.state", s, sizeof(s));
+    in.sounding = strcmp(s, "playing") == 0 || strcmp(s, "buffering") == 0 ||
+                  strcmp(s, "connecting") == 0 || strcmp(s, "reconnecting") == 0;
+    read_string("dlna.state", s, sizeof(s));
+    in.dlna_playing = strcmp(s, "PLAYING") == 0;
+    in.seekable  = read_bool("radio.seekable", false);
+    read_string("bt.peer", s, sizeof(s));
+    in.bt_peer   = s[0] != '\0';
+    in.ap_remote = read_bool("airplay.remote", false);
+
+    state_set("audio.transport_caps", audio_core::transport_caps(in));
+    for (size_t i = 0; i < n; i++) {
+        const audio_core::TransportRoute r = audio_core::transport_route(in, codes[i]);
+        if (!r.module) {
+            ESP_LOGI(TAG, "transport %ld: source %ld does not take it", (long)codes[i], (long)in.source);
+        } else if (!post_command_to(r.module, r.key, r.code)) {
+            ESP_LOGW(TAG, "transport %ld: %s=%ld not queued", (long)codes[i], r.key, (long)r.code);
+        }
+    }
+}
+
+void AudioModule::on_update(uint32_t dt_ms) {
+    own_eq();
+    // Before the gate below: the transport commands other modules, and its queue must not fill
+    // while the audio task is down.
+    const uint32_t tver = state_version();
+    follow_transport(tver == 0 || tver != transport_ver_);
+    transport_ver_ = tver;
+    if (!main_ || !run_) return;
+
+    // Bluetooth whose port or reader task would not start after audio.sources offered it: the
+    // bit goes, and a request for it gives way to what the task plays.
+    const int32_t gone = gone_source_.exchange(-1, std::memory_order_acquire);
+    if (gone >= 0) {
+        state_set("audio.sources", read_int("audio.sources", 0) & ~(1 << (gone >> 8)));
+        if (read_int("audio.source", SRC_OFF) == gone >> 8) {
+            last_source_ = gone & 0xFF;
+            state_set("audio.source", last_source_);
+        }
+    }
+    leveler_schedule(dt_ms);
+    // The settings change only when somebody touches a control, and reading them is some thirty
+    // lookups in the store, each under its mutex, on every pass. They are read again only when
+    // the store's version has moved since the last time — every one of them is written tracked —
+    // or when the store did not answer (0). The schedule goes first, so a switch it makes is sent
+    // in the same pass.
+    bool tone_touched = false;
+    const uint32_t ver = state_version();
+    if (ver == 0 || ver != settings_ver_) {
+        settings_ver_ = ver;
+        tone_touched = follow_settings();
+    }
+    // The rest runs on every pass: what the audio task has done since, and the clocks.
+    if (!vol_published_ && level_.applied()) {
+        vol_published_ = true;
+        state_set("audio.vol_eff", audio_core::LevelLatch::effective(last_volume_, last_vol_max_));
+    }
     if (bt_path_ != last_bt_path_) {
         // The audio task chose the Bluetooth path at its last prime; say why, once, from
         // here: that task does not log.
@@ -921,36 +1104,6 @@ void AudioModule::on_update(uint32_t dt_ms) {
         if (BT_DIAGNOSTIC || MODESP_AUDIO_BT_DIRECT_CONTINUOUS) ESP_LOGW(TAG, "BT path: %s", why);
         else ESP_LOGI(TAG, "BT path: %s", why);
     }
-    const int32_t width = read_int("audio.width", 100);
-    const int32_t mbass = read_int("audio.mono_bass_hz", 0);
-    if (width != last_width_) { last_width_ = width; send(CmdType::WIDTH, width); }
-    if (mbass != last_mono_bass_) { last_mono_bass_ = mbass; send(CmdType::MONO_BASS, mbass); }
-    const int32_t clip = read_int("audio.amp_clip_db10", AMP_CLIP_DEFAULT_DB10);
-    if (clip != last_amp_clip_) {
-        last_amp_clip_ = clip;
-        send(CmdType::AMP_CLIP, clip);
-        state_set("audio.ceiling_dbfs", ceiling_dbfs((float)clip / 10.0f));
-    }
-    const int32_t drive = read_int("audio.drive_db", 0);
-    if (drive != last_drive_) { last_drive_ = drive; send(CmdType::DRIVE, drive); }
-    const int32_t hp = read_int("audio.hp_hz", 40);
-    bool bass_moved = false;
-    if (hp != last_hp_hz_) { last_hp_hz_ = hp; send(CmdType::SUBSONIC, hp); bass_moved = true; }
-    const int32_t xo = read_int("audio.bass_xo_hz", 120);
-    if (xo != last_bass_xo_) { last_bass_xo_ = xo; send(CmdType::BASS_XO, xo); }
-    const int32_t cap = read_int("audio.rms_cap_db10", 0);
-    if (cap != last_rms_cap_) { last_rms_cap_ = cap; send(CmdType::RMS_CAP, cap); }
-    const int32_t loud = read_int("audio.loudness", 70);
-    if (loud != last_loud_) { last_loud_ = loud; send(CmdType::LOUDNESS, loud); bass_moved = true; }
-    const int32_t ref = loud_ref();
-    if (ref != last_loud_ref_) { last_loud_ref_ = ref; send(CmdType::LOUD_REF, ref); bass_moved = true; }
-    const int32_t port = read_port();
-    if (port != last_port_) { last_port_ = port; send(CmdType::PORT, port); bass_moved = true; }
-    if (bass_moved) log_bass("changed");
-    const int32_t tim = timbre();
-    if (tim != last_timbre_) { last_timbre_ = tim; send(CmdType::TIMBRE, tim); }
-    const int32_t bal = read_int("audio.balance_db10", 0);
-    if (bal != last_balance_) { last_balance_ = bal; send(CmdType::BALANCE, bal); }
     if (read_bool("audio.port_meas", false) && !meter_busy_.load()) {
         meter_busy_.store(true);
         if (xTaskCreatePinnedToCore(meter_entry, "port_meter", 8192, this, 5, nullptr, 0) != pdPASS) {
@@ -959,59 +1112,28 @@ void AudioModule::on_update(uint32_t dt_ms) {
             state_set("audio.port_meas_status", "@cal.m_no_memory");
         }
     }
-    {
-        const int32_t mode = read_int("audio.tone_mode", TONE_CHAIN);
-        const int32_t db10 = read_int("audio.tone_db10", -260);
-        const int32_t ch   = read_int("audio.tone_ch", 3);
-        if (mode != last_tone_mode_ || db10 != last_tone_db10_ || ch != last_tone_ch_) tone_touched = true;
-        if (mode != last_tone_mode_) {
-            last_tone_mode_ = mode;
-            send(CmdType::TONE_MODE, mode);
-            if (mode != TONE_CHAIN)
-                ESP_LOGW(TAG, "calibration tone: %s, past the DSP chain at an exact DAC level",
-                         mode == TONE_BURSTS ? "bursts" : "steady");
-        }
-        if (db10 != last_tone_db10_) { last_tone_db10_ = db10; send(CmdType::TONE_DB10, db10); }
-        if (ch != last_tone_ch_)     { last_tone_ch_ = ch;     send(CmdType::TONE_CH, ch); }
-        // Off by itself after TONE_RAW_MAX_MS of playing: the source goes off and the mode back.
-        if (mode != TONE_CHAIN && src == SRC_TONE) {
-            tone_raw_ms_ += dt_ms;
-            if (tone_raw_ms_ >= TONE_RAW_MAX_MS) {
-                tone_raw_ms_ = 0;
-                ESP_LOGW(TAG, "calibration tone off after %lu s", (unsigned long)(TONE_RAW_MAX_MS / 1000));
-                state_set("audio.tone_mode", (int32_t)TONE_CHAIN);
-                state_set("audio.source", (int32_t)SRC_OFF);
-            }
-        } else {
+    // Off by itself after TONE_RAW_MAX_MS of playing: the source goes off and the mode back.
+    if (last_tone_mode_ != TONE_CHAIN && last_source_ == SRC_TONE) {
+        tone_raw_ms_ += dt_ms;
+        if (tone_raw_ms_ >= TONE_RAW_MAX_MS) {
             tone_raw_ms_ = 0;
+            ESP_LOGW(TAG, "calibration tone off after %lu s", (unsigned long)(TONE_RAW_MAX_MS / 1000));
+            state_set("audio.tone_mode", (int32_t)TONE_CHAIN);
+            state_set("audio.source", (int32_t)SRC_OFF);
         }
-        // Through the chain: off after TONE_CHAIN_IDLE_MS with nothing about it changed.
-        if (mode == TONE_CHAIN && src == SRC_TONE && !tone_touched) {
-            tone_idle_ms_ += dt_ms;
-            if (tone_idle_ms_ >= TONE_CHAIN_IDLE_MS) {
-                tone_idle_ms_ = 0;
-                ESP_LOGW(TAG, "test tone off after %lu s unchanged", (unsigned long)(TONE_CHAIN_IDLE_MS / 1000));
-                state_set("audio.source", (int32_t)SRC_OFF);
-            }
-        } else {
+    } else {
+        tone_raw_ms_ = 0;
+    }
+    // Through the chain: off after TONE_CHAIN_IDLE_MS with nothing about it changed.
+    if (last_tone_mode_ == TONE_CHAIN && last_source_ == SRC_TONE && !tone_touched) {
+        tone_idle_ms_ += dt_ms;
+        if (tone_idle_ms_ >= TONE_CHAIN_IDLE_MS) {
             tone_idle_ms_ = 0;
+            ESP_LOGW(TAG, "test tone off after %lu s unchanged", (unsigned long)(TONE_CHAIN_IDLE_MS / 1000));
+            state_set("audio.source", (int32_t)SRC_OFF);
         }
-    }
-    if (read_bool("audio.eq_reload", false)) {
-        state_set("audio.eq_reload", false);
-        send(CmdType::EQ_RELOAD, 0);
-    }
-    // The analyser is a 1024-point FFT every 512 frames, and nobody needs it while the
-    // panel shows a screen without a spectrum row. ui.screen is the UI's own record of what
-    // it is showing; "now" and the standby face draw the row ("radio" did once, and costs
-    // nothing to keep). The standby face shows it only while music plays, and with nothing
-    // playing the analyser is fed silence or not at all (source off) — not worth a second key.
-    {
-        char screen[16] = "";
-        read_string("ui.screen", screen, sizeof(screen));
-        const int want = (strcmp(screen, "now") == 0 || strcmp(screen, "radio") == 0 ||
-                          strcmp(screen, "standby") == 0) ? 1 : 0;
-        if (want != last_spectrum_) { last_spectrum_ = want; send(CmdType::SPECTRUM, want); }
+    } else {
+        tone_idle_ms_ = 0;
     }
 
     report_ms_ += dt_ms;
@@ -1066,6 +1188,13 @@ void AudioModule::on_update(uint32_t dt_ms) {
             state_set("audio.loud_db", ld);
         }
     }
+    {
+        const float lv = roundf(st.lev_db * 10.0f) / 10.0f;
+        if (lv != last_lev_db_) {
+            last_lev_db_ = lv;
+            state_set("audio.lev_db", lv);
+        }
+    }
     // Module init order is not guaranteed, so the "file" bit is re-evaluated here
     // rather than only once at startup.
     {
@@ -1107,8 +1236,8 @@ void AudioModule::on_update(uint32_t dt_ms) {
             // after it is that one's correction: the trim actually achieved when the clock
             // is following, the resampler's departure from its base ratio when it is not.
             // `asrc` counts the blocks that went through the converter since the format was
-            // adopted — in steady clock-following it does not move, which is the stage's
-            // definition of done stated as a number rather than as a feeling.
+            // adopted — in steady clock-following it does not move, which is the servo
+            // working, stated as a number rather than as a feeling.
             ESP_LOGI(TAG, "BT signal: in %d/%d dBFS, width %d, out %d/%d, %lu Hz announced "
                           "(%d delivered) -> clock %lu Hz, %s %d ppm, asrc %lu, short %lu, "
                           "dropped %lu, primes %lu, resyncs %lu, ring %u%% = %u ms",
@@ -1135,7 +1264,7 @@ void AudioModule::on_update(uint32_t dt_ms) {
                      (unsigned long)rx_diag.rx_queue_overflows, (unsigned long)rx_diag.rx_short_reads,
                      (unsigned long)tx_diag.tx_queue_overflows, (unsigned long)tx_diag.tx_short_writes,
                      (unsigned long)tx_diag.trim_applied, (unsigned long)tx_diag.trim_attempts,
-                     (long)vol, (int)mute);
+                     (long)last_volume_, (int)last_mute_);
             ESP_LOGI(TAG, "BT I2S %s window: RXq +%lu, TXq +%lu, RX short +%lu, trim +%lu",
                      steady ? "steady" : "transition/idle",
                      (unsigned long)(rx_diag.rx_queue_overflows - last_bt_rx_diag_.rx_queue_overflows),
@@ -1409,11 +1538,12 @@ void AudioModule::adopt_clock(uint32_t hz, uint16_t mclk_mult) {
     retime();                          // and this task's own: the fades and the cushion
     publish_consumer();                // the limiter's look-ahead is a number of frames: it moved
     {
+        // The newest set, if the bus gives it. On a miss set_sample_rate() above has already
+        // designed the bands the chain holds for this rate, and the EQ_RELOAD behind the
+        // publish that caused the miss brings the new ones.
         audio_core::EqBand bands[audio_core::MAX_BANDS];
         int count = 0;
-        if (audio_core::eq_bus().read(bands, count) || load_eq_file(bands, count)) {
-            dsp_.set_bands(bands, count);
-        }
+        if (audio_core::eq_bus().read(bands, count)) dsp_.set_bands(bands, count);
         dsp_.set_pre_gain_db(eq_trim_db_);
     }
     dsp_.reset();
@@ -1426,6 +1556,28 @@ void AudioModule::adopt_clock(uint32_t hz, uint16_t mclk_mult) {
         if (until > amp_settle_until_us_) amp_settle_until_us_ = until;
     }
     ESP_LOGI(TAG, "output retuned to %lu Hz", (unsigned long)hz);
+}
+
+uint32_t AudioModule::ring_question(audio_core::PcmRing& ring) {
+    bool fresh = ring.take_new_session();
+    uint32_t r = ring.owner() == ring_owner(source_) ? ring.rate() : 0;
+    // USB asks for a new session and then for its rate, and usb_pcm runs above this task on its
+    // core: both can land between the take above and the read. Refused as a second rate of the
+    // old session, that stream stayed silent until the computer restarted it. A rate read after
+    // the request carries the request with it (pcm_ring.h), so before a rate is refused the
+    // request is looked for again — and the rate read again behind it, since the producer may
+    // have run after the read rather than before it.
+    if (!fresh && r && r != out_rate_ && (r == refused_rate_ || (session_rate_ && r != session_rate_)) &&
+        ring.take_new_session()) {
+        fresh = true;
+        r = ring.owner() == ring_owner(source_) ? ring.rate() : 0;
+    }
+    if (fresh) {
+        session_rate_ = 0;
+        refused_rate_ = 0;
+        ring.set_clock_locked(false);
+    }
+    return r;
 }
 
 void AudioModule::pause_bt_reader() {
@@ -1500,7 +1652,7 @@ void AudioModule::apply_source(int32_t src) {
         // descriptors only when the buffer size changes, and that size depends on the slot
         // width alone (i2s_std.c:136, i2s_get_buf_size). Narrowing to 16 bits therefore
         // returns the wide buffers to a heap that, by the time Wi-Fi and a DLNA stream have
-        // had their share, can no longer produce them again: the bench log reads
+        // had their share, can no longer produce them again: the panel logged
         // ESP_ERR_NO_MEM with 16875 bytes free and a largest block of 6144, and Bluetooth is
         // silent for the rest of the uptime. A clock can be given back. Contiguous DMA
         // memory on this chip cannot.
@@ -1809,27 +1961,27 @@ bool AudioModule::pull_bt_block(float* stereo, size_t frames) {
         const bool was_following = bt_clock_follow_;
         // And a fourth thing, decided by the listener rather than the hardware: whether
         // riding the clock is allowed at all (audio.bt_clock_follow). The warning at
-        // BT_TRIM_HYST_PPM came true on the bench on 23.09.2026: sporadic clicks, single or
-        // in pairs, with the Bluetooth source on, playing or not. A trim is not a divider
-        // write. rtc_clk_apll_coeff_set writes I2C_APLL_SDM_STOP and recalibrates the VCO
-        // (esp32p4 rtc_clk.c, clk_tree_ll.h), and the PCM5102A, locking its own PLL to
-        // BCK, meets a disturbed BCK as a clock error: "switch to an internal oscillator
-        // ... the outputs are hard muted to ground", then a restart (SLAS859C 11.2).
-        // Muting the data cannot hide that.
+        // BT_TRIM_HYST_PPM came true on the bench: sporadic clicks, single or in pairs,
+        // with the Bluetooth source on, playing or not. A trim is not a divider write.
+        // rtc_clk_apll_coeff_set writes I2C_APLL_SDM_STOP and recalibrates the VCO (esp32p4
+        // rtc_clk.c, clk_tree_ll.h), and the PCM5102A, locking its own PLL to BCK, meets a
+        // disturbed BCK as a clock error: "switch to an internal oscillator ... the outputs
+        // are hard muted to ground", then a restart (SLAS859C 11.2). Muting the data cannot
+        // hide that.
         //
         // Nor does the loop settle the way the window arithmetic above assumed. In
         // clock-following mode the reader's 240-frame reads and this task's 240-frame
         // blocks run at the same rate by construction, so the ring is sampled at a fixed
         // phase of its own sawtooth: the 250 ms mean does not average that away, it
         // freezes it, and when the phase drifts across a block edge the mean steps by up
-        // to a block, several ppm of command, well past the hysteresis. The captures of
-        // 22.09.2026 show the achieved trim walking -13, -15, -17, -24, -26, -27, -29 over
-        // four minutes of one stream and -55 to -68 in under a minute of another, at
-        // least one rewrite per step; with the satellite sending silence the loop ran
-        // just the same. Not every click is a trim, though: a 150 s capture the same day
-        // with the source NOT Bluetooth, servo idle, bus static, still clicked. So the
-        // setting is the A/B that says whether the trims are audible on this DAC, and
-        // the servo stays in the tree for a trim it cannot hear, if one exists.
+        // to a block, several ppm of command, well past the hysteresis. Bench captures show
+        // the achieved trim walking -13, -15, -17, -24, -26, -27, -29 over four minutes of
+        // one stream and -55 to -68 in under a minute of another, at least one rewrite per
+        // step; with the satellite sending silence the loop ran just the same. Not every
+        // click is a trim, though: a 150 s capture with the source NOT Bluetooth, servo
+        // idle, bus static, still clicked. So the setting is the A/B that says whether the
+        // trims are audible on this DAC, and the servo stays in the tree for a trim it
+        // cannot hear, if one exists.
 #if MODESP_AUDIO_BT_DIRECT_CONTINUOUS
         bt_clock_follow_ = false;
         bt_path_ = BT_CONTINUOUS_DIRECT;
@@ -1992,6 +2144,7 @@ void AudioModule::task_loop() {
     if (bt_ && !bt_->start()) {
         ESP_LOGW(TAG, "port_bt start failed — BT source unavailable");
         bt_ = nullptr;
+        source_gone(SRC_BT);
     }
     main_->set_line_input(source_ == SRC_AUX);
     // The clocks run from here on; the converter gets its boot settle from this moment.
@@ -2052,6 +2205,7 @@ void AudioModule::task_loop() {
                 // is playing withdraws a change still waiting, and the gates simply reopen.
                 if (c.value == source_) pend_source_ = -1;
                 else if (!source_refused(c.value)) pend_source_ = c.value;
+                else source_gone(c.value);   // on offer when on_update sent it
                 break;
             case CmdType::MUTE:      muted_ = (c.value != 0); dsp_.set_mute(muted_); break;
             case CmdType::EQ_ENABLE: dsp_.set_eq_enabled(c.value != 0); break;
@@ -2073,6 +2227,7 @@ void AudioModule::task_loop() {
             case CmdType::PORT:      dsp_.set_port((float)(c.value >> 4), (float)(c.value & 15)); break;
             case CmdType::TIMBRE:    dsp_.set_tone((float)(int8_t)(c.value >> 8), (float)(int8_t)c.value); break;
             case CmdType::BALANCE:   dsp_.set_balance_db((float)c.value / 10.0f); break;
+            case CmdType::LEVELER:   dsp_.set_leveler(c.value != 0); break;
             case CmdType::TONE_MODE: {
                 const int32_t m = (c.value == TONE_RAW || c.value == TONE_BURSTS) ? c.value : TONE_CHAIN;
                 // Through the gate: shut, change, open. Switching in the middle of a tone is a
@@ -2096,14 +2251,11 @@ void AudioModule::task_loop() {
             case CmdType::EQ_RELOAD: {
                 audio_core::EqBand bands[audio_core::MAX_BANDS];
                 int count = 0;
-                // From memory once the UI has published a set; from the file only when
-                // nothing has been edited yet this boot. Never a filesystem read here.
-                const bool from_bus = audio_core::eq_bus().read(bands, count);
-                if (!from_bus && !load_eq_file(bands, count)) break;  // keep what is designed
-                dsp_.set_bands(bands, count);
-                // The section trim comes with the file; the bus carries bands only, so an
-                // in-memory edit leaves whatever the file said.
-                if (!from_bus) dsp_.set_pre_gain_db(eq_trim_db_);
+                // From memory, never a filesystem read here: the bus has held the document's
+                // bands since on_init. A miss means the main loop is publishing a newer set at
+                // this moment, and that set's own EQ_RELOAD follows it (own_eq); until then
+                // the chain keeps the bands it has (eq_config.h).
+                if (audio_core::eq_bus().read(bands, count)) dsp_.set_bands(bands, count);
                 // What the filters were actually given, sampled where it can be heard.
                 // "The EQ feels weak" needs to be answerable with a number, and the number
                 // has to come from the audio side rather than from the screen that drew it.
@@ -2119,7 +2271,7 @@ void AudioModule::task_loop() {
         // music before it, which is a step. Now the
         // old source plays on while both gates close over it, and the switch happens in the
         // silence they leave. Going OFF also waits for the TX queue to play that silence out,
-        // because the amplifier goes off with it (A03).
+        // because the amplifier goes off with it.
         if (pend_source_ >= 0 && sig_gain_ <= 0.0f && out_gate_.shut()) {
             const bool amp_goes_off = pend_source_ == SRC_OFF && amp_on_;
             if (!amp_goes_off || quiet_frames_ >= tx_frames_ + (uint32_t)BLOCK) {
@@ -2215,24 +2367,18 @@ void AudioModule::task_loop() {
             // switches — asks for a new one. Same as a source change for the clock: nothing
             // settled, nothing refused; the producer's next question retunes once the old
             // frames have played out (rate_change_due).
-            if (ring.take_new_session()) {
-                session_rate_ = 0;
-                refused_rate_ = 0;
-                ring.set_clock_locked(false);
-            }
-            const uint32_t r = ring.owner() == ring_owner(source_) ? ring.rate() : 0;
+            const uint32_t r = ring_question(ring);
             if (r) {
                 // The clock is chosen ONCE, by the first track of the source session, and
                 // not touched again until the source changes.
                 //
-                // Following it per TRACK is what produced the click the customer's bench
-                // isolated on 21.09.2026: 48->48 was silent (microphone peak 97, the noise
-                // floor), 44.1->48 peaked at 1020 and 48->44.1 at 981. The mechanism is the
-                // DAC's, not this code's — a PCM5102A takes its internal PLL from the bit
-                // clock, and set_rate() stops that clock to retune it, so the PLL unlocks
-                // and relocks. That is an event in the analogue part of the converter, which
-                // is why muting the DATA path around it (XSMT, the clock-mute patch) did
-                // nothing measurable.
+                // Following it per TRACK is what produced the click isolated on the bench:
+                // 48->48 was silent (microphone peak 97, the noise floor), 44.1->48 peaked at
+                // 1020 and 48->44.1 at 981. The mechanism is the DAC's, not this code's — a
+                // PCM5102A takes its internal PLL from the bit clock, and set_rate() stops that
+                // clock to retune it, so the PLL unlocks and relocks. That is an event in the
+                // analogue part of the converter, which is why muting the DATA path around it
+                // (XSMT, the clock-mute patch) did nothing measurable.
                 //
                 // The benefit the per-track clock was bought for is kept: an album at one
                 // rate still plays bit-exact, and a Bluetooth session still runs natively at
@@ -2280,7 +2426,7 @@ void AudioModule::task_loop() {
                 // nothing is audible while it happens.
                 if (ring.flush_pending()) { ring.reset(ring_generation); priming_ = true; }
                 // The clock waits for the output gate as well. retune() resets the chain, and
-                // after the envelope shuts the chain can still be ringing (review A02).
+                // after the envelope shuts the chain can still be ringing.
                 if (rate_due && out_gate_.shut()) {
                     retune(want_rate_);
                     want_rate_ = 0;
@@ -2385,7 +2531,7 @@ void AudioModule::task_loop() {
                 }
                 memset(s_blk, 0, sizeof(s_blk));
                 // Adopting may move the output clock, and that resets the chain: wait for the
-                // output gate to close over what the chain still holds (review A02).
+                // output gate to close over what the chain still holds.
                 if (!out_gate_.shut()) break;
                 if (!bt_reader_paused_.load()) break; // wait without blocking DAC servicing
                 if (!master) release_link();
@@ -2726,6 +2872,9 @@ void AudioModule::task_loop() {
         } else {
             quiet_frames_ = 0;
         }
+        // The same measure the amplifier goes off by (pend_source_, at the top of the loop), for
+        // whatever must wait until nothing is heard: the radio's logo files (pcm_ring.h).
+        audio_core::pcm_ring().set_output_quiet(quiet_frames_ >= tx_frames_ + (uint32_t)BLOCK);
 
         // ── status window: half a second, at every rate (100 blocks was 0.125 s at 192 kHz, and
         // the main loop, which reads it every 0.5 s, missed three windows in four) ──
@@ -2756,6 +2905,7 @@ void AudioModule::task_loop() {
             status_.out_clamps = out_clamps;
             status_.eq_headroom_db = dsp_.headroom_db();
             status_.loud_db = dsp_.loudness_db();
+            status_.lev_db = dsp_.leveler_db();
             {
                 const float bg = dsp_.take_bass_min();
                 status_.bass_gr_db = bg >= 1.0f ? 0.0f : -20.0f * log10f(bg);
@@ -2794,7 +2944,7 @@ void AudioModule::task_loop() {
         status_.asrc_ppm = (float)(asrc_base_ > 0.0 ? (asrc_ratio_ / asrc_base_ - 1.0) * 1e6 : 0.0);
             // The clock's side of the same story. asrc_ppm stays what it says it is — what
             // the RESAMPLER is doing — and reads zero while the clock is doing the work,
-            // which is the honest answer and also the one the stage's DoD asks for.
+            // which is the honest answer.
             status_.clock_ppm      = bt_trim_got_;
             status_.clock_follow   = bt_clock_follow_;
             status_.bt_asrc_blocks = bt_asrc_blocks_;

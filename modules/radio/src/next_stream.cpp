@@ -50,6 +50,10 @@ Prepared *prepare(uint32_t owner, const char *uri, uint32_t serial) {
         int status = esp_http_client_get_status_code(p->http);
         if (status >= 300 && status < 400) {
             if (esp_http_client_set_redirection(p->http) != ESP_OK) break;
+            // Body bytes that came with the 3xx head stay cached in the handle when the next
+            // hop is on the same host and port (set_url drops them only on a change), and
+            // came out ahead of the track's own: the RIFF/ID3/fLaC sniff saw them and failed.
+            esp_http_client_clear_response_buffer(p->http);
             esp_http_client_close(p->http);
             continue;
         }
@@ -82,6 +86,7 @@ Prepared *prepare(uint32_t owner, const char *uri, uint32_t serial) {
              (p->size >= 2 && p->prefix[0] == 0xff && (p->prefix[1] & 0xe0) == 0xe0))
         dec.dec_type = ESP_AUDIO_SIMPLE_DEC_TYPE_MP3;
     else { destroy(p); return nullptr; }
+    p->type = dec.dec_type;
     if (esp_audio_simple_dec_open(&dec, &p->decoder) != ESP_AUDIO_ERR_OK) {
         destroy(p); return nullptr;
     }

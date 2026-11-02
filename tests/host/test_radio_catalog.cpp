@@ -2,11 +2,11 @@
  * @file test_radio_catalog.cpp
  * @brief The station catalog: requests, the page parser, the filters, the store.
  *
- * The page cases run on answers recorded from Radio Browser on 05.10.2026
- * (tests/host/fixtures/radio_catalog), and the numbers asserted were worked out from the
- * same files by a separate script, not read back from this parser. The edge cases are the
- * ones the service actually produces: a null url_resolved, \u escapes now and then, HLS and
- * unknown codecs among the rows, the same stream listed twice, a body cut off mid-read.
+ * The page cases run on answers recorded from Radio Browser (tests/host/fixtures/radio_catalog),
+ * and the numbers asserted were worked out from the same files by a separate script, not read
+ * back from this parser. The edge cases are the ones the service actually produces: a null
+ * url_resolved, \u escapes now and then, HLS and unknown codecs among the rows, the same stream
+ * listed twice, a body cut off mid-read.
  */
 
 #include "doctest.h"
@@ -164,7 +164,7 @@ TEST_CASE("keep() is what this device plays at the floor asked for") {
 
     snprintf(r.codec, sizeof(r.codec), "%s", "AAC+");
     r.bitrate = 64;
-    CHECK(keep(r, Quality::ANY));              // HE-AAC plays since 2e29fbc
+    CHECK(keep(r, Quality::ANY));              // HE-AAC plays (the radio sets aac_plus_enable)
     CHECK_FALSE(keep(r, Quality::K128));
 
     snprintf(r.codec, sizeof(r.codec), "%s", "FLAC");
@@ -299,7 +299,7 @@ TEST_CASE("not a station array, an empty one, and a body cut off mid-read") {
 TEST_CASE("a body nested deeper than any stack is skipped, not recursed into") {
     // Pages come over plain HTTP, so how deep a body nests is up to whoever answers.
     // Skipping a value recursed once per level, and a few hundred levels overflowed the
-    // 8 KB catalog task and rebooted the panel (deep review 2026-10-12, RP-2).
+    // 8 KB catalog task and rebooted the panel.
     Row rows[4];
     std::string nest(5000, '[');
     nest += std::string(5000, ']');

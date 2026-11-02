@@ -45,11 +45,12 @@ public:
         // main loop → LVGL
         char     clock[12] = "--:--:--";
         char     date[12]  = "--.--.----";
-        int32_t  encoder_pos = 0;
+        int32_t  encoder_pos = 0;       ///< detents handed to the UI: not the turn that woke the panel
         bool     encoder_sw  = false;
         int32_t  volume      = -1;      ///< audio.volume mirror, −1 = no audio core
         bool     mute        = false;
-        int32_t  source      = -1;      ///< audio.source (0 off, 1 tone, 2 aux, 3 bt), −1 = none
+        bool     leveler     = false;   ///< audio.leveler: «Вирівнювання гучності» (the Player's moon)
+        int32_t  source      = -1;      ///< audio.source (modesp::gen::AUDIO_SOURCE_*), −1 = no audio core
         int32_t  sources     = 0;       ///< audio.sources bitmask — unavailable keys are greyed out
         char     audio_state[16] = "";  ///< audio.state
         float    level_l = -120.0f;     ///< dBFS
@@ -67,6 +68,7 @@ public:
         int32_t  cpu_pct    = 0;
         int32_t  in_rate    = 0;        ///< measured input sample rate, 0 = none
         int32_t  tone_hz    = 0;
+        bool     port_meas  = false;    ///< audio.port_meas: the port measurement runs (the panel's microphone)
         char     play_title[96] = "";   ///< player.title mirror; as wide as the tag field
                                     ///  and as a file name, which is the fallback
         char     play_artist[96] = "";  ///< player.artist mirror; empty when the file has no tag
@@ -100,7 +102,6 @@ public:
         char     radio_fmt[32]   = "";
         char     radio_state[16] = "";   ///< idle | connecting | buffering | playing | reconnecting
         int32_t  radio_station   = 0;
-        int32_t  radio_buffer    = 0;    ///< radio.buffer — the compressed buffer's fill, %
         bool     wifi_ok = false;
         char     wifi_ssid[33] = "";    ///< a whole SSID: the Wi-Fi page marks the list row by it
         char     wifi_ip[16]   = "";
@@ -117,8 +118,8 @@ public:
         int32_t  loop_max_ms   = 0;     ///< system.main_loop_max_ms
         int32_t  stack_min     = 0;     ///< system.main_stack_min, BYTES on ESP-IDF
         int32_t  heap_free     = 0;     ///< system.heap_free — whole heap, PSRAM included
-        int32_t  heap_min      = 0;     ///< system.heap_min — its minimum since boot
         int32_t  heap_internal = 0;     ///< system.heap_internal — the scarce one
+        int32_t  heap_internal_min = 0; ///< system.heap_internal_min — its lowest since boot
         int32_t  heap_dma      = 0;     ///< system.heap_dma
         int32_t  heap_largest  = 0;     ///< system.heap_largest — largest INTERNAL block
         int32_t  heap_psram    = 0;     ///< system.heap_psram
@@ -146,10 +147,14 @@ public:
         bool     ap_switching = false;  ///< receiver is applying the selected mode
         bool     ap_mode_error = false; ///< a mode switch failed; details are on the web page
         char     ap_name[32]  = "";     ///< airplay.name
+        char     usb_name[33] = "";     ///< usb_audio.name — what the computer lists the panel as
         bool     dlna_enabled = false;  ///< dlna.enabled — the renderer announced by SSDP
         bool     dlna_built   = false;  ///< the key exists: this build has the renderer
         char     dlna_name[40] = "";    ///< dlna.name
         int32_t  standby_min  = 5;      ///< ui.standby_min — 0 is never
+        bool     lev_sched    = false;  ///< audio.lev_sched: «Вирівнювання гучності» by the clock
+        int32_t  lev_from     = 1320;   ///< audio.lev_from, minute of the day it switches on
+        int32_t  lev_to       = 420;    ///< audio.lev_to, minute of the day it switches off
         int32_t  out_caps     = 1;      ///< audio.out_caps — the output schemes that play (out_caps.h)
         // ── the Wi-Fi page (2 Hz) ──
         bool     wifi_ap      = false;  ///< wifi.mode is "ap": the fallback access point is up
@@ -177,6 +182,7 @@ public:
         uint8_t  enc_event = 0;         ///< 1 = short click, 2 = long press
         uint32_t enc_event_seq = 0;
         bool     standby = false;       ///< screen asleep (auto or from the quick menu)
+        uint32_t idle_ms = 0;           ///< the standby's idle timer: since the last touch or knob input
     };
 
     /// What a screen can ask the main loop to do. SharedState is written from the main loop
@@ -207,10 +213,14 @@ public:
         WIFI_FORGET,  ///< forget the stored network: the access point comes up
         STANDBY_BL,   ///< value = 5..100: the standby face's backlight while music plays
         LANG,         ///< value = ui.lang: 0 Українська, 1 English, 2 Deutsch, 3 Polski
-        BASS,         ///< value = audio.bass_db, −6…+6 (the «Звук» sheet, S3)
+        BASS,         ///< value = audio.bass_db, −6…+6 (the «Звук» sheet)
         TREBLE,       ///< value = audio.treble_db, −6…+6
-        LOUDNESS,     ///< value = audio.loudness, 0…100 (0 = off)
+        LOUDNESS,     ///< value = audio.loudness, 0…100 (0 = off); −1 = on at audio.loud_back
         BALANCE,      ///< value = audio.balance_db10, −60…+60 in steps of 5 (Колонки)
+        LEVELER,      ///< value = audio.leveler 0/1, −1 = toggle (the Player's moon)
+        LEV_SCHED,    ///< value = audio.lev_sched 0/1 (Налаштування › Звук › Тембр)
+        LEV_FROM,     ///< value = audio.lev_from, minute of the day, 0…1435 in steps of 5
+        LEV_TO,       ///< value = audio.lev_to, the same
     };
 
 
@@ -261,9 +271,11 @@ private:
     uint32_t last_touch_seq_   = 0;
     bool     last_touch_down_  = false;
     int32_t  last_backlight_   = -1;
+    int32_t  enc_ui_pos_       = 0;     ///< Snapshot::encoder_pos
     // encoder button: a long press opens the quick menu, a short one is a click
     uint32_t sw_held_ms_   = 0;
     bool     sw_hold_fired_ = false;
+    bool     sw_wake_       = false;    ///< this press woke the panel: no click, no hold
     // auto-standby
     uint32_t idle_ms_      = 0;
     bool     standby_      = false;

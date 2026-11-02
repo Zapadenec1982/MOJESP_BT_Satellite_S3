@@ -6,7 +6,8 @@
  * The song's cover: the station's ICY title goes to Deezer's search over plain HTTP, and the
  * first hit that is the same song (radio_art::best) has its 500 px JPEG fetched over plain
  * HTTP too. The station's logo: its favicon from Radio Browser — carried by a catalog row,
- * or asked for by the station's uuid — fetched once per station.
+ * or asked for by the station's uuid — fetched once per station, and handed on as a preset
+ * shows it to the logos kept on the panel (logos.cpp).
  *
  * What the tile shows, in order: the song's cover; the station's logo; nothing. Last song's
  * album beside this song's title is worse than the station's logo, and the logo of the last
@@ -14,14 +15,16 @@
  *
  * TLS: never for a cover, and for a logo only when the station's own stream is plain HTTP —
  * the panel holds one TLS session at a time, and while the radio plays it is the station's.
- * Most logos are HTTPS-only (10 of 13 among the top Ukrainian stations, 05.10.2026), so a
- * station streaming over HTTPS mostly shows none.
+ * Most logos are HTTPS-only (10 of 13 among the top Ukrainian stations), so a station
+ * streaming over HTTPS mostly shows none.
  */
 
 #include "radio_art_task.h"
 #include "radio_art.h"
 #include "radio_catalog.h"
 #include "radio_http.h"
+#include "radio_logos.h"
+#include "station_logo.h"
 #include "cover.h"
 
 #include "esp_heap_caps.h"
@@ -42,8 +45,7 @@ const char* TAG = "Radio";   // the module's tag: on the INFO allowlist
 namespace rc = radio_catalog;
 
 constexpr const char* SEARCH_HOST  = "api.deezer.com";
-constexpr const char* CATALOG_HOST = "all.api.radio-browser.info";
-constexpr size_t SEARCH_MAX = 48 * 1024;    // ten hits are ~22 KB (05.10.2026)
+constexpr size_t SEARCH_MAX = 48 * 1024;    // ten hits are ~22 KB
 constexpr size_t IMAGE_MAX  = 256 * 1024;   // a 500 px cover is tens of KB
 constexpr size_t LOGO_MAX   = 128 * 1024;   // favicons are small; a few are full-size art
 constexpr int    TITLE_LEN  = 256;
@@ -71,6 +73,7 @@ struct ArtTask {
     uint8_t*              image    = nullptr;   // PSRAM
     uint8_t*              logo     = nullptr;   // PSRAM: the current station's logo
     size_t                logo_len = 0;
+    station_logo::Thumb*  thumb    = nullptr;   // PSRAM: the same, as a preset shows it
     char                  logo_uuid[rc::UUID_LEN]   = "";   // whose logo it is
     char                  logo_favicon[rc::URL_LEN] = "";
     radio_art::Hit*       hits     = nullptr;   // PSRAM
@@ -84,8 +87,11 @@ ArtTask a;
 
 bool current_title(uint32_t serial) { return a.latest.load(std::memory_order_acquire) == serial; }
 
-/// No song cover: the station's logo if there is one, else nothing.
+/// No song cover: the station's logo if there is one, else nothing. A logo already on the
+/// tile is left there: decoded again on every title with no cover, a PNG one cost the
+/// software decoder its whole run each time, for the picture that was already up.
 void fall_back() {
+    if (a.logo_len && a.shown == Shown::LOGO) return;
     if (a.logo_len) {
         const uint32_t gen = player_core::cover_view(TILE).gen;
         if (player_core::cover_set_jpeg(a.logo, a.logo_len, TILE, gen)) {
@@ -152,9 +158,9 @@ void serve_title(const TitleAsk& rq) {
 /// The favicon URL for a station known only by its uuid.
 bool favicon_by_uuid(const char* uuid, char* out, size_t out_sz) {
     char path[96];
-    snprintf(path, sizeof(path), "/json/stations/byuuid?uuids=%s", uuid);
+    if (!rc::byuuid_path(&uuid, 1, path, sizeof(path))) return false;
     char why[64] = "";
-    const int n = radio_http::get(CATALOG_HOST, 80, path, a.search, SEARCH_MAX,
+    const int n = radio_http::get(rc::LOOKUP_HOST, 80, path, a.search, SEARCH_MAX,
                                   radio_http::user_agent(), why, sizeof(why));
     if (n < 0) {
         ESP_LOGW(TAG, "art: station %s: %s", uuid, why);
@@ -165,6 +171,17 @@ bool favicon_by_uuid(const char* uuid, char* out, size_t out_sz) {
     const bool ok = scratch && rc::parse_favicon(a.search, (size_t)n, scratch, need, out, out_sz);
     heap_caps_free(scratch);
     return ok;
+}
+
+/// The logo just fetched as a preset shows it, for the logos kept on the panel (logos.cpp):
+/// made while the bytes are here, so a station that is a preset, or becomes one, has its logo
+/// kept without a second download. Only for a station with a uuid, which a kept logo is found by.
+void offer_thumb(const StationAsk& rq) {
+    if (!station_logo::valid_uuid(rq.uuid)) return;
+    if (!player_core::cover_thumb(a.logo, a.logo_len, a.thumb->px, station_logo::SIDE)) return;
+    if (a.station.load(std::memory_order_acquire) != rq.serial) return;   // a newer station
+    snprintf(a.thumb->uuid, sizeof(a.thumb->uuid), "%s", rq.uuid);
+    radio_logos::offer(*a.thumb);
 }
 
 void serve_station(const StationAsk& rq) {
@@ -182,17 +199,8 @@ void serve_station(const StationAsk& rq) {
     if (!favicon[0] && rq.uuid[0] && !favicon_by_uuid(rq.uuid, favicon, sizeof(favicon))) return;
     if (!favicon[0]) return;
 
-    // Plain HTTP first, even for an https:// logo: some hosts still serve it there.
     char why[64] = "";
-    char plain[rc::URL_LEN];
-    snprintf(plain, sizeof(plain), "%s", favicon);
-    radio_art::plain_http(plain);
-    int len = radio_http::get_url(plain, (char*)a.logo, LOGO_MAX, radio_http::user_agent(),
-                                  false, why, sizeof(why));
-    if (len <= 0 && strcmp(plain, favicon) != 0) {
-        len = radio_http::get_url(favicon, (char*)a.logo, LOGO_MAX, radio_http::user_agent(),
-                                  rq.tls_free, why, sizeof(why));
-    }
+    const int len = radio_http::get_logo(favicon, (char*)a.logo, LOGO_MAX, rq.tls_free, why, sizeof(why));
     if (a.station.load(std::memory_order_acquire) != rq.serial) return;   // a newer station
     if (len <= 0) {
         ESP_LOGI(TAG, "art: no logo from %s: %s", favicon, why);
@@ -207,6 +215,7 @@ void serve_station(const StationAsk& rq) {
     ESP_LOGI(TAG, "art: logo %d B (%s) from %s", len, kind == rc::Image::JPEG ? "JPEG" : "PNG",
              favicon);
     if (a.shown != Shown::TRACK) fall_back();   // shows it, unless a song's cover is up
+    offer_thumb(rq);
 }
 
 void art_task(void*) {
@@ -226,7 +235,7 @@ void art_task(void*) {
 /// 16 KB of stack since a PNG logo was decoded in this task by stb_image (cover_soft.c),
 /// whose inflate keeps its two Huffman tables on the stack (~4 KB) and builds the code
 /// lengths' table deeper down (~2.5 KB more). With 8 KB the first PNG logo on the bench —
-/// Hit FM's 120 px favicon, 05.10.2026 — ended in a stack protection fault and a reboot.
+/// Hit FM's 120 px favicon — ended in a stack protection fault and a reboot.
 /// That decode now runs on the cover component's own task (SOFT_STACK in
 /// components/cover/src/cover.cpp), so this is headroom rather than a requirement.
 constexpr uint32_t ART_STACK = 16 * 1024;
@@ -242,8 +251,15 @@ bool start() {
         a.hits = static_cast<radio_art::Hit*>(h);
         for (int i = 0; i < HITS; i++) new (&a.hits[i]) radio_art::Hit();
     }
-    if (!a.titles || !a.stations || !a.search || !a.image || !a.logo || !a.hits) return false;
-    return xTaskCreatePinnedToCoreWithCaps(art_task, "radio_art", ART_STACK, nullptr, 2, nullptr, 0,
+    void* t    = heap_caps_calloc(1, sizeof(station_logo::Thumb), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    a.thumb    = t ? new (t) station_logo::Thumb() : nullptr;
+    if (!a.titles || !a.stations || !a.search || !a.image || !a.logo || !a.hits || !a.thumb) return false;
+    // Idle priority, as the card player's artwork worker has (player_module.cpp, on_init): a
+    // PNG or progressive picture goes to the software decoder, which takes this task's
+    // priority and never blocks. At 2 it ran above the radio's decoder and reader, LVGL, main
+    // and IDLE0 on core 0, and a logo of about 700 px was a dropout and a frozen screen.
+    return xTaskCreatePinnedToCoreWithCaps(art_task, "radio_art", ART_STACK, nullptr,
+                                           tskIDLE_PRIORITY, nullptr, 0,
                                            MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT) == pdPASS;
 }
 

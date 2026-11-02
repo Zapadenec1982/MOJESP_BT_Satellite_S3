@@ -33,6 +33,7 @@ include_directories(
     "${ROOT}/components/radio_catalog/include"               # radio_catalog.h — the station catalog, pure
     "${ROOT}/components/cover/include"                       # cover.h — for cover_tone.cpp, which is pure
     "${ROOT}/components/jsmn"                                # header-only JSON parser
+    "${ROOT}/components/jsmn_util/include"                   # jsmn_util.h — the parsers' shared helpers
     "${ROOT}/components/audio_resampler"                     # resampler.h — vendored dbry, plain C
     "${ROOT}/components/audio_pipe/include"                  # audio_pipe.h — decoder-to-ring arithmetic
     "${ROOT}/components/sat_link/include"                    # sat_link.h — the BT satellite wire format
@@ -59,6 +60,7 @@ include_directories(
 set(CORE_SOURCES
     "${ROOT}/components/modesp_core/src/shared_state.cpp"
     "${ROOT}/components/modesp_core/src/base_module.cpp"
+    "${ROOT}/components/modesp_net/src/state_json.cpp"       # GET /api/state and the WebSocket's JSON
     "${CMAKE_SOURCE_DIR}/module_manager_host.cpp"
     "${CMAKE_SOURCE_DIR}/driver_manager_host.cpp"
 )
@@ -69,10 +71,12 @@ set(MODULE_SOURCES
     "${ROOT}/components/modesp_hal/src/driver_registry.cpp"
     "${ROOT}/components/modesp_services/src/config_service.cpp"  # fopen + mocked esp_log/littlefs/heap_caps
     "${ROOT}/components/modesp_services/src/error_service.cpp"   # portMUX → std::mutex in freertos_mock.h
+    "${ROOT}/components/modesp_services/src/watchdog_service.cpp" # liveness stalls, on the host clock in esp_timer_mock.h
     "${ROOT}/components/modesp_services/src/nvs_helper.cpp"      # over the in-memory NVS in mocks/nvs.h
     "${ROOT}/components/modesp_services/src/persist_service.cpp" # restore + the one-shot positional-key pass
     "${ROOT}/components/audio_dsp/src/dsp_chain.cpp"         # band design, the EQ/width/limiter chain, the tone
     "${ROOT}/components/audio_dsp/src/dsp_kernels.cpp"       # the EQ's stereo SVF loops (fmaf spelled out: same rounding as the P4)
+    "${ROOT}/components/audio_dsp/src/leveler.cpp"           # «Вирівнювання гучності» and its schedule
     "${ROOT}/components/audio_dsp/src/eq_config.cpp"         # eq.json parse/serialise (jsmn, header-only)
     "${ROOT}/components/audio_dsp/src/eq_presets.cpp"        # the DSP page's presets and the "Свій" rules
     "${ROOT}/modules/ui_lvgl/src/i18n.cpp"                   # the panel's strings: tr, plural, fmt, num
@@ -80,6 +84,7 @@ set(MODULE_SOURCES
     "${ROOT}/components/audio_dsp/src/eq_store.cpp"          # the EQ document the panel and the web share
     "${ROOT}/components/audio_dsp/src/eq_web.cpp"            # GET/POST /api/eq bodies
     "${ROOT}/modules/bt/src/bt_web.cpp"                      # GET/POST /api/bt bodies (bt_settings types only)
+    "${ROOT}/modules/bt/src/device_name.cpp"                 # the panel's one name, over the in-memory NVS
     "${ROOT}/components/audio_dsp/src/spectrum.cpp"          # FFT kernel mocked in mocks/dsps_fft_ref.h
     "${ROOT}/components/audio_dsp/src/pcm_ring.cpp"          # SPSC ring, decoder -> audio task
     "${ROOT}/components/audio_dsp/src/port_finder.cpp"       # the port meter's lock-in and dip finder
@@ -89,6 +94,7 @@ set(MODULE_SOURCES
     "${ROOT}/components/radio_catalog/src/radio_art.cpp"     # a cover for a station's ICY title
     "${ROOT}/components/cover/src/cover_tone.cpp"            # the colour of a cover tile, pure
     "${ROOT}/components/radio_catalog/src/radio_catalog_ui.cpp" # what the catalog screen and the radio module share
+    "${ROOT}/components/radio_catalog/src/station_logo.cpp"  # the presets' logos kept on the panel
     "${ROOT}/components/audio_resampler/resampler.c"         # vendored dbry resampler, plain C
     "${ROOT}/components/audio_pipe/src/audio_pipe.cpp"       # PCM conversion + stream length/seek arithmetic
     "${ROOT}/components/sat_link/src/sat_link.cpp"           # COBS + CRC16 framing for the BT satellite
@@ -114,6 +120,7 @@ set(TEST_SOURCES
     "${CMAKE_SOURCE_DIR}/test_dsp_design.cpp"
     "${CMAKE_SOURCE_DIR}/test_dsp_loudness.cpp"
     "${CMAKE_SOURCE_DIR}/test_dsp_tone.cpp"
+    "${CMAKE_SOURCE_DIR}/test_dsp_leveler.cpp"
     "${CMAKE_SOURCE_DIR}/test_dsp_passes.cpp"        # the filter sections two to a pass, bit for bit
     "${CMAKE_SOURCE_DIR}/test_level_latch.cpp"
     "${CMAKE_SOURCE_DIR}/test_port_finder.cpp"
@@ -123,6 +130,7 @@ set(TEST_SOURCES
     "${CMAKE_SOURCE_DIR}/test_eq_store.cpp"
     "${CMAKE_SOURCE_DIR}/test_eq_curve_vectors.cpp"
     "${CMAKE_SOURCE_DIR}/test_bt_web.cpp"
+    "${CMAKE_SOURCE_DIR}/test_device_name.cpp"       # modules/bt/include/device_name.h — only a name the satellite takes
     "${CMAKE_SOURCE_DIR}/test_bt_volume_gate.cpp"
     "${CMAKE_SOURCE_DIR}/test_bt_stall_kick.cpp"
     "${CMAKE_SOURCE_DIR}/test_airplay_meta.cpp"
@@ -137,6 +145,7 @@ set(TEST_SOURCES
     "${CMAKE_SOURCE_DIR}/test_stations.cpp"
     "${CMAKE_SOURCE_DIR}/test_radio_catalog.cpp"
     "${CMAKE_SOURCE_DIR}/test_radio_art.cpp"
+    "${CMAKE_SOURCE_DIR}/test_station_logo.cpp"      # components/radio_catalog/include/station_logo.h — the presets' logos
     "${CMAKE_SOURCE_DIR}/test_resampler.cpp"
     "${CMAKE_SOURCE_DIR}/test_resampler_fixed_phase.cpp"
     "${CMAKE_SOURCE_DIR}/test_resampler_safety.cpp"
@@ -149,22 +158,29 @@ set(TEST_SOURCES
     "${CMAKE_SOURCE_DIR}/test_sat_link.cpp"
     "${CMAKE_SOURCE_DIR}/test_cover_assembly.cpp"
     "${CMAKE_SOURCE_DIR}/test_cover_guard.cpp"       # components/cover/include/cover_guard.h — the software decoder's budget
+    "${CMAKE_SOURCE_DIR}/test_cover_thumb.cpp"       # components/cover/include/cover_thumb.h — a logo fitted into a preset's disc
     "${CMAKE_SOURCE_DIR}/test_cover_png_zlib.cpp"    # components/cover/src/stb_image.h — the PNG DEFLATE-block cap
     "${CMAKE_SOURCE_DIR}/test_cover_tone.cpp"        # components/cover/src/cover_tone.cpp — the Player's background
-    "${CMAKE_SOURCE_DIR}/test_uac_tone.cpp"          # components/usb_uac/include/uac_tone.h — the USB stream check (U0)
-    "${CMAKE_SOURCE_DIR}/test_usb_volume.cpp"        # modules/usb_audio/include/usb_volume.h — the computer's slider (U1)
+    "${CMAKE_SOURCE_DIR}/test_uac_tone.cpp"          # components/usb_uac/include/uac_tone.h — the USB stream check
+    "${CMAKE_SOURCE_DIR}/test_usb_volume.cpp"        # modules/usb_audio/include/usb_volume.h — the computer's slider
+    "${CMAKE_SOURCE_DIR}/test_volume_follow.cpp"     # components/audio_dsp/include/volume_follow.h — USB's and AirPlay's slider rule
+    "${CMAKE_SOURCE_DIR}/test_transport_route.cpp"   # components/audio_dsp/include/transport_route.h — audio.transport
     "${CMAKE_SOURCE_DIR}/test_i2s_clock.cpp"
     "${CMAKE_SOURCE_DIR}/test_stream_control.cpp"
     "${CMAKE_SOURCE_DIR}/test_audio_pipe.cpp"
     "${CMAKE_SOURCE_DIR}/test_etl_asserts.cpp"
     "${CMAKE_SOURCE_DIR}/test_config_service.cpp"
     "${CMAKE_SOURCE_DIR}/test_error_service.cpp"
+    "${CMAKE_SOURCE_DIR}/test_watchdog_service.cpp"  # a stalled task is one error
     "${CMAKE_SOURCE_DIR}/test_persist_service.cpp"
     "${CMAKE_SOURCE_DIR}/test_liveness.cpp"
     "${CMAKE_SOURCE_DIR}/test_base_module.cpp"
     "${CMAKE_SOURCE_DIR}/test_module_manager.cpp"    # request_stop_all(): on_stop() on the update_all() task
     "${CMAKE_SOURCE_DIR}/test_shared_state.cpp"
     "${CMAKE_SOURCE_DIR}/test_json_escape.cpp"
+    "${CMAKE_SOURCE_DIR}/test_state_json.cpp"        # modesp/net/state_json.h — the state as JSON
+    "${CMAKE_SOURCE_DIR}/test_key_write.cpp"         # modesp/net/key_write.h — a key written from outside
+    "${CMAKE_SOURCE_DIR}/test_jsmn_util.cpp"         # components/jsmn_util — key_is, span, unescape, Appender
     "${CMAKE_SOURCE_DIR}/test_utf8.cpp"              # modesp/utf8.h — cutting text on a character boundary
     "${CMAKE_SOURCE_DIR}/test_ws_slots.cpp"          # modesp/net/ws_slots.h — WsService's slot rules
     "${CMAKE_SOURCE_DIR}/test_module_commands.cpp"
@@ -175,6 +191,8 @@ set(TEST_SOURCES
     "${CMAKE_SOURCE_DIR}/test_i18n.cpp"              # modules/ui_lvgl/include/i18n.h — the panel in four languages
     "${CMAKE_SOURCE_DIR}/test_vlist_window.cpp"      # modules/ui_lvgl/include/vlist_window.h
     "${CMAKE_SOURCE_DIR}/test_touch_gesture.cpp"     # modules/ui_lvgl/include/touch_gesture.h — a finger that scrolls sets nothing
+    "${CMAKE_SOURCE_DIR}/test_idle_home.cpp"         # modules/ui_lvgl/include/idle_home.h — back to the Player after a minute alone
+    "${CMAKE_SOURCE_DIR}/test_station_badge.cpp"     # modules/ui_lvgl/include/station_badge.h — a station's stand-in for a logo
     "${CMAKE_SOURCE_DIR}/test_ppa_geometry.cpp"      # modules/ui_lvgl/include/ppa_geometry.h
     "${CMAKE_SOURCE_DIR}/test_web_media.cpp"         # components/web_media/include/web_media.h — /api/library, /api/cover
     "${CMAKE_SOURCE_DIR}/test_net_probe_stats.cpp"   # components/net_probe/include/net_probe/probe_stats.h

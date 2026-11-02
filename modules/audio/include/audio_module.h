@@ -34,6 +34,7 @@
 #include <cstdint>
 
 namespace modesp { class DriverManager; struct BindingTable; class HAL; }
+namespace audio_core { class PcmRing; }
 struct resample;   // dbry/audio-resampler context
 
 class AudioModule : public modesp::BaseModule {
@@ -89,7 +90,7 @@ private:
     enum class CmdType : uint8_t { SOURCE, MUTE, EQ_ENABLE, EQ_RELOAD, TONE_HZ,
                                    WIDTH, MONO_BASS, SPECTRUM, BT_CLOCK, AMP_CLIP, DRIVE,
                                    SUBSONIC, TONE_MODE, TONE_DB10, TONE_CH, BASS_XO, RMS_CAP,
-                                   LOUDNESS, PORT, TIMBRE, BALANCE, LOUD_REF, STOP };
+                                   LOUDNESS, PORT, TIMBRE, BALANCE, LOUD_REF, LEVELER, STOP };
     /// audio.tone_mode: what the tone source plays.
     enum ToneMode : int32_t {
         TONE_CHAIN  = 0,   ///< through the whole chain, −12 dB under the ceiling (as ever)
@@ -111,6 +112,7 @@ private:
         float    eq_headroom_db = 0;        ///< B: what the EQ takes off the top of the volume scale
         float    bass_gr_db = 0;            ///< the bass limiter's deepest cut in the window, dB
         float    loud_db = 0;               ///< the loudness bass shelf's gain now, dB
+        float    lev_db = 0;                ///< «Вирівнювання гучності»: its gain now, dB
         float    dsp_pct = 0;               ///< DSP cycles over the window, % of one core
         float    dsp_max_pct = 0;           ///< the window's worst block, % of a block's time
         uint32_t out_clamps = 0;            ///< samples the output conversion had to clamp, total
@@ -130,8 +132,8 @@ private:
         uint32_t edge_openings = 0;
         uint32_t startup_seq = 0, startup_rate = 0;
         audio_core::StartupProbe startup_raw{}, startup_out{};
-        // The output clock as a servo (stage 13). Reported rather than logged, like
-        // everything else the audio task measures.
+        // The output clock as a servo (docs/AUDIO.md, "Playback"). Reported rather than
+        // logged, like everything else the audio task measures.
         int32_t  clock_ppm    = 0;      ///< what the output clock is trimmed to, achieved
         bool     clock_follow = false;  ///< the BT path is riding the clock, not the resampler
         uint32_t bt_asrc_blocks = 0;    ///< blocks that still went through the resampler
@@ -139,7 +141,6 @@ private:
         uint32_t bt_primes = 0, bt_format_revision = 0;
     };
 
-    bool load_eq_file(audio_core::EqBand* bands, int& count);
     /// Section 0 of `cfg` as the chain takes it: its bands, the trim, the output mode.
     void take_eq(const audio_core::EqConfig& cfg, audio_core::EqBand* bands, int& count);
     /// Main task: hand an edited EQ on and write it back when that is not in the way.
@@ -152,15 +153,25 @@ private:
     /// audio.bass_db and audio.treble_db as one command value: bass in the high byte, treble in the
     /// low one, each a signed byte within ±6 (DspChain::set_tone).
     int32_t timbre();
-    /// audio.vol_max, «Максимум»: 40…100 % of the scale (S4).
+    /// audio.vol_max, «Максимум»: 40…100 % of the scale.
     int32_t vol_max();
     void send(CmdType t, int32_t v);
+    /// Main loop: the settings to the audio task, each that changed (the .cpp says when).
+    bool follow_settings();
+    /// Main loop: audio.transport to the module of what plays, and audio.transport_caps kept to
+    /// what that source takes now (transport_route.h). `moved`: the store changed since last time.
+    void follow_transport(bool moved);
     /// Switch to `src` now. Audio task only, and only once both gates are shut: the task loop
     /// holds a requested source in pend_source_ until they are.
     void apply_source(int32_t src);
     /// A source this board cannot play, said once in the log. Checked before the fade starts,
     /// so a refused source does not silence the one that is playing.
     bool source_refused(int32_t src);
+    /// Main loop: the same question before a request goes to the task at all.
+    bool source_on_offer(int32_t src);
+    /// Audio task (and on_init): `src` was offered in audio.sources and cannot be played after
+    /// all. on_update takes its bit back and gives a request for it up for the source that stays.
+    void source_gone(int32_t src);
     /// Everything the task counts in frames but means in milliseconds, at out_rate_.
     void retime();
     /// Bring the last frame a source delivered down to silence along the short tail, for a block
@@ -210,6 +221,9 @@ private:
     /// The second half of retune(): the port has taken `hz`, so record it, answer the
     /// producer and redesign what depends on the rate.
     void adopt_clock(uint32_t hz, uint16_t mclk_mult);
+    /// The rate the playing ring source's producer asks for, 0 for none. A new session it
+    /// asked for is taken first: the clock the old one settled is forgotten. Audio task.
+    uint32_t ring_question(audio_core::PcmRing& ring);
     /// Silence held after the amplifier is enabled, before any audio is let through.
     ///
     /// Switching the enable line is a pop, in the amplifier, downstream of everything this
@@ -250,7 +264,7 @@ private:
     int32_t pend_source_ = -1;
     /// Frames sent to the DAC since the output gate last let anything through. The amplifier
     /// goes off only once this covers the whole TX queue. Until then the DMA is still playing
-    /// the fade (review A03).
+    /// the fade.
     uint32_t quiet_frames_ = 0;
     uint32_t tx_frames_ = 0;                ///< the port's TX queue, frames
     /// Audio the ring must hold before playback resumes after the queue is dropped.
@@ -259,7 +273,7 @@ private:
     /// guarantees an underrun — and in the middle of a steady tone an underrun is heard as a
     /// tick even when the samples either side of it are perfectly continuous, because the
     /// gap itself is the artefact. 100 ms is longer than the gap and far shorter than
-    /// opening the next file. A time at every rate, like the fades (review A06).
+    /// opening the next file. A time at every rate, like the fades.
     static constexpr float PRIME_S = 0.100f;
     size_t prime_frames_ = 4800;
     bool priming_ = true;
@@ -284,10 +298,17 @@ private:
     int32_t  last_hp_hz_ = INT32_MIN;
     int32_t  last_bass_xo_ = INT32_MIN, last_rms_cap_ = INT32_MIN;
     int32_t  last_loud_ = INT32_MIN, last_port_ = INT32_MIN;
-    /// «Звичайна гучність» (S6): the reference the audio task has (LOUD_REF).
+    /// «Звичайна гучність»: the reference the audio task has (LOUD_REF).
     int32_t  last_loud_ref_ = INT32_MIN;
     int32_t  last_timbre_ = INT32_MIN, last_balance_ = INT32_MIN;   ///< Бас and Високі packed (timbre()), balance
     float    last_loud_db_ = -1.0f;
+    // «Вирівнювання гучності» (audio.leveler) and its schedule (audio.lev_sched/lev_from/lev_to)
+    int32_t  last_leveler_ = INT32_MIN;
+    float    last_lev_db_ = 99.0f;
+    audio_core::LevelerSchedule lev_sched_;
+    uint32_t lev_sched_ms_ = 0;
+    /// Once a second: the schedule against the clock, and the switch to what it says at its edges.
+    void leveler_schedule(uint32_t dt_ms);
     // ── port meter (audio.port_meas): the onboard microphone at a woofer finds the port ──
     struct i2c_master_bus_t* mic_bus_ = nullptr;   ///< the microphone codec's I2C bus, from on_bind
     std::atomic<bool> meter_busy_{false};
@@ -330,6 +351,7 @@ private:
     audio_core::DspChain dsp_;
     audio_core::ToneGen  tone_;
     int32_t  source_ = SRC_OFF;
+    uint32_t transport_ver_ = 0;   ///< state_version() follow_transport() last read the store at
     bool     muted_  = false;
     bool     amp_on_ = false;
     /// The rate the output is clocked at, and the one a producer has asked for.
@@ -343,10 +365,10 @@ private:
     uint16_t out_mclk_mult_ = 0;
     uint32_t want_rate_ = 0;                ///< 0 = nothing pending
     uint32_t refused_rate_ = 0;             ///< logged once, not once a block
-    /// The highest rate the output clock is moved to (the customer, 15.10.2026). A 176.4 or
-    /// 192 kHz track plays at 88.2 or 96 kHz, halved by its own producer, as a rate the port
-    /// refused would be. What 192 kHz adds over 96 lies above 48 kHz, where the amplifier's
-    /// output filter and the speakers stop; the DSP at 192 kHz costs twice what it does at 96.
+    /// The highest rate the output clock is moved to. A 176.4 or 192 kHz track plays at 88.2 or
+    /// 96 kHz, halved by its own producer, as a rate the port refused would be. What 192 kHz
+    /// adds over 96 lies above 48 kHz, where the amplifier's output filter and the speakers
+    /// stop; the DSP at 192 kHz costs twice what it does at 96.
     static constexpr uint32_t PLAY_MAX_HZ = 96000;
     /// The clock this listening SESSION runs at; 0 until the first track of it has settled
     /// one. See the FILE/RADIO branch of the audio task: the clock is chosen once, when a
@@ -387,7 +409,7 @@ private:
     uint32_t bt_diag_dropped_ = 0;
     modesp::audio::AudioPortDiagnostics bt_diag_rx_{}, bt_diag_tx_{};
 
-    // ── the output clock as the Bluetooth servo (stage 13) ──
+    // ── the output clock as the Bluetooth servo ──
     //
     // The satellite owns the input clock: it is the I2S master of that port and this panel
     // its slave, so the samples arrive at the satellite's rate whatever the P4 believes. The
@@ -439,13 +461,17 @@ private:
     // main-loop side change detection
     int32_t  last_source_ = -1, last_volume_ = -1, last_tone_ = -1;
     int32_t  last_vol_max_ = -1;
+    /// The store's version when follow_settings() last read it; 0: not yet, read them.
+    uint32_t settings_ver_ = 0;
     /// The volume and «Максимум» to the audio task: the last value, never the command queue,
-    /// which drops what does not fit (S4). audio.vol_eff says when it has been taken.
+    /// which drops what does not fit. audio.vol_eff says when it has been taken.
     audio_core::LevelLatch level_;
     bool     vol_published_ = false;
     /// A persisted ring source that was not on offer at init because the ring's owner had
     /// not initialised yet; settled in the report loop once the ring exists. −1 = none.
     int32_t  pending_source_ = -1;
+    /// source_gone(): the source and the one the task stays on, gone << 8 | kept; −1 = none.
+    std::atomic<int32_t> gone_source_{-1};
     bool     last_mute_ = false, last_eq_ = true;
     bool     last_bt_clock_ = true;    ///< audio.bt_clock_follow as last sent to the task
     uint8_t  last_bt_path_  = 0;       ///< the last BT path decision reported (bt_path_)

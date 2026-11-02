@@ -7,8 +7,7 @@
  * rebuilds the screens (as the palette switch always has), so no component keeps a colour.
  *
  * Geometry is in LOGICAL pixels (800x480 landscape), 8.54 px a millimetre. Whatever a finger
- * takes is at least 64 px (7.5 mm) each way — the glass for a finger, the customer, 20.10.2026
- * (48-px targets were 5.6 mm, under every guideline): the
+ * takes is at least 64 px (7.5 mm) each way (48 px would be 5.6 mm, under every guideline): the
  * slider's row, a chip, a list row, a dialog's buttons, the switch's reach. Nothing here animates by itself —
  * a morph is an lv_anim the caller starts on the object's radius, so a screen that must not
  * spend frames does not.
@@ -100,18 +99,14 @@ int32_t chip_width(const Chip& c);
 // ── switch ─────────────────────────────────────────────────────────────────────────────────
 
 /// 52x32, the M3 shape: off = outlined track with a small knob, on = primary track with a
-/// large on_primary knob carrying a check. Built on lv_switch, so LVGL owns the state and
-/// LV_EVENT_VALUE_CHANGED fires as usual.
+/// large on_primary knob carrying a check. Built on lv_switch; a tap on it — its 52×32 and 16 px
+/// around, 84×64 where its parent has the room — toggles it and fires LV_EVENT_VALUE_CHANGED. The
+/// row it sits in does not: a finger toggles the switch itself.
 lv_obj_t* switch_m3(lv_obj_t* parent, int32_t x, int32_t y, bool on);
-/// A row with a switch on it toggles from a tap anywhere on the row, as a list row does — the
-/// switch's own 52×32 was the only place that took a finger. The switch's VALUE_CHANGED fires.
-/// A switch alone reaches 16 px past its track: 84×64, where its parent has the room.
-void switch_row(lv_obj_t* row, lv_obj_t* sw);
 
 // ── slider ─────────────────────────────────────────────────────────────────────────────────
 
-/// The one slider of the glass and the web (the customer, 16.10.2026: three styles on the glass
-/// and a fourth on the web were one too many): a SLIDER_RAIL px rail, the fill in primary from its
+/// The one slider of the glass and the web: a SLIDER_RAIL px rail, the fill in primary from its
 /// left end to a round SLIDER_KNOB px knob, the number to the right of the track; the icon at the
 /// left when there is one. Бас, Високі and the balance are the same with the zero in the middle
 /// (sound_sheet.cpp, screen_speakers.cpp); the web's is m3/Slider.svelte and m3/CenterSlider.svelte.
@@ -294,8 +289,9 @@ void   dialog_hide(Dialog& d);
 /// typing on — so that rebuilding the UI (a palette or a language changed from the web) can
 /// wait for it to go instead of throwing away a question or half a password.
 void mark_modal(lv_obj_t* o);
-/// A marked object under `root` is showing (it and every parent not hidden).
-bool modal_shown(lv_obj_t* root);
+/// A marked object under `root` is showing (it and every parent not hidden). `except`, and what
+/// is under it, is not looked at.
+bool modal_shown(lv_obj_t* root, const lv_obj_t* except = nullptr);
 
 // ── feedback ───────────────────────────────────────────────────────────────────────────────
 

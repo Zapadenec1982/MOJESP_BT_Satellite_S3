@@ -13,6 +13,7 @@
 #include "i18n.h"
 #include "fonts/ui_fonts.h"
 #include "ppa_flush.h"
+#include "touch_gesture.h"
 #include "ui_scroll_bench.h"
 #include "vlist_window.h"
 #include "sdkconfig.h"
@@ -218,17 +219,26 @@ int32_t chip_width(const Chip& c) {
 
 // ── switch ─────────────────────────────────────────────────────────────────────────────────
 
-static void switch_row_cb(lv_event_t* e) {
+// A switch toggles on a tap on it only (touch_gesture.h): a finger that
+// scrolled, or tried to scroll a page that does not, lifts over it and changes nothing. One
+// finger on the glass, so one press to follow.
+static touch::Tap s_switch_press;
+
+static void switch_tap_cb(lv_event_t* e) {
     auto* sw = static_cast<lv_obj_t*>(lv_event_get_user_data(e));
-    if (!sw || lv_obj_has_state(sw, LV_STATE_DISABLED)) return;
+    lv_indev_t* indev = lv_indev_active();
+    lv_point_t p{};
+    if (indev) lv_indev_get_point(indev, &p);
+    switch (lv_event_get_code(e)) {
+        case LV_EVENT_PRESSED:  s_switch_press.down(p.x, p.y); return;
+        case LV_EVENT_PRESSING: s_switch_press.move(p.x, p.y); return;
+        case LV_EVENT_CLICKED:  break;
+        default:                return;
+    }
+    if (!s_switch_press.tap() || !sw || lv_obj_has_state(sw, LV_STATE_DISABLED)) return;
     if (lv_obj_has_state(sw, LV_STATE_CHECKED)) lv_obj_remove_state(sw, LV_STATE_CHECKED);
     else                                         lv_obj_add_state(sw, LV_STATE_CHECKED);
     lv_obj_send_event(sw, LV_EVENT_VALUE_CHANGED, nullptr);
-}
-
-void switch_row(lv_obj_t* row, lv_obj_t* sw) {
-    lv_obj_add_flag(row, LV_OBJ_FLAG_CLICKABLE);
-    lv_obj_add_event_cb(row, switch_row_cb, LV_EVENT_CLICKED, sw);
 }
 
 lv_obj_t* switch_m3(lv_obj_t* parent, int32_t x, int32_t y, bool on) {
@@ -260,6 +270,11 @@ lv_obj_t* switch_m3(lv_obj_t* parent, int32_t x, int32_t y, bool on) {
     lv_obj_set_style_radius(sw, m3::shape::FULL, LV_PART_KNOB);
     if (on) lv_obj_add_state(sw, LV_STATE_CHECKED);
     lv_obj_set_ext_click_area(sw, 16);            // a 32-px switch takes a 64-px finger
+    // LVGL would toggle it on any release over it; it toggles on a tap (switch_tap_cb)
+    lv_obj_remove_flag(sw, LV_OBJ_FLAG_CHECKABLE);
+    lv_obj_add_event_cb(sw, switch_tap_cb, LV_EVENT_PRESSED, sw);
+    lv_obj_add_event_cb(sw, switch_tap_cb, LV_EVENT_PRESSING, sw);
+    lv_obj_add_event_cb(sw, switch_tap_cb, LV_EVENT_CLICKED, sw);
     return sw;
 }
 
@@ -868,7 +883,7 @@ Dialog dialog(lv_obj_t* parent, int32_t w, int32_t h) {
     lv_obj_set_style_bg_opa(d.scrim, LV_OPA_50, 0);
     lv_obj_add_flag(d.scrim, LV_OBJ_FLAG_CLICKABLE);          // swallow taps meant for below
     constexpr int32_t BW = 150, BH = 64;
-    h += BH - 48;                     // the buttons grew from 48 to 64 (20.10.2026); the text keeps its room
+    h += BH - 48;                     // callers size h for 48-px buttons; the text keeps its room
     d.card = surface(d.scrim, 0, 0, w, h, t.c.surface_container, m3::shape::XL);
     lv_obj_center(d.card);
     lv_obj_set_style_pad_all(d.card, 24, 0);
@@ -919,12 +934,12 @@ void mark_modal(lv_obj_t* o) {
     if (o) lv_obj_add_flag(o, MODAL);
 }
 
-bool modal_shown(lv_obj_t* root) {
-    if (!root || lv_obj_has_flag(root, LV_OBJ_FLAG_HIDDEN)) return false;   // nor anything under it
+bool modal_shown(lv_obj_t* root, const lv_obj_t* except) {
+    if (!root || root == except || lv_obj_has_flag(root, LV_OBJ_FLAG_HIDDEN)) return false;   // nor anything under it
     if (lv_obj_has_flag(root, MODAL)) return true;
     const uint32_t n = lv_obj_get_child_count(root);
     for (uint32_t i = 0; i < n; i++) {
-        if (modal_shown(lv_obj_get_child(root, (int32_t)i))) return true;
+        if (modal_shown(lv_obj_get_child(root, (int32_t)i), except)) return true;
     }
     return false;
 }

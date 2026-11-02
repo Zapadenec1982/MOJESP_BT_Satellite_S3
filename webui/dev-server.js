@@ -2,10 +2,10 @@
  * P4 Player web UI dev server — the device's API, faked well enough to work on pages without a
  * panel. Usage: npm run dev → http://localhost:5000
  *
- * State: dev/state.json, a real /api/state of the player (11.10.2026, Bluetooth playing) with
+ * State: dev/state.json, a real /api/state of the player (Bluetooth playing) with
  * names and addresses replaced. Writes to /api/settings land in it and go out over /ws as the
  * panel does; *.cmd keys are acted on roughly (play/pause/stop), never stored. Service's endpoints
- * (log levels, bindings, the screenshot, factory reset) answer as the device's do, and so do W6's:
+ * (log levels, bindings, the screenshot, factory reset) answer as the device's do, and so do these:
  * the card's library, the DLNA browser (its servers appear 2.5 s after a search), the cover.
  * Pages: data/ui.json, as the build generated it. Languages: src/i18n/<lang>.json at /lang/.
  */
@@ -41,6 +41,40 @@ const stations = {
 };
 state['radio.list_rev'] = stations.rev;
 const auth = { enabled: false, username: 'admin', pass: 'modesp' };
+
+// The radio as the Player sees it: a tune names the list's station, ‹ › step through the list
+// (from a catalog station, its first), and a station kept from the catalog (radio.web_act 1–7,
+// radio.fav_add) goes into the list, found there by its stream if it is in it already, as
+// modules/radio/src/catalog.cpp does — the one playing becoming the list's station.
+function tuned(i) {
+  const st = stations.list.stations[i];
+  return st ? { 'radio.station': i, 'radio.name': st.name, 'radio.url': st.url, 'radio.uuid': st.uuid || '',
+                'radio.state': 'playing', 'radio.now_playing': '' } : {};
+}
+function keep(name, url, uuid, slot) {
+  const list = stations.list;
+  let i = list.stations.findIndex((st) => st.url === url);
+  if (i < 0) {
+    list.stations.push(uuid ? { name: name || url, url, uuid } : { name: name || url, url });
+    i = list.stations.length - 1;
+  }
+  if (slot >= 0) list.presets[slot] = i;
+  stations.rev += 2;
+  return { i, delta: { 'radio.list_rev': stations.rev, 'radio.count': list.stations.length } };
+}
+function radioWrite(k, v) {
+  if (k === 'radio.station') return tuned(v);
+  if (k === 'radio.web_act' && v >= 0) {
+    const [name, url, uuid] = ['radio.web_name', 'radio.web_url', 'radio.web_uuid'].map((x) => state[x] || '');
+    if (v === 0) return { 'radio.station': -1, 'radio.name': name, 'radio.url': url, 'radio.uuid': uuid, 'radio.state': 'playing' };
+    return { ...keep(name, url, uuid, v - 2).delta, 'radio.web_act': -1 };
+  }
+  if (k === 'radio.fav_add' && v && state['radio.station'] === -1) {
+    const kept = keep(state['radio.name'], state['radio.url'], state['radio.uuid'], -1);
+    return { ...kept.delta, 'radio.station': kept.i, 'radio.fav_add': false };
+  }
+  return {};
+}
 
 // The EQ as GET/POST /api/eq keep it (modules/audio/src/eq_http.inc, audio_dsp/eq_store.h). The
 // presets are read out of the firmware's own table, so the page's dropdown is the panel's.
@@ -142,7 +176,7 @@ function wifiJoin(ssid, password) {
   }, 6000);
 }
 
-// Service (W5). The console's log levels as GET/POST /api/loglevel keep them (log_policy.cpp): a
+// Service. The console's log levels as GET/POST /api/loglevel keep them (log_policy.cpp): a
 // "*" puts the kept tags back at INFO. The calibration tone turns itself off after 60 s, and the
 // port measurement walks its statuses in ~15 s, as audio_module.cpp does. The diagnostics move a
 // little every 2 s without a WebSocket delta, as on the device: only /api/state shows them.
@@ -167,7 +201,7 @@ function portMeasure() {
   meter = steps.map(([ms, d]) => setTimeout(() => loud(d), ms));
   meter.push(setTimeout(() => {
     meter = null;
-    // found and offered, not written (S6): «Прийняти» or «Застосувати» writes audio.port_hz
+    // found and offered, not written: «Прийняти» or «Застосувати» writes audio.port_hz
     loud({ 'audio.tone_mode': was.mode, 'audio.tone_hz': was.hz, 'audio.source': was.src, 'audio.port_meas': false,
            'audio.port_meas_hz': 63.4, 'audio.port_meas_status': `@cal.m_found${U}hz=63` });
   }, 15000));
@@ -203,7 +237,7 @@ function screenshotBmp() {
   return buf;
 }
 
-// W6. The card's index as GET /api/library pages it (modules/ui_lvgl/src/ui_web_media.cpp), the
+// The card's index as GET /api/library pages it (modules/ui_lvgl/src/ui_web_media.cpp), the
 // DLNA browser as GET /api/dlna/browser shows it and dlna.browse_cmd drives it (components/
 // dlna_client: twelve rows a page, a revision on every snapshot, a command for another revision
 // ignored), and the Player's picture as GET /api/cover sends it, named by ui.cover.
@@ -372,10 +406,31 @@ function json(res, code, body) {
   res.end(typeof body === 'string' ? body : JSON.stringify(body));
 }
 
+// audio.transport as the panel routes it (components/audio_dsp/include/transport_route.h), roughly.
+function transport(v) {
+  const src = state['audio.source'];
+  if (src === 4) return ['player.cmd', v];
+  if (src === 3) return ['bt.cmd', v];
+  if (src === 6) return ['airplay.cmd', v];
+  if (src === 5 && state['radio.mode'] === 'push') {
+    return ['dlna.cmd', v === 6 ? (state['dlna.state'] === 'PLAYING' ? 3 : 1) : [0, 1, 3, 2, 4, 5][v]];
+  }
+  if (src === 5) {
+    const sounding = ['playing', 'buffering', 'connecting', 'reconnecting'].includes(state['radio.state']);
+    return ['radio.cmd', v === 6 ? (sounding ? 2 : 1) : [0, 1, 0, 2, 3, 4][v]];
+  }
+  return [null, 0];
+}
+
 // What a command does, roughly: enough to see the transport and the mini-player react.
 function command(key, v) {
+  if (key === 'audio.transport') [key, v] = transport(v);
   const out = {};
   if (key === 'radio.cmd') out['radio.state'] = v === 2 ? 'idle' : 'playing';
+  if (key === 'radio.cmd' && (v === 3 || v === 4)) {
+    const n = stations.list.stations.length, i = state['radio.station'];
+    Object.assign(out, tuned(v === 3 ? (i >= 0 ? (i + 1) % n : 0) : (i > 0 ? i - 1 : n - 1)));
+  }
   if (key === 'player.cmd') out['player.state'] = v === 2 || (v === 6 && state['player.state'] === 'playing') ? 'paused' : 'playing';
   if (key === 'player.cmd' && v === 1 && state['player.track']) {
     // a track asked for by its path, as the library page does: the card plays it
@@ -431,8 +486,8 @@ const server = createServer((req, res) => {
       try {
         for (const [k, v] of Object.entries(JSON.parse(body))) {
           if (k === 'dlna.browse_cmd') dlnaCommand(v);
-          else if (k.endsWith('.cmd')) Object.assign(delta, command(k, v));
-          else { delta[k] = v; state[k] = v; }
+          else if (k.endsWith('.cmd') || k === 'audio.transport') Object.assign(delta, command(k, v));
+          else { delta[k] = v; state[k] = v; Object.assign(delta, radioWrite(k, v)); Object.assign(state, delta); }
         }
       } catch {
         return json(res, 400, 'Invalid JSON');
@@ -706,13 +761,15 @@ setInterval(() => {
 }, 1000);
 setInterval(() => {
   const j = (v, d, lo, hi) => Math.round(Math.min(hi, Math.max(lo, v + (Math.random() - 0.5) * d)) * 100) / 100;
+  const internal = Math.round(j(state['system.heap_internal'] ?? 120000, 4000, 40000, 200000));
   quiet({
     'audio.cpu_pct': j(state['audio.cpu_pct'] ?? 30, 6, 5, 95),
     'audio.dsp_pct': j(state['audio.dsp_pct'] ?? 19, 4, 2, 60),
     'audio.dsp_max_pct': j(state['audio.dsp_max_pct'] ?? 23, 6, 5, 90),
     'audio.lim_gr': Math.random() < 0.3 ? j(1.2, 2, 0, 4) : 0,
     'system.main_loop_max_ms': Math.round(j(state['system.main_loop_max_ms'] ?? 12, 8, 10, 60)),
-    'system.heap_internal': Math.round(j(state['system.heap_internal'] ?? 120000, 4000, 40000, 200000)),
+    'system.heap_internal': internal,
+    'system.heap_internal_min': Math.min(state['system.heap_internal_min'] ?? internal, internal),
     'ui.touch_x': Math.floor(Math.random() * 480),
     'ui.touch_y': Math.floor(Math.random() * 800),
   });

@@ -1,6 +1,6 @@
 /**
  * @file ui_common.h
- * @brief What every screen file shares: the context, the layout grid, widget helpers.
+ * @brief What every screen file shares: the context, the layout grid, the sources, widget helpers.
  *
  * Screens are built once at startup and then shown/hidden, so navigation costs nothing at
  * run time and no screen has to cope with being half-constructed. Each one exposes a
@@ -16,14 +16,16 @@
 #include "ui_theme.h"
 #include "ui_lvgl_module.h"
 #include "fonts/ui_fonts.h"
+#include "i18n.h"
+#include "state_enums.h"   // audio.source and the other manifest values, generated from the manifests
 #include "esp_heap_caps.h"
 #include "lvgl.h"
 #include <cassert>
 #include <new>
 
 // ── the 800x480 grid: a 48 px header, the content below it, nothing permanent beside ──
-// No rail: it took 88 px off every page for a menu that is wanted a few times a day
-// (decision of 24.09.2026). The one menu is the drawer, and it is modal.
+// No rail: it would take 88 px off every page for a menu that is wanted a few times a day.
+// The one menu is the drawer, and it is modal.
 namespace uig {
 constexpr int32_t SCR_W    = 800;
 constexpr int32_t SCR_H    = 480;
@@ -34,7 +36,7 @@ constexpr int32_t CONT_X   = PAD;                      // 24
 constexpr int32_t CONT_Y   = HEAD_Y + HEAD_H + 10;     // 74 — content top
 constexpr int32_t CONT_W   = SCR_W - 2 * PAD;          // 752
 constexpr int32_t CONT_H   = SCR_H - CONT_Y - 22;      // 384
-/// The modal navigation drawer: 340 since S1 (14.10.2026) — «Налаштування» in the rows' headline
+/// The modal navigation drawer: 340 — «Налаштування» in the rows' headline
 /// face is 223 px, and at 300 a row left it 212 (tools/i18n/font_metrics.py).
 constexpr int32_t DRAWER_W = 340;
 constexpr int32_t EDGE_W   = 18;    ///< invisible left-edge strip that opens the drawer
@@ -61,6 +63,81 @@ struct UiScreenDef {
     /// Return true when it went up a level; false lets the shell leave the page.
     bool      (*back)(UiCtx& c);
 };
+
+// ── the sources ──────────────────────────────────────────────────────────────────────────
+// What the glass makes of audio.source — the Player's face, the icon, the name — said once, as the
+// web says it once (webui/src/stores/now.js): an entry for each of the manifest's values
+// (modesp::gen::AUDIO_SOURCE_*; docs/CONCEPT.md, "`audio.source` values"), and DLNA, a track pushed
+// to the radio.
+
+/// A source as the glass tells them apart.
+enum class UiSrc : uint8_t {
+    OFF     = modesp::gen::AUDIO_SOURCE_OFF,
+    TONE    = modesp::gen::AUDIO_SOURCE_TONE,
+    AUX     = modesp::gen::AUDIO_SOURCE_AUX,
+    BT      = modesp::gen::AUDIO_SOURCE_BT,
+    CARD    = modesp::gen::AUDIO_SOURCE_FILE,
+    RADIO   = modesp::gen::AUDIO_SOURCE_RADIO,
+    AIRPLAY = modesp::gen::AUDIO_SOURCE_AIRPLAY,
+    USB     = modesp::gen::AUDIO_SOURCE_USB,
+    DLNA,                                       ///< the radio, playing a push (radio.mode "push")
+};
+static_assert((int)UiSrc::DLNA == modesp::gen::AUDIO_SOURCE_MAX + 1, "an entry for every audio.source value");
+
+/// What the Player draws: a track with its position and transport — the card, DLNA, Bluetooth and
+/// AirPlay alike — a station, or neither: the tone, AUX, USB (the computer is its own remote) and
+/// the output off. NONE is a page's "nothing drawn yet".
+enum class PlayerFace : int8_t { NONE = -1, EMPTY, TRACK, RADIO };
+
+/// No name to give: tr() of either is "" (i18n.h).
+constexpr i18n::S  UI_NO_NAME = i18n::S::COUNT;
+constexpr i18n::SU UI_NO_CAPS = i18n::SU::COUNT;
+
+struct UiSrcDef {
+    PlayerFace  face;   ///< what the Player draws while it plays
+    const char* sym;   ///< the icon: the Player's tile while nothing plays, the Sources page's card
+    i18n::S     name;   ///< the standby face's line and the Sources page's card; none for the output
+                        ///< off and the tone
+    i18n::SU    caps;   ///< the line over the Player's block; none where the sound is played from
+                        ///< nowhere — the tone, AUX, off — as on the web (stores/now.js fromKey)
+};
+
+/// What the glass makes of `src`.
+constexpr UiSrcDef ui_src_def(UiSrc src) {
+    using i18n::S;
+    using i18n::SU;
+    switch (src) {
+    case UiSrc::OFF:     return { PlayerFace::EMPTY, UI_SYM_POWER,      UI_NO_NAME,     UI_NO_CAPS };
+    case UiSrc::TONE:    return { PlayerFace::EMPTY, UI_SYM_GRAPHIC_EQ, UI_NO_NAME,     UI_NO_CAPS };
+    case UiSrc::AUX:     return { PlayerFace::EMPTY, UI_SYM_AUX,        S::src_aux,     UI_NO_CAPS };
+    case UiSrc::BT:      return { PlayerFace::TRACK, UI_SYM_BLUETOOTH,  S::src_bt,      SU::src_bt };
+    case UiSrc::CARD:    return { PlayerFace::TRACK, UI_SYM_SD,         S::src_card,    SU::src_card };
+    case UiSrc::RADIO:   return { PlayerFace::RADIO, UI_SYM_RADIO,      S::src_radio,   SU::src_radio };
+    case UiSrc::AIRPLAY: return { PlayerFace::TRACK, UI_SYM_AIRPLAY,    S::src_airplay, SU::src_airplay };
+    case UiSrc::USB:     return { PlayerFace::EMPTY, UI_SYM_USB,        S::src_usb,     SU::src_usb };
+    case UiSrc::DLNA:    return { PlayerFace::TRACK, UI_SYM_CAST,       S::src_dlna,    SU::src_dlna };
+    }
+    return ui_src_def(UiSrc::OFF);
+}
+
+/// The audio.source value `src` plays from: its own, and the radio's for DLNA.
+constexpr int32_t ui_src_value(UiSrc src) {
+    return src == UiSrc::DLNA ? modesp::gen::AUDIO_SOURCE_RADIO : (int32_t)src;
+}
+
+/// What plays, as the glass tells it: audio.source `value`, and DLNA where the radio plays a push;
+/// OFF for a value that is none of them (−1: a build without the audio module).
+constexpr UiSrc ui_src(int32_t value, bool push) {
+    if (value == modesp::gen::AUDIO_SOURCE_RADIO && push) return UiSrc::DLNA;
+    if (value < modesp::gen::AUDIO_SOURCE_MIN || value > modesp::gen::AUDIO_SOURCE_MAX) return UiSrc::OFF;
+    return (UiSrc)value;
+}
+inline UiSrc ui_src(const UiLvglModule::Snapshot& s) { return ui_src(s.source, s.network_push); }
+
+/// The Player's face for what plays. The Player, its transport, the standby face and the module's
+/// "music is playing" all ask this, rather than each spelling the rule again.
+constexpr PlayerFace ui_face(int32_t value, bool push) { return ui_src_def(ui_src(value, push)).face; }
+inline PlayerFace ui_face(const UiLvglModule::Snapshot& s) { return ui_face(s.source, s.network_push); }
 
 // ── widget helpers ───────────────────────────────────────────────────────────────────────
 // These exist so a screen file reads as layout, not as twenty lv_obj_set_style_* calls.
@@ -113,7 +190,7 @@ void set_text(lv_obj_t* lbl, char* cache, size_t cache_sz, const char* txt);
 // Once that list overflows LVGL gives up on areas and repaints the WHOLE 800x480 screen, 25
 // times a second, on core 1 — the same core the audio task and the Bluetooth resampler sit
 // on. That is why the row visibly stalls in Bluetooth and not on the card, where the decoder
-// is pinned to core 0 (diagnosis of 21.09.2026, plan item 13.5).
+// is pinned to core 0.
 //
 // Drawn as one object it is one invalidation of 560x218 instead of a full screen: a third of
 // the pixels, none of the object-tree walking, and the same picture. It helps in every mode.
@@ -199,6 +276,9 @@ void ui_pick_build(lv_obj_t* scr);
 void ui_pick_show(const char* title, const char* const* items, int n, int current, void (*chosen)(int index));
 bool ui_pick_shown();
 void ui_pick_hide();
+/// The list's scrim — the object m3w::dialog marks modal — for a look past the list
+/// (m3w::modal_shown's `except`): the return to the Player closes the list rather than wait for it.
+const lv_obj_t* ui_pick_scrim();
 
 extern const UiScreenDef UI_SCREEN_NOW;
 extern const UiScreenDef UI_SCREEN_SRC;
@@ -251,14 +331,12 @@ void ui_bt_preview(bool on);
 /// the page as it is with no cover — and false gives it back. Returns whether the page has a
 /// cover's colour to paint. Call with the LVGL lock held.
 bool ui_now_plain(bool plain);
-/// The Player's play button, for the knob's press on any page: what the source's transport does
-/// — play or pause, the radio's play or stop — and nothing where there is nobody to command.
-void ui_now_play_pause();
+/// The knob's press on any page, the Player's play button: play or pause for a track, the mute for
+/// a station, which does not pause; nothing where there is nobody to command.
+void ui_now_press();
 /// Bring the player screen up. Choosing the card as a source is choosing to listen to
 /// what is on it, so the list of it is where that choice should land.
 void ui_shell_show_player();
-/// Call up the volume pop-up, the way a turn of the encoder does.
-void ui_shell_show_volume();
 /// The header's ≡ / ← pressed: the drawer on a section, back on a list (through the page's
 /// own `back` first).
 void ui_shell_nav();
@@ -269,14 +347,21 @@ void ui_shell_show_radio();
 lv_obj_t* ui_station_tabs(lv_obj_t* parent, int on);
 /// The catalog page on tab 1 Топ, 2 Країни, 3 Жанри or 4 Пошук, each from its top.
 void ui_catalog_open(int tab);
+/// The six presets' gestures, as the Stations page has them (screen_radio.cpp) and the Player's
+/// station face repeats them: a tap tunes preset `slot` — and starts it when it is the station
+/// tuned but not playing — or, on an empty one, stores what plays; a long press stores what plays.
+void ui_preset_tap(int slot);
+void ui_preset_store(int slot);
+/// Something plays that a preset can keep: a station of the list, or one from the catalog.
+bool ui_preset_storable(const UiLvglModule::Snapshot& s);
 /// One encoder update: `delta` detents since the last call, `event` 0 none / 1 click / 2 hold.
-/// The knob has one job on every page, over every sheet and dialog (customer, 18.10.2026):
-/// a turn is the volume, a press plays and pauses, a hold
-/// opens the menu. What is on the glass is chosen by touch. Called from the LVGL refresh, which
-/// is the only place that may touch widgets.
+/// The knob has one job on every page, over every sheet and dialog: a turn is the volume, a
+/// press plays and pauses (mutes a station), a hold opens the menu. What is on the glass is
+/// chosen by touch.
+/// Called from the LVGL refresh, which is the only place that may touch widgets.
 void ui_shell_encoder(int32_t delta, uint8_t event, UiCtx& c);
 
-/// «Скасувати» after a finger moved a sound setting (touch_gesture.h; the customer, 14.10.2026):
+/// «Скасувати» after a finger moved a sound setting (touch_gesture.h):
 /// a snackbar over the pages for touch::UNDO_MS — `text`, «Бас: 0 › +3», and the button, which
 /// calls `undo(value, arg)` once. Another note replaces it; ui_shell_undo_drop(key) takes down
 /// the one `key` put up. The knob's change — the volume — has none.

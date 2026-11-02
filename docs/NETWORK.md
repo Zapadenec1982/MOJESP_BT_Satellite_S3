@@ -75,6 +75,11 @@ the I2S descriptors and everything that asks for DMA ([CONCEPT.md](CONCEPT.md), 
 - The task stacks of the radio, DLNA, the media server browser and covers are in PSRAM. An internal
   stack belongs to the tasks that write to flash (`ap_start`: HAP keys in NVS) and to the SSDP
   task: a task with its stack in PSRAM cannot run while the flash cache is disabled.
+- The HTTP routes' buffers of a kilobyte and more are in PSRAM, allocated at a route's first
+  request and kept (`http_routes::scratch()`), and so are the two 80 KB buffers the state is
+  written to as JSON, one for the httpd task and one for the main task
+  (`modesp/net/state_json.h`). mDNS keeps its records in PSRAM
+  (`CONFIG_MDNS_MEMORY_ALLOC_SPIRAM`).
 
 ### lwIP
 
@@ -106,14 +111,19 @@ without it — access point.
 - `esp_netif_set_default_netif()` on STA (`CONFIG_MODESP_NET_SET_DEFAULT_NETIF`, default for P4):
   without it, unbound UDP sockets (SNTP) do not go out through the ESP-Hosted interface.
 - Disconnect: three retries after 2, 4 and 8 s; another 16 s without an address — access point.
-- 10 min without a connection in total — `esp_restart()`; an hour of stable connection resets the
-  counter.
+- No restart for lost Wi-Fi time (`CONFIG_MODESP_WIFI_RESTART_ON_LONG_DISCONNECT=n`; the
+  framework's default restarts after 10 min without a connection in total). A router that is off
+  sends the panel to its access point, and the panel goes back when the router returns. A C6 that
+  stops answering on SDIO restarts the panel through ESP-Hosted
+  (`CONFIG_ESP_HOSTED_HOST_TRANSPORT_RESTART_ON_FAILURE`), and the restart resets the C6
+  (GPIO 54).
 
 **Access point.** SSID `ModESP-XXXX` (the last two bytes of the base MAC) or `wifi/ap_ssid`;
-password `wifi/ap_pass` ≥ 8 characters → WPA2, otherwise open; channel `wifi/ap_chan` (1–13,
+password `wifi/ap_pass` of 8–63 characters → WPA2 (a longer stored one is cut to its first 63,
+with an ERROR in the log), otherwise open; channel `wifi/ap_chan` (1–13,
 default 1); up to 2 clients; address 192.168.4.1. With a saved network, the AP tries STA (APSTA,
 15 s per attempt): the first attempt after 30 s, then the interval doubles up to 5 min; an attempt
-is skipped when free heap is < 50 KB. A successful attempt switches to pure STA.
+is skipped when free internal RAM is < 50 KB. A successful attempt switches to pure STA.
 
 **Joining** from the panel and the web — `WiFiService::try_connect()`: the old pair stays in
 memory, the new one is written to NVS only after an address is obtained. A refusal by the network
@@ -122,8 +132,10 @@ threshold) ends the attempt at once; 25 s without an address or three failed ret
 comes back, and when there was none — the access point.
 
 **Scanning.** Active, 120–500 ms per channel, no hidden networks, up to 20 results (records in
-PSRAM); needs ≥ 50 000 B of free heap; in AP mode — APSTA for the duration of the scan. Scanning
-blocks its caller: for `GET /api/wifi/scan`, the HTTP server task.
+PSRAM); needs ≥ 50 000 B of free internal RAM; in AP mode — APSTA for the duration of the scan.
+Scanning blocks its caller: for `GET /api/wifi/scan`, the HTTP server task. One scan at a time,
+and none during a join or an AP → STA attempt: such a request gets no list (`{"ok":false}` on the
+web, a failed scan on the panel), while a join or an attempt that comes during a scan waits for it.
 
 **RSSI is not read.** `esp_wifi_sta_get_ap_info()` here is a synchronous RPC to the C6 with a 5 s
 timeout, while the main loop feeds a 5-second watchdog; besides, ESP-Hosted 3.0.7 returns rssi 0
@@ -156,14 +168,17 @@ synchronization `system.time` and `system.date` show `--:--:--` and `--.--.----`
 **The device name** is shared by Bluetooth, AirPlay, DLNA, USB audio and the header of the panel's
 drawer (`modules/bt/include/device_name.h`):
 
-- NVS `devname/name`, 1–32 bytes — the satellite's limit (`BT_CONFIG_SET`,
+- NVS `devname/name`, 1–32 bytes of UTF-8 — the satellite's rule (`BT_CONFIG_SET`,
   [LINK_PROTOCOL.md](LINK_PROTOCOL.md)); while there is no name — `P4 Player` (`device_name::FALLBACK`,
-  the same as `system.device_name` in `project.json`).
+  the same as `system.device_name` in `project.json`). A stored name that breaks the rule counts as
+  none.
 - Set by the "Name" field on the Bluetooth page of the panel or the web (`POST /api/bt`,
-  `{"name":…}`): the name goes to the satellite and is saved in NVS. Needs a satellite that exposes
-  its settings (`DEV_CAP_BT_SETTINGS`); without one `POST /api/bt` answers `409`.
+  `{"name":…}`, a name that is not UTF-8 gets `400`): the name goes to the satellite and is saved in
+  NVS. Needs a satellite that exposes its settings (`DEV_CAP_BT_SETTINGS`); without one
+  `POST /api/bt` answers `409`.
 - The first name the satellite reports is saved when the panel has none of its own yet; to a
-  satellite with a different name the panel passes its own.
+  satellite with a different name the panel passes its own, once per link: a satellite that still
+  reports its own after that keeps it.
 - Bluetooth takes a new name at once; AirPlay, DLNA and USB audio read it at startup — after a
   restart.
 - DLNA announces it as friendlyName (`dlna.name`), AirPlay as the name in the list (`airplay.name`)
@@ -200,10 +215,15 @@ and the WebSocket broadcast. Handler buffers over a few kilobytes are in PSRAM o
 ### Static files
 
 The wildcard `/*` serves `/data/www/` from the `data` partition — the web bundle sits in
-`data.bin`, not in the app image. `<path>.gz` takes precedence (`Content-Encoding: gzip`,
-`Cache-Control: no-store`), otherwise the file as is (`no-cache`); an unknown path — `index.html`
-(SPA routes). A URI longer than 51 characters — 404, `..` in the path — 400. `/radio.html`
-redirects to `/#/stations/top`.
+`data.bin`, not in the app image. `<path>.gz` takes precedence (`Content-Encoding: gzip`),
+otherwise the file as is; an unknown path — `index.html` (SPA routes). A URI longer than 51
+characters — 404, `..` in the path — 400. `/radio.html` redirects to `/#/stations/top`.
+
+Every file from the partition (`send_file()`, `GET /api/ui` too) goes with `Cache-Control:
+no-cache` and an `ETag`, the CRC-32 of the file, worked out at its first request after boot (up to
+64 files). A request with that tag in `If-None-Match` gets `304` with no body, so a reload costs a
+round trip per file, and a flash of the web reaches an open tab at its next load. Files go out in
+4 KB pieces from one PSRAM buffer.
 
 ### Route order
 
@@ -218,8 +238,11 @@ rejected as `already registered`. Hence the order:
 3. last — `/*`.
 
 A subsystem that registers later (the DLNA renderer once the network is up) removes the wildcard
-(`http_routes::wildcard(false)`) and puts it back. If `/*` did not fit in the handler table, no
-page opens, but the API answers; log `HTTP: Static file handler NOT registered`.
+(`http_routes::wildcard(false)`) and puts it back. In between, the server's task is held between two
+requests: httpd changes its handler table with no lock against its own lookups, so a request that
+comes meanwhile waits for the routes to be whole rather than getting a 404 or a half-built slot.
+If `/*` did not fit in the handler table, no page opens, but the API answers; log
+`HTTP: Static file handler NOT registered`.
 
 ### Authentication
 
@@ -237,8 +260,8 @@ HTTP Basic, realm `ModESP`. NVS namespace `auth`: `user`, `pass`, `enabled`; def
 - Development builds: `CONFIG_UI_SCREENSHOT_OPEN` (default `n`) removes the login from
   `/api/screenshot`, `/api/ui/frames`, `/api/i18n/overflow`; `CONFIG_UI_SCROLL_BENCH` (default `n`)
   adds `/api/ui/scrollbench` without login. Both log a WARN about themselves at every boot.
-- CORS: there is no `Access-Control-Allow-Origin` header — a page from another origin cannot read
-  the response; `OPTIONS` on the framework routes answers empty.
+- CORS: there is no `Access-Control-Allow-Origin` header and no `OPTIONS` route — a page from
+  another origin cannot read a response, and a preflight it needs for a JSON POST fails.
 - The web keeps the credentials in the tab's `sessionStorage` and asks for them on `401`.
 
 `POST /api/auth`: `{"username","enabled","current_pass","new_pass","reset"}`. `new_pass` (4–63
@@ -248,26 +271,41 @@ before writing.
 
 ### REST API
 
+For every route:
+- A `POST` must carry `Content-Type: application/json` (`application/octet-stream` for the OTA
+  upload); anything else, or none, gets `415 {"error":"content_type"}`. A page on another site can
+  make a browser send only a form's content types without asking first, and these two make it ask
+  with a preflight, which the server never grants. UPnP control URLs are not under `/api/` and
+  are not affected. With curl: `-H 'Content-Type: application/json'`.
+- A body that does not fit the route's buffer is refused with `413` before it is read; a body is
+  read whole, however many TCP segments it comes in. Its length must come as `Content-Length`:
+  httpd does not read a chunked body (`Transfer-Encoding: chunked`), and such a POST arrives empty
+  — `400` (dart:io sends chunked unless the length is set).
+- A `GET` of an `/api/` path nothing serves gets `404 {"error":"not_found"}` (`application/json`);
+  the web's own paths still get `index.html`. Another method on such a path gets httpd's `405`:
+  the static files' wildcard takes every `GET` path, so httpd counts the path as known.
+
 Framework routes (`http_service.cpp`):
 
 | Route | What |
 |---|---|
 | `GET /api/state` | the whole SharedState as one JSON object (80 KB buffer in PSRAM; does not fit — 500) |
-| `POST /api/settings` | `{key: value,…}`: only known writable keys from `generated/state_meta.h`; a number outside the manifest's range is clamped with a WARN in the log; a command key (`"command": true`) goes to the owning module's queue, not to the store. Body ≤ 511 B, up to 15 pairs |
-| `GET /api/ui` | `ui.json` |
-| `GET /api/board`, `GET`/`POST /api/bindings`, `GET`/`POST /api/devices`, `GET /api/modules` | ModESP board and module configuration |
-| `POST /api/wifi` | `{"ssid","password"}` — save only (takes effect after a restart); with `"join":true` — `try_connect()` (SSID 1–32 bytes, password ≤ 64; `409 {"error":"busy"}` during another attempt); `{"forget":true}` — forget the network, access point. Body ≤ 255 B |
+| `POST /api/settings` | `{key: value,…}`: only known writable keys from `generated/state_meta.h`, each with a value of its manifest type (a string, a number, `true`/`false`) — anything else is refused, and the request gets `400` when nothing in it was taken; a number outside the manifest's range is clamped with a WARN in the log; a command key (`"command": true`) goes to the owning module's queue, not to the store. Body ≤ 1023 B, up to 15 pairs |
+| `GET /api/ui` | `ui.json` gzip-encoded: the build packs `data/ui.json.gz` beside it (~12 KB for ~86 KB); `ETag`, `304` |
+| `GET`/`POST /api/bindings` | the board's bindings |
+| `GET /api/board`, `GET`/`POST /api/devices`, `GET /api/modules` | ModESP board, device registry and modules — only with `CONFIG_MODESP_HTTP_FRAMEWORK_ROUTES` (`n` on the player) |
+| `POST /api/wifi` | `{"ssid","password"}`, SSID 1–32 bytes, password ≤ 64 (otherwise `400`) — save only (takes effect after a restart); with `"join":true` — `try_connect()` (`409 {"error":"busy"}` during another attempt); `{"forget":true}` — forget the network, access point. Body ≤ 255 B |
 | `GET /api/wifi/scan` | `{"ok","networks":[{"ssid","rssi","auth"}]}` |
-| `GET`/`POST /api/wifi/ap` | `{"ssid","channel","password_set"}` / `{"ssid","password","channel"}`: password empty or ≥ 8; takes effect after a restart |
+| `GET`/`POST /api/wifi/ap` | `{"ssid","channel","password_set"}` / `{"ssid","password","channel"}`: SSID 1–32 bytes, password empty or 8–63; takes effect after a restart |
 | `GET`/`POST /api/time` | `{"time","date","ntp_enabled","timezone","synced","unix"}` / `{"mode":"ntp"\|"manual","time":<unix>,"timezone"}` |
 | `GET`/`POST /api/auth` | `{"enabled","username"}` / see "Authentication" |
 | `GET`/`POST /api/loglevel` | log levels: `{"tag","level"}`, `level` — `none`, `error`, `warn` or `info`, not above the build's ceiling (INFO); not persisted |
-| `GET /api/log`, `GET /api/log/summary` | ModESP journal history; `project.json` has no source module, so the response is 500 |
-| `GET /api/backup`, `POST /api/restore` | persist keys (numbers and bool), `{"modesp_backup":1,"keys":{…}}`, ≤ 2 KB; restoring restarts the panel |
+| `GET /api/log`, `GET /api/log/summary` | ModESP journal history — only with `CONFIG_MODESP_HTTP_FRAMEWORK_ROUTES`; the player has no journal source |
+| `GET /api/backup`, `POST /api/restore` | persist keys (numbers and bool), `{"modesp_backup":1,"keys":{…}}`, ≤ 2 KB; a restore skips a key that is not a persist key or whose value is not of its manifest type, answers `{"ok":true,"restored":N,"skipped":M}` and restarts the panel |
 | `POST /api/restart` | saving settings, stopping the modules in the main loop (≤ 2 s), restart |
 | `POST /api/factory-reset` | erases NVS (Wi-Fi, login, settings, AirPlay keys) and restarts; does not touch the `userdata` partition |
 | `GET`/`POST /api/ota` | see "OTA" |
-| `GET /api/onewire/scan`, `GET /api/drivers/scan`, `GET /api/ble/scan` | ModESP bus scanners |
+| `GET /api/onewire/scan`, `GET /api/drivers/scan`, `GET /api/ble/scan` | ModESP bus scanners — only with `CONFIG_MODESP_HTTP_FRAMEWORK_ROUTES` |
 
 Module routes (`http_routes`):
 
@@ -291,6 +329,8 @@ Module routes (`http_routes`):
   `400 {"error":"board_mismatch","running","incoming"}`.
 - Three receive timeouts in a row (~90 s) — `408`: a client that vanished without FIN would
   otherwise hold the only httpd task.
+- One update at a time, shared with the MQTT `_ota` command where it is built: while one is being
+  written the other is refused (here `409`), and a written image keeps the slot until the restart.
 - Writes to the next slot (`ota_0` / `ota_1`), makes it bootable, stops the modules,
   restarts.
 - Within 60 s the new image must get Wi-Fi and the HTTP server, `audio.state` ≠ `error` and a
@@ -306,16 +346,21 @@ Module routes (`http_routes`):
 `tests/host/test_ws_slots.cpp`).
 
 - A server message is a text JSON object `{key: value,…}` in the `/api/state` format. After the
-  handshake the client receives the whole state (needs ≥ 32 000 B of free heap), then every 1.5 s —
-  only the changed keys, if there are any.
+  handshake the client receives the whole state (needs ≥ 32 000 B of free internal RAM), then
+  the changed keys as soon as they change, at most one message every 200 ms.
+- Keys starting with `_` are reserved for service messages and are never state keys. Every 5 s
+  the server sends each client a PING and a text frame `{"_hb":n}`: a page cannot see PINGs, and
+  without a message it cannot tell a quiet panel from a connection that is gone. The web drops a
+  socket that has carried a heartbeat and then stays silent for 15 s, and connects again.
 - Keys that modules write without a change flag (diagnostics: CPU, heap, limiter, satellite
   counters) do not get into the deltas; the web page with diagnostics, while visible, polls
   `/api/state` every 2 s (`webui/src/lib/live.js`).
-- Up to 3 clients. PING every 5 s; a client not heard from for 15 s (any frame, PONG too), or one
-  that missed a message, is closed. A fourth client takes the slot of one already due to be
-  closed, or receives CLOSE 1013 `busy`.
+- Up to 3 clients. A client not heard from for 15 s (any frame, PONG too), or one that missed a
+  message, is closed. A frame to a client goes out whole within 3 s, or the session is closed: the
+  httpd task serves all of HTTP and every client, and a slow phone must not hold it. A fourth
+  client takes the slot of one already due to be closed, or receives CLOSE 1013 `busy`.
 - Client text frames (up to 127 B) are read and discarded; commands go through
-  `POST /api/settings`.
+  `POST /api/settings`. A longer frame of any type closes the session.
 - Sending goes through `httpd_queue_work` in the httpd task: `httpd_ws_send_frame_async()` from
   another task races with its `recv()`.
 - The client is registered by `ws_post_handshake_cb`: IDF 5.5.5 does not call the `/ws` handler for
@@ -340,8 +385,8 @@ wait until the source becomes 5. The same engine plays stations and external URL
   up to 4 redirects (`Location`); `Range` — for seeking and resuming a track.
 - Read: `Content-Type`, `Content-Length`, `Content-Range`, `icy-metaint` (≤ 64 KB), `icy-br`,
   `icy-name`. `StreamTitle='…'` → `radio.now_playing`.
-- Playlist (`.m3u`, `.m3u8`, `.pls` or Content-Type `mpegurl` / `scpls`): the first http URL is
-  taken. HLS is not supported.
+- Playlist (Content-Type `mpegurl` / `scpls` / `x-pls`, or a URL ending in `.m3u`, `.m3u8`, `.pls` whose
+  Content-Type is not `audio/…`): the first http URL is taken. HLS is not supported.
 - Decoder — by Content-Type: `mpeg`/`mp3` → MP3, `aac`/`aacp` → AAC, `flac` → FLAC (checked before
   `ogg`, because there is `audio/ogg; codecs=flac`), `ogg`/`opus` → Ogg, `wav`/`wave` → WAV,
   `mp4`/`m4a` → M4A; without a usable type — by the URL extension (`.aac`, `.wav`, `.flac`,
@@ -369,9 +414,10 @@ two 5-second reports in a row in which the network delivers < 95 % of what the s
 buffer is < 10 % — reconnection to another address of the same host (connection by IP, the name in
 `Host` and SNI), no more often than once per 35 s. Stations only.
 
-**TLS.** A station can play over HTTPS; the catalog and track covers go over HTTP only, the logo over
-HTTPS only when the station itself plays over HTTP: there is one TLS session, and while a station
-plays, the station holds it.
+**TLS.** A station can play over HTTPS; the catalog and track covers go over HTTP only, the logos
+over HTTPS only while the station itself plays over HTTP — its address and, after a redirect or a
+playlist, its connection: there is one TLS session, and while a station plays, the station holds
+it. One HTTPS fetch of a logo at a time (`radio_http::get_url`).
 
 ### Station list
 
@@ -384,7 +430,9 @@ empty one — the built-in set.
 {"stations":[{"name":"…","url":"…","uuid":"…"}],"presets":[0,3,-1,-1,-1,-1]}
 ```
 
-Unreadable entries are discarded, the rest remain; file ≤ 24 KB.
+Unreadable entries are discarded, the rest remain; file ≤ 24 KB. A name is one line: a control
+character in it (a tab, a line break) becomes a space and the spaces at its ends go, whichever way
+it came — the web, the catalog, the file.
 
 - `GET /api/stations` → `{"rev":N,"list":{"stations":[…],"presets":[…]}}`.
 - `POST /api/stations` ← `{"rev":N,"stations":[…],"presets":[…]}`, `rev` as the first field. `202` —
@@ -421,7 +469,9 @@ Unreadable entries are discarded, the rest remain; file ≤ 24 KB.
 **Web** (Stations → catalog, `webui/src/lib/radiobrowser.js`): the browser itself goes to Radio
 Browser over HTTPS (the API gives CORS `*`) with the same filters. Only `radio.web_name`,
 `radio.web_url`, `radio.web_uuid` are passed to the panel, then `radio.web_act`: 0 play, 1 to the
-list, 2–7 to preset 1–6. The URL must be `http(s)://` and ≤ 223 B.
+list, 2–7 to preset 1–6. The URL must be `http(s)://` and ≤ 223 B. The Player stores what plays on
+a preset through the same keys, and asks `/json/stations/byuuid?uuids=…` for its stations' logos
+([UI.md](UI.md), "Pages and what they read/write").
 
 **Clicks.** When a station with a `uuid` (from the list or from the catalog) has started playing, the
 module makes `GET /json/url/<uuid>` once per tuning — this is how Radio Browser counts what is
@@ -441,9 +491,45 @@ choosing the result — `components/radio_catalog/include/radio_art.h`, test
 - **Station logo.** The `favicon` of the catalog row or from `/json/stations/byuuid?uuids=<uuid>`;
   first over HTTP (for an `https://` address too), over HTTPS only when the station itself plays
   over HTTP; ≤ 128 KB, JPEG or PNG.
-- Tile `CoverSource::Radio`: the track cover, without it — the logo, without that — nothing. A track
-  pushed through DLNA shows the control point's cover (`CoverSource::Network`), without it — the
-  Radio tile.
+- Tile `CoverSource::Radio`: the track cover, without it — the logo, without that — nothing, and the
+  panel draws the station's stand-in ([UI.md](UI.md), "Panel pages"). A track pushed through DLNA
+  shows the control point's cover (`CoverSource::Network`), without it — the Radio tile.
+
+**Preset logos** (`modules/radio/src/logos.cpp`; the rules — `components/radio_catalog/include/
+station_logo.h`, test `tests/host/test_station_logo.cpp`; fitting into the disc —
+`components/cover/include/cover_thumb.h`, test `tests/host/test_cover_thumb.cpp`). The panel keeps
+the logo of every preset station that has a Radio Browser `uuid`, so its preset button shows it
+while an HTTPS station holds the TLS session and after a restart ([UI.md](UI.md), "Panel pages").
+
+- **Storage**: `logos/<uuid>.565` in the `UserStore` folder (`/userdata`; on a panel without that
+  partition, `/data`) — 40×40, the size of the preset's disc, drawn unscaled: an 8-byte header
+  (`SLG1`, the side twice) and RGB565, 3208 B a file. Read at start and when the presets change.
+  A logo that arrives or changes is on its preset at once, but files are written (through
+  `safe_file`) and deleted only while nothing plays: after 4 s of silence at the output
+  (`PcmRing::output_quiet` — the output gate shut and the TX queue played out, whatever the
+  source), one file a 500 ms pass, since a LittleFS write stops the cache of both cores and with
+  music playing the speakers click. Then the file of a station no longer on a preset goes, and so
+  does a candidate an interrupted save left. A logo not yet written when the power goes is
+  fetched again after the restart. Only a well-formed uuid names a file.
+- **Fetching**: task `radio_logo` (12 KB, PSRAM, idle priority), one at a time, made for one batch
+  and gone after it; on the main task's 500 ms pass, when the network has been up for 20 s, at
+  least 30 s after the last batch, and only while the TLS session is free — the radio is not the
+  source, is stopped, or plays a station over plain HTTP past its buffering (not a pushed track).
+  One `/json/stations/byuuid?uuids=a,b,…` for every station without a logo, then each favicon as
+  the station logo above: HTTP first, ≤ 128 KB, JPEG or PNG by the first bytes. Before each
+  favicon the task looks again whether the TLS session is free; when it is not, the rest wait for
+  the next batch.
+- **Decoding**: `cover_thumb()` (`components/cover`) — the JPEG engine for baseline JPEG, the
+  software decoder at the task's idle priority for PNG and progressive JPEG, with the limits of a
+  cover. The picture is fitted whole, not cropped, and averaged down; transparent pixels and the
+  margins go on a ground: the colour of the picture's edge when it has no transparency, otherwise
+  a light neutral under dark ink and a dark one under light ink.
+- The playing station's logo, fetched for the tile, becomes its preset logo without a second
+  download.
+- **Failures**: a station whose logo cannot be had — none listed, the address does not answer, the
+  file is not JPEG or PNG (ICO, SVG, WebP) or does not decode — is asked for again after 6 h; when
+  Radio Browser does not answer the lookup, after 10 min. The waits are not kept over a restart.
+  A station without a `uuid` (typed in by hand) has no logo source and keeps its stand-in.
 
 ### External URLs: position, seek, next track
 
@@ -483,7 +569,7 @@ URL, and a truncated URL fails as 404.
 
 | Key | Value |
 |---|---|
-| `radio.state` | `idle` / `connecting` / `buffering` / `playing` / `reconnecting` |
+| `radio.state` | `idle` / `connecting` / `buffering` / `playing` / `reconnecting`; `idle` while another source plays |
 | `radio.cmd` | command: 1 play, 2 stop, 3 next, 4 previous |
 | `radio.station` | index in the list (0–63), −1 — a catalog station; persist |
 | `radio.name`, `radio.url`, `radio.uuid`, `radio.now_playing`, `radio.format`, `radio.buffer` | what is playing |
@@ -633,7 +719,7 @@ the contract is keys only.
 ### Verification
 
 ```
-curl -u <user>:<pass> -X POST http://<panel>/api/loglevel -d '{"tag":"Dlna","level":"info"}'
+curl -u <user>:<pass> -X POST -H 'Content-Type: application/json' http://<panel>/api/loglevel -d '{"tag":"Dlna","level":"info"}'
 curl http://<panel>/rootDesc.xml     # the description XML; the web's HTML means the routes went in after the wildcard
 ```
 
@@ -701,7 +787,7 @@ namespace), PTP and NTP clocks, DACP client. Sound goes into the PCM ring as `OW
 - Volume: the phone's slider −30…0 dB ↔ `audio.volume` 0–100 by position (−144, mute → 0).
   The room volume is announced to senders as `initialVolume` in `/info`. The phone's level moves the
   room only while AirPlay is the source and not in the first 3 s after connecting or the start of
-  playback (`modules/airplay/include/airplay_volume.h`).
+  playback (`components/audio_dsp/include/volume_follow.h`).
 - Remote: a sender that gave `DACP-ID` and `Active-Remote` (AirPlay 1: TuneBlade, Music Assistant,
   iTunes, an iPhone or a Mac in mode 1) — `airplay.remote` = true; `airplay.cmd` (1 play, 2 pause,
   3 stop, 4 next, 5 previous, 6 toggle) goes to it through DACP. An AirPlay 2 sender gives no
@@ -766,9 +852,12 @@ default choice with `MODESP_NET_ENABLE`), disabled at runtime: NVS `mqtt/enabled
 - `<prefix>/heartbeat` — every 30 s `{"proto":1,"fw","up","heap","rssi":0}`.
 - Commands — subscription `<prefix>/cmd/+`: any writable key of type int, float or bool from
   `state_meta` (the range is clamped, a command key goes to the module's queue). String keys
-  (`radio.play_url`) are not applied through MQTT. Retained commands are ignored. Service commands:
-  `_ota` (`{"url","version","checksum":"sha256:…"}` — firmware download over HTTP or HTTPS,
-  verification and writing to an OTA slot), `_request_full_state`, `_set_mqtt_creds`, `_set_tenant`.
+  (`radio.play_url`) are not applied through MQTT. Retained commands are ignored. Service command:
+  `_request_full_state`. The framework's broker administration — `_ota`
+  (`{"url","version","checksum":"sha256:…"}`: a firmware download, verified and written to an OTA
+  slot), `_set_mqtt_creds`, `_set_tenant` — is off on the player
+  (`CONFIG_MODESP_MQTT_REMOTE_ADMIN=n`): anyone who can publish to the broker could use it, with
+  no login, and Home Assistant needs none of it.
 - Reconnection: 5 s, doubling up to 5 min. The client's network steps have a 3 s timeout, and the
   old client is stopped by the `mqtt_stop` task: `esp_mqtt_client_stop()` can wait out a whole
   connection attempt, while the main loop feeds a 5-second watchdog.

@@ -208,6 +208,51 @@ No file in `upstream/` is edited. How the behaviour differs from upstream:
     `airplay2_report_volume()` (without `AIRPLAY2_EV_VOLUME`). The client takes its slider from this key
     and sends no level until somebody moves it (`tools/tests/test_airplay_mode.py`).
 
+16. **An `ekey` is decrypted only when its key fits** (`port/rtsp_handlers.c`, `handle_setup`).
+    Upstream decrypts an `ekey` of up to 64 bytes into a 32-byte key on the RTSP task's stack.
+    libsodium writes the whole plaintext, and zeroes as much when the tag does not verify, so up to
+    48 bytes land in 32 — from the network, after the raw pair-verify, which checks no signature.
+    An `ekey` longer than a 32-byte key and its tag (48 bytes) is not decrypted: like one that does
+    not decrypt, it leaves the session's derived key (`tools/tests/test_airplay_setup.py`).
+
+17. **A stream's rate is held to 8–192 kHz** (`port/airplay2_port.h`, `port/rtsp_handlers.c`,
+    `port/audio_output_ring.cpp`). Upstream takes the rate from ANNOUNCE's SDP (rtpmap, ALAC fmtp)
+    and from an AirPlay 2 stream's `sr` as sent, and the timing engine and the output divide by
+    it. While another source plays, the output paces its reads by the rate's frame period
+    (`pace_unheard`); a rate in the hundreds of MHz rounds that period to nothing, `ap_play`
+    never sleeps, and the task watchdog restarts the panel. A rate outside 8–192 kHz gets 400:
+    ANNOUNCE changes nothing, SETUP stops before the receiver's format is set. The output ignores
+    such a rate as well (`tools/tests/test_airplay_sdp.py`, `tools/tests/test_airplay_setup.py`).
+
+18. **A session without DACP drops the one a replaced slot left** (`port/rtsp_handlers.c`,
+    `rtsp_dispatch`). The DACP session is global. An AirPlay 1 slot waiting out its grace period
+    (paused, its DACP service still advertised) takes any new connection for its sender
+    reconnecting and leaves the session set. An AirPlay 2 sender names no `DACP-ID` or
+    `Active-Remote`, so nothing replaced it, and the panel's pause and next went to the previous
+    device. A SETUP on a connection without both identifiers clears the session; a sender that
+    names them sets its own, as before (`tools/tests/test_airplay_dacp.py`).
+
+19. **An AirPlay 2 session starts PTP itself** (`port/rtsp_handlers.c`, `handle_setup`). An
+    AirPlay 1 SETUP stops the PTP clock for its sockets, and only the cleanup of a slot that was
+    not replaced starts it again, on the word that the new session's SETUP manages PTP; upstream's
+    AirPlay 2 SETUP never starts it. An AirPlay 2 sender that replaced an AirPlay 1 session played
+    all of it without a clock lock, on a local anchor. The AirPlay 2 initial SETUP starts PTP when
+    it is not running (`tools/tests/test_airplay_setup.py`).
+
+20. **The binary /info carries any name** (`port/bplist_builder.c`). Upstream writes the device
+    name as an ASCII string object (marker 0x5X) whatever it holds. The name is the owner's own
+    text ([NETWORK.md](../../docs/NETWORK.md), "Device name and mDNS"), and in Cyrillic it made an
+    object CoreFoundation reads as ASCII, so the plist was not valid. A name with a byte over 0x7F
+    is written as UTF-16 big-endian (marker 0x6X, counted in code units, surrogate pairs above
+    U+FFFF, U+FFFD for a byte that starts no well-formed UTF-8 sequence); an ASCII name is written
+    as before (`tools/tests/test_airplay_mode.py`).
+
+21. **The XML /info escapes the name** (`port/rtsp_handlers.c`, `plist_dict_text()`).
+    `upstream/plist/plist_xml.c` prints a `<string>` as it is given, and an `&` or `<` in the
+    owner's name ("Living & Dining") left the whole answer ill-formed. The name is escaped
+    (`&amp;` `&lt;` `&gt;` `&quot;` `&apos;`) and written whole or not at all
+    (`tools/tests/test_airplay_mode.py`).
+
 ## Updating
 
 Clone upstream at the new commit, compare it with `upstream/` file by file, carry the changes over,

@@ -5,14 +5,14 @@
   // its own frequency, which is where a shelf or a pass actually is.
   //
   // The bands that are on have a point, labelled with the band's place in the set as the glass
-  // labels it; one that is off is not drawn (S7: deleting a band turns it off). The curve has its
+  // labels it; one that is off is not drawn (deleting a band turns it off). The curve has its
   // area filled to 0 dB; with `stages` (lib/syscurve.js) the whole system's curve is over it, dashed.
   //
-  // A band is taken by its point only (lib/gesture.js, the customer, 14.10.2026): a finger
-  // anywhere else on the plot scrolls the page. On a point it picks the band, and the point moves
-  // once it has been held HOLD_MS or the finger went SLOP px away; a mouse takes it at once. x is
-  // frequency, y is gain (twice the target for a shelf, whose corner carries half of it; nothing
-  // for a pass or a notch). `grab` fires when a band starts to move, `release` when it is let go.
+  // A band is taken by its point only (lib/gesture.js): a finger anywhere else on the plot
+  // scrolls the page. On a point it picks the band, and the point moves once it has been held
+  // HOLD_MS or the finger went SLOP px away; a mouse takes it at once. x is frequency, y is gain
+  // (twice the target for a shelf, whose corner carries half of it; nothing for a pass or a
+  // notch). `grab` fires when a band starts to move, `release` when it is let go.
   import { createEventDispatcher, onDestroy } from 'svelte';
   import { curveDb, bandMagnitudeDb, hasGain } from '../../lib/eqmath.js';
   import { pointGesture, HOLD_MS } from '../../lib/gesture.js';

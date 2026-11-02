@@ -54,12 +54,7 @@ struct Buf {
     Buf& operator=(const Buf&) = delete;
 };
 
-esp_err_t send_json(httpd_req_t* req, const char* status, const char* body) {
-    httpd_resp_set_status(req, status);
-    httpd_resp_set_type(req, "application/json");
-    httpd_resp_set_hdr(req, "Cache-Control", "no-store");
-    return httpd_resp_send(req, body, HTTPD_RESP_USE_STRLEN);
-}
+using modesp::http_routes::send_json;
 
 /// The whole of `path`, NUL-terminated, into `out` (made here). False when there is no such
 /// file or it is larger than safe_file copies.
@@ -122,15 +117,8 @@ esp_err_t userdata_post(httpd_req_t* req) {
     }
     Buf body((size_t)req->content_len + 1);
     if (!body.p) return send_json(req, "503 Service Unavailable", "{\"error\":\"no_memory\"}");
-    size_t got = 0;
-    int timeouts = 0;
-    while (got < (size_t)req->content_len) {
-        const int r = httpd_req_recv(req, body.p + got, req->content_len - got);
-        if (r == HTTPD_SOCK_ERR_TIMEOUT && ++timeouts < 3) continue;
-        if (r <= 0) return ESP_FAIL;
-        got += (size_t)r;
-    }
-    body.p[got] = '\0';
+    if (!modesp::http_routes::read_body(req, body.p)) return ESP_FAIL;
+    const size_t got = req->content_len;
 
     constexpr size_t MAX = 8;
     modesp::user_backup::Entry e[MAX];
@@ -148,7 +136,7 @@ esp_err_t userdata_post(httpd_req_t* req) {
         text[i] = new Buf(e[i].len + 1);       // unescaping never makes a string longer
         if (!text[i]->p) { no_memory = true; break; }
         // A file over what its reader takes is refused, not staged: it would be read cut
-        // short or never installed, after a reply that said ok (deep review CO-3).
+        // short or never installed, after a reply that said ok.
         const bool json = modesp::user_backup::is_json_file(e[i].name);
         if (!modesp::user_backup::unescape(e[i].text, e[i].len, text[i]->p, text[i]->n, len[i]) ||
             (json && !modesp::user_backup::is_json_object(text[i]->p, len[i])) ||

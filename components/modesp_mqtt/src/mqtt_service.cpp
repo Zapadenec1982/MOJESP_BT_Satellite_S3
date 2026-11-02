@@ -5,7 +5,9 @@
 
 #include "modesp/net/mqtt_service.h"
 #include "modesp/net/http_service.h"
+#include "modesp/net/http_routes.h"
 #include "modesp/net/json_escape.h"
+#include "modesp/net/key_write.h"
 #include "modesp/net/ota_handler.h"
 #include "modesp/shared_state.h"
 #include "modesp/services/nvs_helper.h"
@@ -30,6 +32,8 @@
 #include <cstring>
 #include <cstdio>
 #include <cstdlib>
+#include <memory>
+#include <new>
 
 static const char* TAG = "MQTT";
 
@@ -454,20 +458,24 @@ void MqttService::mqtt_event_handler(void* args, esp_event_base_t base,
 // ── Publish state ───────────────────────────────────────────────
 
 int MqttService::format_value(const StateValue& val, char* buf, size_t buf_size) {
+    int n = 0;
     if (etl::holds_alternative<float>(val)) {
-        return snprintf(buf, buf_size, "%.2f",
-                        static_cast<double>(etl::get<float>(val)));
+        n = snprintf(buf, buf_size, "%.2f",
+                     static_cast<double>(etl::get<float>(val)));
     } else if (etl::holds_alternative<int32_t>(val)) {
-        return snprintf(buf, buf_size, "%ld",
-                        (long)etl::get<int32_t>(val));
+        n = snprintf(buf, buf_size, "%ld",
+                     (long)etl::get<int32_t>(val));
     } else if (etl::holds_alternative<bool>(val)) {
-        return snprintf(buf, buf_size, "%s",
-                        etl::get<bool>(val) ? "true" : "false");
+        n = snprintf(buf, buf_size, "%s",
+                     etl::get<bool>(val) ? "true" : "false");
     } else if (etl::holds_alternative<StringValue>(val)) {
-        return snprintf(buf, buf_size, "%s",
-                        etl::get<StringValue>(val).c_str());
+        n = snprintf(buf, buf_size, "%s",
+                     etl::get<StringValue>(val).c_str());
     }
-    return 0;
+    // player-fork: what is in buf, not what snprintf wanted to write. The callers publish this
+    // many bytes from buf, and a string longer than it sent the stack beyond to the broker.
+    if (n < 0) return 0;
+    return (size_t)n < buf_size ? n : (int)buf_size - 1;
 }
 
 void MqttService::publish_state() {
@@ -484,7 +492,7 @@ void MqttService::publish_state() {
         auto val = state_->get(gen::MQTT_PUBLISH[i]);
         if (!val.has_value()) continue;
 
-        char payload[32];
+        char payload[PAYLOAD_MAX];
         int len = format_value(val.value(), payload, sizeof(payload));
         if (len <= 0) continue;
 
@@ -523,7 +531,7 @@ void MqttService::publish_state() {
         auto val = state_->get(SYS_KEYS[j]);
         if (!val.has_value()) continue;
 
-        char payload[32];
+        char payload[PAYLOAD_MAX];
         int len = format_value(val.value(), payload, sizeof(payload));
         if (len <= 0) {
             // Пустий рядок — публікуємо як "" (1 байт = порожній MQTT payload)
@@ -559,7 +567,7 @@ void MqttService::publish_params() {
         auto val = state_->get(gen::MQTT_SUBSCRIBE[i]);
         if (!val.has_value()) continue;
 
-        char payload[32];
+        char payload[PAYLOAD_MAX];
         int len = format_value(val.value(), payload, sizeof(payload));
         if (len <= 0) continue;
 
@@ -583,8 +591,8 @@ void MqttService::publish_heartbeat() {
 
     // player-fork: no esp_wifi_sta_get_ap_info() here. Over esp_hosted it is a synchronous RPC
     // to the C6 with a 5 s timeout, made from the task that feeds the 5 s watchdog, and it
-    // reads rssi=0 on this stack anyway — see the 17.09.2026 note in wifi_service.cpp, where
-    // the same call reset the board. The field stays for the payload's consumers.
+    // reads rssi=0 on this stack anyway — see the RSSI note in wifi_service.cpp, where the
+    // same call resets the board. The field stays for the payload's consumers.
     // A chip with its own radio (the ESP32-S3) reads it locally.
     int rssi = 0;
 #if defined(SOC_WIFI_SUPPORTED) && SOC_WIFI_SUPPORTED
@@ -626,6 +634,7 @@ void MqttService::handle_incoming(const char* topic, int topic_len,
 
     const char* key = cmd_marker + 5;  // skip "/cmd/"
 
+#if CONFIG_MODESP_MQTT_REMOTE_ADMIN
     // Special command: _ota (JSON payload — не поміщається в val_buf[32])
     // Обробляємо ДО копіювання в val_buf, бо payload може бути 200+ байт
     if (strcmp(key, "_ota") == 0) {
@@ -682,6 +691,7 @@ void MqttService::handle_incoming(const char* topic, int topic_len,
         }
         return;
     }
+#endif  // CONFIG_MODESP_MQTT_REMOTE_ADMIN
 
     // Копіюємо payload в null-terminated буфер (потрібно для _set_tenant та звичайних команд)
     char val_buf[32];
@@ -706,6 +716,7 @@ void MqttService::handle_incoming(const char* topic, int topic_len,
         return;
     }
 
+#if CONFIG_MODESP_MQTT_REMOTE_ADMIN
     // Special command: _set_mqtt_creds (JSON: {"user":"...","pass":"..."})
     // Cloud sends this BEFORE _set_tenant — save creds but don't reconnect yet.
     // The subsequent _set_tenant triggers reconnect with new credentials.
@@ -783,6 +794,7 @@ void MqttService::handle_incoming(const char* topic, int topic_len,
         reconnect();
         return;
     }
+#endif  // CONFIG_MODESP_MQTT_REMOTE_ADMIN
 
     // Валідація: ключ має бути в STATE_META як writable
     const auto* meta = gen::find_state_meta(key);
@@ -797,51 +809,24 @@ void MqttService::handle_incoming(const char* topic, int topic_len,
 
     ESP_LOGI(TAG, "CMD: %s = %s", key, val_buf);
 
-    // Парсимо значення за типом з meta
-    if (strcmp(meta->type, "float") == 0) {
-        char* end = nullptr;
-        float f = strtof(val_buf, &end);
-        if (end == val_buf) {
-            ESP_LOGW(TAG, "Invalid float: %s", val_buf);
-            return;
-        }
-        // Валідація min/max. A clamp is never silent: the range comes from the manifest, and a
-        // request outside it is either a client bug or a manifest that lags the code (an
-        // audio.source of 4 landed on 3 for a while because the options stopped at Bluetooth).
-        const float f_req = f;
-        if (f < meta->min_val) f = meta->min_val;
-        if (f > meta->max_val) f = meta->max_val;
-        if (f != f_req) {
-            ESP_LOGW(TAG, "CMD %s: %g is outside [%g..%g], clamped to %g",
-                     key, (double)f_req, (double)meta->min_val, (double)meta->max_val, (double)f);
-        }
-        state_set(key, f);
-    } else if (strcmp(meta->type, "int") == 0) {
-        char* end = nullptr;
-        long v = strtol(val_buf, &end, 10);
-        if (end == val_buf) {
-            ESP_LOGW(TAG, "Invalid int: %s", val_buf);
-            return;
-        }
-        const long v_req = v;
-        if (v < static_cast<long>(meta->min_val)) v = static_cast<long>(meta->min_val);
-        if (v > static_cast<long>(meta->max_val)) v = static_cast<long>(meta->max_val);
-        if (v != v_req) {
-            ESP_LOGW(TAG, "CMD %s: %ld is outside [%ld..%ld], clamped to %ld",
-                     key, v_req, (long)meta->min_val, (long)meta->max_val, v);
-        }
-        // A command key is an event for the module that owns it, not a value in the
-        // store: it goes to that module's queue after the same range check above. See
-        // STATE_COMMANDS in the generated state_meta.h.
+    // The one rule for a value written from outside (key_write.h): its manifest type, its range,
+    // "true"/"false" or "1"/"0" for a bool; MQTT applies no string keys.
+    const net::KeyWrite w = net::key_write(*meta, key, val_buf, net::ValueFrom::MQTT_TEXT, "MQTT");
+    switch (w.kind) {
+    case net::KeyWrite::INT:
+        // A command key is an event for the module that owns it, not a value in the store: it
+        // goes to that module's queue after the same range check. See STATE_COMMANDS in the
+        // generated state_meta.h.
         if (const auto* cmd = gen::find_state_command(key)) {
-            if (!post_command_to(cmd->module, key, static_cast<int32_t>(v)))
+            if (!post_command_to(cmd->module, key, w.i))
                 ESP_LOGW(TAG, "CMD %s: %s did not take it", key, cmd->module);
         } else {
-            state_set(key, static_cast<int32_t>(v));
+            state_set(key, w.i);
         }
-    } else if (strcmp(meta->type, "bool") == 0) {
-        bool b = (strcmp(val_buf, "true") == 0 || strcmp(val_buf, "1") == 0);
-        state_set(key, b);
+        break;
+    case net::KeyWrite::FLOAT: state_set(key, w.f); break;
+    case net::KeyWrite::BOOL:  state_set(key, w.b); break;
+    default:                   break;   // refused, said by key_write(); no string keys here
     }
 }
 
@@ -852,12 +837,6 @@ void MqttService::set_cors_headers(httpd_req_t* req) {
     // config must not be readable cross-origin by a malicious external page.
     httpd_resp_set_hdr(req, "Access-Control-Allow-Methods", "GET,POST,OPTIONS");
     httpd_resp_set_hdr(req, "Access-Control-Allow-Headers", "Content-Type, Authorization");
-}
-
-esp_err_t MqttService::handle_options(httpd_req_t* req) {
-    set_cors_headers(req);
-    httpd_resp_send(req, nullptr, 0);
-    return ESP_OK;
 }
 
 void MqttService::set_http_server(httpd_handle_t server) {
@@ -885,14 +864,6 @@ void MqttService::register_http_handlers() {
     post_mqtt.user_ctx = this;
     httpd_register_uri_handler(server_, &post_mqtt);
 
-    // OPTIONS для CORS preflight
-    httpd_uri_t options = {};
-    options.uri      = "/api/mqtt";
-    options.method   = HTTP_OPTIONS;
-    options.handler  = handle_options;
-    options.user_ctx = this;
-    httpd_register_uri_handler(server_, &options);
-
     http_registered_ = true;
     ESP_LOGI(TAG, "HTTP handlers registered (GET/POST /api/mqtt)");
 }
@@ -910,8 +881,26 @@ esp_err_t MqttService::handle_get_mqtt(httpd_req_t* req) {
         else status = "disconnected";
     }
 
-    char buf[512];
-    int len = snprintf(buf, sizeof(buf),
+    // player-fork: the text fields escaped, as POST unescapes them on the way in — a user such
+    // as DOMAIN\user or a prefix holding a quote came back as broken JSON, the page was left with
+    // an empty form, and a Save from it would have wiped the settings. At their worst (six bytes
+    // for one) the fields and the reply take ~4 KB: the heap's, not the server's 8 KB stack.
+    struct Text {
+        char broker[net::json_escaped_capacity(sizeof(MqttService::broker_) - 1)];
+        char user[net::json_escaped_capacity(sizeof(MqttService::user_) - 1)];
+        char prefix[net::json_escaped_capacity(sizeof(MqttService::prefix_) - 1)];
+        char tenant[net::json_escaped_capacity(sizeof(MqttService::tenant_) - 1)];
+        char json[sizeof(broker) + sizeof(user) + sizeof(prefix) + sizeof(tenant) + 256];
+    };
+    std::unique_ptr<Text> t(new (std::nothrow) Text);
+    if (!t || !net::json_escape(t->broker, sizeof(t->broker), self->broker_) ||
+        !net::json_escape(t->user, sizeof(t->user), self->user_) ||
+        !net::json_escape(t->prefix, sizeof(t->prefix), self->prefix_) ||
+        !net::json_escape(t->tenant, sizeof(t->tenant), self->tenant_)) {
+        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Out of memory");
+        return ESP_FAIL;
+    }
+    int len = snprintf(t->json, sizeof(t->json),
         "{\"enabled\":%s,"
         "\"connected\":%s,"
         "\"broker\":\"%s\","
@@ -923,17 +912,17 @@ esp_err_t MqttService::handle_get_mqtt(httpd_req_t* req) {
         "\"status\":\"%s\"}",
         self->enabled_ ? "true" : "false",
         self->connected_ ? "true" : "false",
-        self->broker_,
+        t->broker,
         self->port_,
-        self->user_,
-        self->prefix_,
-        self->tenant_,
+        t->user,
+        t->prefix,
+        t->tenant,
         self->device_id_,
         status);
 
     set_cors_headers(req);
     httpd_resp_set_type(req, "application/json");
-    httpd_resp_send(req, buf, len);
+    httpd_resp_send(req, t->json, len);
     return ESP_OK;
 }
 
@@ -942,12 +931,8 @@ esp_err_t MqttService::handle_post_mqtt(httpd_req_t* req) {
     auto* self = static_cast<MqttService*>(req->user_ctx);
 
     char buf[384];
-    int len = httpd_req_recv(req, buf, sizeof(buf) - 1);
-    if (len <= 0) {
-        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Empty body");
-        return ESP_FAIL;
-    }
-    buf[len] = '\0';
+    const int len = http_routes::read_small_body(req, buf, sizeof(buf));
+    if (len < 0) return ESP_FAIL;
 
     // Parse JSON з jsmn
     jsmn_parser parser;

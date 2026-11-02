@@ -42,11 +42,12 @@ T& single() {
 Published<Status>&    status()    { return single<Published<Status>>(); }
 Published<Countries>& countries() { return single<Published<Countries>>(); }
 Published<Genres>&    genres()    { return single<Published<Genres>>(); }
+Published<station_logo::Shelf>& logo_shelf() { return single<Published<station_logo::Shelf>>(); }
 Asks&                 asks()      { return single<Asks>(); }
 
 int order_countries(CountryCount* items, int n, const char* first) {
-    // The service keys countries as typed, so "GR" and "gr" are both there (04.10.2026); the
-    // parser has upper-cased them, and here they become one country with both counts.
+    // The service keys countries as typed, so "GR" and "gr" are both there; the parser has
+    // upper-cased them, and here they become one country with both counts.
     int kept = 0;
     for (int i = 0; i < n; i++) {
         if (!items[i].stations || !country_name(items[i].code, 0)) continue;

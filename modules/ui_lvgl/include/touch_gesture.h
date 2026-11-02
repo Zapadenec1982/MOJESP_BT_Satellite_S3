@@ -2,21 +2,26 @@
  * @file touch_gesture.h
  * @brief A finger that scrolls does not set anything — the glass's rules. No LVGL.
  *
- * The customer, 14.10.2026: scrolling caught the sliders and the equalizer, on the web and on
- * the glass alike. LVGL only decides that a press is a scroll after scroll_limit, and it sends
+ * Without these rules scrolling catches the sliders and the equalizer, on the web and on the
+ * glass alike. LVGL only decides that a press is a scroll after scroll_limit, and it sends
  * PRESSING to the pressed widget all the while; a slider that took the finger's x on PRESSED and
  * PRESSING had jumped and moved before the page began to move. The rules are the web's
  * (webui/src/lib/gesture.js):
  *
  *   - a slider: only a finger on its knob takes it — GRAB px either side of its centre, an EQ
- *     point's reach (the customer, 15.10.2026: a touch anywhere on the track still moved it, the
- *     knob jumping to the finger once it had gone SLOP px). The gesture is the slider's once that
- *     finger has gone SLOP px along, more along than across, and the knob then follows the finger
- *     from where it stood: it never jumps to it. It is the page's if the finger went up or down
+ *     point's reach (a touch anywhere on the track would move it, the knob jumping to the finger
+ *     once it had gone SLOP px). The gesture is the slider's once that finger has gone SLOP px
+ *     along, more along than across, and the knob then follows the finger from where it stood:
+ *     it never jumps to it. It is the page's if the finger went up or down
  *     first. A press, a tap or a finger off the knob changes nothing — a tap is how a finger
- *     stops a list that is still moving. The glass's rule only: the web keeps the 14.10 one;
+ *     stops a list that is still moving. The glass's rule only: on the web a finger anywhere on
+ *     the slider takes it once it has gone SLOP px along (lib/gesture.js);
  *   - an EQ point: only the point takes a finger. A tap picks its band; the point moves once
  *     held HOLD_MS or once the finger went SLOP px from where it landed;
+ *   - a switch: only a tap on the switch itself toggles it, never one on its row. A finger that went SLOP px from
+ *     where it landed, at any moment of the press, was scrolling or missed, and changes nothing
+ *     when it lifts — LVGL toggles on any release over the switch, a page that does not scroll
+ *     included;
  *   - «Скасувати»: a snackbar for UNDO_MS after a moved sound setting, from where it started.
  *
  * Split out of the widgets so the rules are pinned on the host (tests/host/test_touch_gesture.cpp).
@@ -47,6 +52,20 @@ inline Intent intent(int32_t dx, int32_t dy, int32_t slop = SLOP) {
     if (ay >= slop) return Intent::SCROLL;
     return Intent::PRESS;
 }
+
+/// One press on a switch: a tap until the finger has once gone `slop` px from where it landed.
+class Tap {
+public:
+    void down(int32_t x, int32_t y) { x0_ = x; y0_ = y; moved_ = false; }
+    void move(int32_t x, int32_t y, int32_t slop = SLOP) {
+        if (intent(x - x0_, y - y0_, slop) != Intent::PRESS) moved_ = true;
+    }
+    bool tap() const { return !moved_; }
+
+private:
+    int32_t x0_ = 0, y0_ = 0;
+    bool    moved_ = false;
+};
 
 /// One press on a slider, from down to end. move() keeps the first answer that is not PRESS.
 class Slide {

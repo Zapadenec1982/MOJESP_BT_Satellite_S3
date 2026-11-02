@@ -40,13 +40,13 @@ namespace {
 using i18n::P;
 using i18n::S;
 using i18n::tr;
+using modesp::gen::AUDIO_SOURCE_RADIO;
 
 enum Tab : int { TAB_FAV = 0, TAB_TOP = 1, TAB_COUNTRIES = 2, TAB_GENRES = 3, TAB_SEARCH = 4, N_TABS = 5 };
 constexpr S TAB_NAMES[N_TABS] = {S::st_tab_fav, S::st_tab_top, S::st_tab_countries, S::st_tab_genres, S::st_tab_search};
 
 // ── geometry, in the 752x384 content column ──
-// The tabs, the pager and the chips are a finger's 64 px (the glass for a finger, 20.10.2026: 40,
-// 48 and 32 before).
+// The tabs, the pager and the chips are a finger's 64 px.
 constexpr int32_t TAB_W   = 112;
 constexpr int32_t TAB_H   = 64;
 constexpr int32_t TABS_W  = N_TABS * TAB_W;
@@ -172,7 +172,7 @@ void toast_hide() {
 // Station names come in every script there is; the panel's faces carry Latin-1, Ukrainian
 // Cyrillic and some punctuation (tools/fonts/build_fonts.py). A letter with a diacritic the
 // face lacks becomes its base letter — "Złote" reads "Zlote" — and anything else is left
-// out. A name with nothing readable left is replaced by the stream's host (PLAN §6, fonts).
+// out. A name with nothing readable left is replaced by the stream's host.
 
 /// U+0100..U+017F to their base letters.
 constexpr char LATIN_EXT_A[] =
@@ -307,8 +307,7 @@ void tab_cb(lv_event_t* e) {
 bool on_air(const rc::Row& r) {
     if (!g.ctx) return false;
     const auto& s = g.ctx->s;
-    return s.source == 5 && !s.network_push && s.radio_station < 0 && r.name[0] &&
-           strcmp(s.radio_name, r.name) == 0;
+    return ui_src(s) == UiSrc::RADIO && s.radio_station < 0 && r.name[0] && strcmp(s.radio_name, r.name) == 0;
 }
 
 void station_sub(const rc::Row& r, char* out, size_t n) {
@@ -515,7 +514,7 @@ void sheet_cancel_cb(lv_event_t*) { close_sheet(); }
 
 void build_sheet(lv_obj_t* root) {
     const auto& t = m3::theme();
-    constexpr int32_t W = 520, H = 332;      // buttons of 64 (20.10.2026); «Скасувати» under the presets
+    constexpr int32_t W = 520, H = 332;      // buttons of 64; «Скасувати» under the presets
     g.scrim = m3w::box(root, 0, 0, uig::CONT_W, uig::CONT_H);
     lv_obj_set_style_bg_color(g.scrim, m3::col(0x000000), 0);
     lv_obj_set_style_bg_opa(g.scrim, LV_OPA_50, 0);
@@ -776,7 +775,8 @@ void refresh(lv_obj_t*, UiCtx& c) {
 
     // The station playing: its row is marked, and that changes with a tune or a stop.
     char playing[64];
-    snprintf(playing, sizeof(playing), "%s", (c.s.source == 5 && c.s.radio_station < 0) ? c.s.radio_name : "");
+    snprintf(playing, sizeof(playing), "%s",
+             (c.s.source == AUDIO_SOURCE_RADIO && c.s.radio_station < 0) ? c.s.radio_name : "");
     if (strcmp(playing, g.playing) != 0) {
         snprintf(g.playing, sizeof(g.playing), "%s", playing);
         if (g.view == View::STATIONS && g.shown_rows) g.list.refill();

@@ -183,9 +183,9 @@ inline Grade stack_free(int32_t b) {
 }
 
 /// `system.heap_dma` — free DMA-capable internal SRAM, the resource this board actually runs
-/// out of. 80 KB is stage 7's bench DoD ("вільна
-/// DMA-internal ≥ 80 КБ"); the wave started from 28 275 B, which is what failure looked
-/// like, so half the DoD is the line below which the same failure is in reach.
+/// out of (docs/CONCEPT.md, "Board constraints"). 80 KB is the target the memory work was
+/// held to; it started from 28 275 B, which is what failure looked like, so half the target
+/// is the line below which the same failure is in reach.
 inline Grade dma_free(int32_t b) {
     if (b < 40 * 1024) return Grade::Bad;
     if (b < 80 * 1024) return Grade::Warn;
@@ -194,7 +194,8 @@ inline Grade dma_free(int32_t b) {
 
 /// `system.heap_internal` — all free internal 8-bit SRAM, of which the DMA-capable part is a
 /// subset. Held a step above the DMA line for that reason: internal running out first is the
-/// same fault one allocation earlier.
+/// same fault one allocation earlier. Its lowest since boot, `system.heap_internal_min`, is
+/// held to the same line: under it, the fault was in reach at least once.
 inline Grade internal_free(int32_t b) {
     if (b < 48 * 1024) return Grade::Bad;
     if (b < 96 * 1024) return Grade::Warn;

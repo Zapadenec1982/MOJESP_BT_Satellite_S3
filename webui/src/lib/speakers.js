@@ -21,8 +21,7 @@ export function port(s) {
 /**
  * The speakers as catalog keys: `title`, then `line` with its `args` where there is a port to say
  * ('' where the title says it all — closed, or not set up); `again` when the wizard has been
- * through, so the button says «знову». No note under them (the customer, 18.10.2026: values,
- * not explanations).
+ * through, so the button says «знову». No note under them: values, not explanations.
  */
 export function speakerState(s) {
   const type = s['audio.spk_type'] ?? SPK_UNSET;
@@ -76,7 +75,7 @@ export const subUnder = (hz) => Math.round(0.8 * hz);
 
 /**
  * «Звичайна гучність»: the reference for the volume that plays — % of the effective level, which
- * «Максимум» compresses (S4), held to 20…100 as the device holds it — and back to the volume
+ * «Максимум» compresses, held to 20…100 as the device holds it — and back to the volume
  * scale for saying it.
  */
 export function refOf(volume, volMax = 100) {

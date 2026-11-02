@@ -189,9 +189,9 @@ void disp_cb(lv_event_t* e) {
         // resumes it (lv_refr.c), so a list that is not moving yet would stop the run before it
         // began. An invalidation is not enough on its own: lv_inv_area drops an area that one
         // already pending contains without resuming anything, and the host's own first paint is
-        // such an area - runs stalled for the whole of their time that way (05.10). So the timer
-        // is resumed outright. The list itself is not invalidated: the scroll below repaints
-        // what it has to, and with two frame buffers that is only the strip that came into view.
+        // such an area - runs stalled for the whole of their time that way. So the timer is
+        // resumed outright. The list itself is not invalidated: the scroll below repaints what
+        // it has to, and with two frame buffers that is only the strip that came into view.
         s_refr_starts.fetch_add(1, std::memory_order_relaxed);
         if (lv_timer_t* rt = lv_display_get_refr_timer(lv_display_get_default())) lv_timer_resume(rt);
         if (now < s_st.t_start) { s_st.last_step = now; return; }   // still settling
@@ -524,12 +524,7 @@ void blit_probe(char* out, size_t n) {
     (void)par_dma;
 }
 
-esp_err_t send_json(httpd_req_t* req, const char* status, const char* body) {
-    httpd_resp_set_status(req, status);
-    httpd_resp_set_type(req, "application/json");
-    httpd_resp_set_hdr(req, "Cache-Control", "no-store");
-    return httpd_resp_sendstr(req, body);
-}
+using modesp::http_routes::send_json;
 
 /// ?ms=6000 (1000..20000), ?v=1200 px/s (100..4000), ?screen=<id> to switch the page under the
 /// list first — "set" is a quiet one, so the page's own refresh does not add to the frames.
@@ -598,8 +593,8 @@ esp_err_t handle_bench(httpd_req_t* req) {
     uint32_t lines_used = 0;
     bool internal = false;
     if (ibuf > 0) {
-        // Not under 8 rows: ibuf=4 reset the panel by watchdog on 05.10 — LVGL waiting on a
-        // flush that never finished, cause not found — while PSRAM buffers of 4 rows ran.
+        // Not under 8 rows: ibuf=4 reset the panel by watchdog — LVGL waiting on a flush that
+        // never finished, cause not found — while PSRAM buffers of 4 rows ran.
         lines_used = ibuf >= 8 ? use_internal(ibuf) : 0;
         internal = lines_used > 0;
         if (!internal) {

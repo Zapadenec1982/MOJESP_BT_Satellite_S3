@@ -5,14 +5,14 @@
  *
  * Plain HTTP, never TLS. The panel holds one TLS session at a time, and while the radio
  * plays it belongs to the station (docs/NETWORK.md, "Internet radio"); what comes back here is a page
- * of metadata, not audio. Measured 04.10.2026: the service answers on port 80 with no
- * redirect, and it is down to one server, so the list of servers is asked for rather than
- * written down — two other ESP32 radios still point at mirrors that no longer exist.
+ * of metadata, not audio. Measured: the service answers on port 80 with no redirect, and it
+ * is down to one server, so the list of servers is asked for rather than written down — two
+ * other ESP32 radios still point at mirrors that no longer exist.
  *
  * The request side runs whatever the source is: browsing does not need the radio to be
  * playing, and choosing a row is what makes it the source.
  *
- * Stage 20а.
+ * What the user sees of it: docs/NETWORK.md, "Radio Browser catalog".
  */
 
 #include "radio_module.h"
@@ -20,6 +20,7 @@
 #include "radio_catalog_task.h"
 #include "radio_catalog_ui.h"
 #include "state_enums.h"   // audio.source values, generated from the manifests
+#include "stations.h"
 
 #include "esp_heap_caps.h"
 #include "radio_http.h"
@@ -43,7 +44,7 @@ namespace {
 const char* TAG = "Radio";   // the module's tag: it is on the INFO allowlist (log_policy.cpp)
 
 constexpr const char* BOOTSTRAP_HOST = "all.api.radio-browser.info";
-/// A 24-station page is ~27 KB (05.10.2026); room for twice that and a margin.
+/// A 24-station page is ~27 KB; room for twice that and a margin.
 constexpr size_t  BODY_MAX     = 64 * 1024;
 constexpr int     MAX_HOSTS    = 8;
 constexpr int     PATH_LEN     = 320;
@@ -590,7 +591,7 @@ void RadioModule::catalog_update(uint32_t /*dt_ms*/) {
         }
     }
 
-    // ── a station chosen on the browser's catalog page (data/www/radio.html, stage 20д). The
+    // ── a station chosen in the web's catalog (docs/NETWORK.md, "Radio Browser catalog"). The
     // page asks Radio Browser itself; all that reaches the panel is the name, the stream and
     // the uuid, written in that order before the act, in one request. The logo is looked up
     // by the uuid, as for a station from the list. ──
@@ -603,6 +604,7 @@ void RadioModule::catalog_update(uint32_t /*dt_ms*/) {
         read_string("radio.web_name", name, sizeof(name));
         read_string("radio.web_url", url, sizeof(url));
         read_string("radio.web_uuid", uuid, sizeof(uuid));
+        radio_core::tidy_name(name);   // one line, as a row of the panel's own catalog
         const bool usable = (!strncmp(url, "http://", 7) || !strncmp(url, "https://", 8)) &&
                             strlen(url) < (size_t)rc::URL_LEN;
         const char* label = name[0] ? name : url;

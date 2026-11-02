@@ -4,15 +4,17 @@
  */
 
 #include "eq_config.h"
+#include "eq_web.h"          // eq_web_clamp(): a band read from a file is held to the editors' limits
 #include "safe_file.h"
 
 #define JSMN_STATIC          // jsmn is header-only and linked in several places
 #include "jsmn.h"
+#include "jsmn_util.h"
 
+#include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
-#include <climits>
 
 namespace audio_core {
 
@@ -47,10 +49,8 @@ namespace {
 constexpr size_t MAX_FILE   = 4096;
 constexpr int    MAX_TOKENS = 320;
 
-bool key_is(const char* json, const jsmntok_t& t, const char* name) {
-    const int n = t.end - t.start;
-    return t.type == JSMN_STRING && (int)strlen(name) == n && !strncmp(json + t.start, name, n);
-}
+using jsmn_util::key_is;
+using jsmn_util::span;
 
 void copy_str(const char* json, const jsmntok_t& t, char* out, size_t out_sz) {
     int n = t.end - t.start;
@@ -60,10 +60,15 @@ void copy_str(const char* json, const jsmntok_t& t, char* out, size_t out_sz) {
     out[n] = '\0';
 }
 
-float num(const char* json, const jsmntok_t& t) {
+/// A number. jsmn is not strict here, so inf and nan pass as numbers, and strtof makes 1e39 an
+/// inf too. No field can hold one — as a band's gain it designs NaN coefficients, and the audio
+/// core silences every block they run in — so `finite` turns false and the file is refused.
+float num(const char* json, const jsmntok_t& t, bool& finite) {
     char b[24];
     copy_str(json, t, b, sizeof(b));
-    return strtof(b, nullptr);
+    const float v = strtof(b, nullptr);
+    if (!std::isfinite(v)) finite = false;
+    return v;
 }
 
 bool truthy(const char* json, const jsmntok_t& t) {
@@ -92,16 +97,12 @@ const char* type_name(BandType t) {
     }
 }
 
-/// Number of tokens `tok[i]` spans, itself included, never past `count`. jsmn lays children
-/// out contiguously after their parent. A loop, not recursion: eq.json can come back from a
-/// user backup, and a few hundred levels of '[' would recurse off main's stack at every boot
-/// (the defect RP-2 fixed in the radio parsers, deep review 2026-10-12). Each token takes the
-/// place of one child still owed and owes its own in turn; the value ends when nothing is owed.
-int span(const jsmntok_t* tok, int count, int i) {
-    if (i >= count) return 1;
-    int j = i + 1;
-    for (int pending = tok[i].size; pending > 0 && j < count; ++j) pending += tok[j].size - 1;
-    return j - i;
+/// The index of the value the key at `k` holds, or -1 when it holds none. jsmn here is not
+/// strict and lets a key close with nothing after it, as in {"f":}: the token after it is then
+/// something else's, or, for the last key, one jsmn never wrote — past the whole array when
+/// the file filled it. A key's value is its one child, so a key with none is caught here.
+int value_of(const jsmntok_t* tok, int count, int k) {
+    return k + 1 < count && tok[k].size == 1 ? k + 1 : -1;
 }
 
 } // namespace
@@ -115,27 +116,33 @@ bool eq_parse(const char* json, size_t len, EqConfig& cfg) {
     const int n = jsmn_parse(&p, json, len, tok, MAX_TOKENS);
     if (n < 1 || tok[0].type != JSMN_OBJECT) return false;
 
-    // Schema gate, before anything is read out of the file (plan item 11.2). eq_serialize
+    // Schema gate, before anything is read out of the file. eq_serialize
     // has always stamped "version": 2 and nothing ever looked at it, so a file written by a
     // LATER build would be read with today's rules: the fields this parser does not know
     // would be dropped silently, and the first touch of a slider would write the file back
     // without them. Refusing costs a flat EQ and a log line; the alternative costs the file.
+    // Compared as read, not cast to int: an int cast of a float out of its range is undefined.
+    bool finite = true;   // every number read so far (num())
     {
-        int file_version = EQ_SCHEMA_VERSION;
+        float file_version = EQ_SCHEMA_VERSION;
         for (int i = 1, f = 0; f < tok[0].size && i < n; f++) {
             const int vi = i + 1;
             if (vi >= n) break;
-            if (key_is(json, tok[i], "version")) { file_version = (int)num(json, tok[vi]); break; }
+            if (key_is(json, tok[i], "version")) { file_version = num(json, tok[vi], finite); break; }
             i = vi + span(tok, n, vi);
         }
-        if (file_version > EQ_SCHEMA_VERSION) return false;
+        if (!finite || file_version > EQ_SCHEMA_VERSION) return false;
     }
+
+    // A key without a value, or a number no float holds, is a file this parser cannot read, at
+    // any depth, and is refused like any other: cfg back at its defaults (eq_config.h).
+    auto malformed = [&cfg] { cfg = EqConfig{}; return false; };
 
     int i = 1;
     for (int f = 0; f < tok[0].size && i < n; f++) {
         const jsmntok_t& key = tok[i];
-        const int vi = i + 1;
-        if (vi >= n) break;
+        const int vi = value_of(tok, n, i);
+        if (vi < 0) return malformed();
 
         if (key_is(json, key, "mode")) {
             copy_str(json, tok[vi], cfg.mode, sizeof(cfg.mode));
@@ -149,11 +156,13 @@ bool eq_parse(const char* json, size_t len, EqConfig& cfg) {
                 plain = (ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9') || ch == '_';
             }
             if (plain) copy_str(json, tok[vi], cfg.preset, sizeof(cfg.preset));
-        } else if (key_is(json, key, "crossover")) {
+        } else if (key_is(json, key, "crossover") && tok[vi].type == JSMN_OBJECT) {
             // one nested object: pick freq_hz out of it
             int ci = vi + 1;
             for (int c = 0; c < tok[vi].size && ci < n; c++) {
-                if (key_is(json, tok[ci], "freq_hz")) cfg.crossover_hz = num(json, tok[ci + 1]);
+                const int cv = value_of(tok, n, ci);
+                if (cv < 0) return malformed();
+                if (key_is(json, tok[ci], "freq_hz")) cfg.crossover_hz = num(json, tok[cv], finite);
                 ci += 1 + span(tok, n, ci + 1);
             }
         } else if (key_is(json, key, "outputs") && tok[vi].type == JSMN_ARRAY) {
@@ -164,11 +173,12 @@ bool eq_parse(const char* json, size_t len, EqConfig& cfg) {
                     int ki = si + 1;
                     for (int k = 0; k < tok[si].size && ki < n; k++) {
                         const jsmntok_t& sk = tok[ki];
-                        const int svi = ki + 1;
+                        const int svi = value_of(tok, n, ki);
+                        if (svi < 0) return malformed();
                         if      (key_is(json, sk, "id"))       copy_str(json, tok[svi], sec.id, sizeof(sec.id));
                         else if (key_is(json, sk, "label"))    copy_str(json, tok[svi], sec.label, sizeof(sec.label));
-                        else if (key_is(json, sk, "gain_db"))  sec.gain_db  = num(json, tok[svi]);
-                        else if (key_is(json, sk, "delay_ms")) sec.delay_ms = num(json, tok[svi]);
+                        else if (key_is(json, sk, "gain_db"))  sec.gain_db  = num(json, tok[svi], finite);
+                        else if (key_is(json, sk, "delay_ms")) sec.delay_ms = num(json, tok[svi], finite);
                         else if (key_is(json, sk, "invert"))   sec.invert   = truthy(json, tok[svi]);
                         else if (key_is(json, sk, "bands") && tok[svi].type == JSMN_ARRAY) {
                             int bi = svi + 1;
@@ -178,13 +188,19 @@ bool eq_parse(const char* json, size_t len, EqConfig& cfg) {
                                     int fi = bi + 1;
                                     for (int q = 0; q < tok[bi].size && fi < n; q++) {
                                         const jsmntok_t& bk = tok[fi];
-                                        if      (key_is(json, bk, "type")) band.type    = parse_type(json, tok[fi + 1]);
-                                        else if (key_is(json, bk, "f"))    band.freq_hz = num(json, tok[fi + 1]);
-                                        else if (key_is(json, bk, "gain")) band.gain_db = num(json, tok[fi + 1]);
-                                        else if (key_is(json, bk, "q"))    band.q       = num(json, tok[fi + 1]);
-                                        else if (key_is(json, bk, "on"))   band.enabled = truthy(json, tok[fi + 1]);
+                                        const int bv = value_of(tok, n, fi);
+                                        if (bv < 0) return malformed();
+                                        if      (key_is(json, bk, "type")) band.type    = parse_type(json, tok[bv]);
+                                        else if (key_is(json, bk, "f"))    band.freq_hz = num(json, tok[bv], finite);
+                                        else if (key_is(json, bk, "gain")) band.gain_db = num(json, tok[bv], finite);
+                                        else if (key_is(json, bk, "q"))    band.q       = num(json, tok[bv], finite);
+                                        else if (key_is(json, bk, "on"))   band.enabled = truthy(json, tok[bv]);
                                         fi += 1 + span(tok, n, fi + 1);
                                     }
+                                    // What the panel's page and the web can set: a file is no
+                                    // way past them, and a gain of hundreds of dB, designed as
+                                    // written, took the volume down to nothing.
+                                    eq_web_clamp(band);
                                     sec.count++;
                                 }
                                 bi += span(tok, n, bi);
@@ -199,29 +215,14 @@ bool eq_parse(const char* json, size_t len, EqConfig& cfg) {
         }
         i = vi + span(tok, n, vi);
     }
+    if (!finite) return malformed();
     return cfg.sections > 0;
 }
 
 size_t eq_serialize(const EqConfig& cfg, char* buf, size_t buf_sz) {
-    size_t o = 0;
-    // A tiny append helper: every write checks the remaining room, so a too-small buffer
-    // returns 0 rather than producing half a JSON document.
-    // `at` is a local copy on purpose. `o` is captured by reference, so with the size
-    // bound written as `buf_sz - o` the optimiser cannot prove the subtraction does not
-    // wrap — and at -O2 it says so. Reading the offset once states the invariant the guard
-    // already establishes: past this point the offset is strictly inside the buffer.
-    auto add = [&](const char* fmt, auto... args) {
-        const size_t at = o;
-        if (at >= buf_sz) { o = buf_sz + 1; return; }
-        // Clamped because snprintf reports its length as an int, so a size past INT_MAX is
-        // meaningless to it in any case. It also settles the range analysis, which at -O2
-        // will not take the guard above as proof that the subtraction cannot wrap.
-        size_t room = buf_sz - at;
-        if (room > (size_t)INT_MAX) room = (size_t)INT_MAX;
-        const int w = snprintf(buf + at, room, fmt, args...);
-        if (w < 0 || (size_t)w >= room) o = buf_sz + 1;
-        else o = at + (size_t)w;
-    };
+    // Every write checks the remaining room, so a too-small buffer returns 0 rather than
+    // producing half a JSON document.
+    jsmn_util::Appender add(buf, buf_sz);
 
     add("{\n  \"_comment\": \"%s\",\n",
         "Written by the player. DSP config, sectioned by output — see docs/CONCEPT.md, \\\"Outputs\\\". "
@@ -242,7 +243,7 @@ size_t eq_serialize(const EqConfig& cfg, char* buf, size_t buf_sz) {
             // Frequency and Q as %.6g, not rounded to a fixed width: the presets put a band at
             // 62.5 Hz and the shelves at Q 0.707, and "%.0f"/"%.2f" brought them back as 62 and
             // 0.71 - still the preset to the ear, but no longer equal to it, so the EQ screen
-            // showed the user's own set after every reboot (customer, 04.10.2026).
+            // would show the user's own set after every reboot.
             add("        {\"type\": \"%s\", \"f\": %.6g, \"gain\": %.1f, \"q\": %.6g, \"on\": %s}%s\n",
                 type_name(x.type), (double)x.freq_hz, (double)x.gain_db, (double)x.q,
                 x.enabled ? "true" : "false", b + 1 < sec.count ? "," : "");
@@ -250,7 +251,7 @@ size_t eq_serialize(const EqConfig& cfg, char* buf, size_t buf_sz) {
         add("      ]\n    }%s\n", s + 1 < cfg.sections ? "," : "");
     }
     add("  ]\n}\n");
-    return o > buf_sz ? 0 : o;
+    return add.size();
 }
 
 bool eq_load(const char* path, EqConfig& cfg) {
@@ -274,7 +275,7 @@ bool eq_save(const char* path, const EqConfig& cfg) {
     if (len == 0) return false;
 
     // One implementation of write -> read back -> rename, shared with the station list, the
-    // resume point and POST /api/bindings (plan item 11.2). This used to be its own copy,
+    // resume point and POST /api/bindings. This used to be its own copy,
     // and that copy did `remove(path)` before the rename on the belief that LittleFS would
     // not replace an existing target. It does — lfs_rename commits the replace in one
     // metadata operation — so the remove bought nothing and opened a window in which the EQ

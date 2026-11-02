@@ -50,9 +50,9 @@ int32_t moved_to(int32_t idx, const radio_core::StationList& to) {
 /// station that is on is first parked in the transient slot — the radio task then reads its
 /// URL from there, the same URL — the list is copied, and only then is the station pointed at
 /// its new index. The park and the copy happen under list_guard(), so the task's copy is of
-/// the old list or the new one and never of half of each; it holds no pointer into either
-/// (deep review 2026-10-12, RP-6). A station that was deleted while it played stays parked:
-/// it goes on playing, as a catalog station would, until something else is tuned.
+/// the old list or the new one and never of half of each; it holds no pointer into either.
+/// A station that was deleted while it played stays parked: it goes on playing, as a catalog
+/// station would, until something else is tuned.
 bool apply_station_edit(int32_t& station) {
     if (s_edit_state.load(std::memory_order_acquire) != EDIT_POSTED) return false;
     StationEdit& e = *station_edit();
@@ -98,12 +98,7 @@ bool apply_station_edit(int32_t& station) {
 /// envelope.
 constexpr size_t STATIONS_HTTP_MAX = STATIONS_JSON_MAX + 64;
 
-esp_err_t send_json(httpd_req_t* req, const char* status, const char* body) {
-    httpd_resp_set_status(req, status);
-    httpd_resp_set_type(req, "application/json");
-    httpd_resp_set_hdr(req, "Cache-Control", "no-store");
-    return httpd_resp_send(req, body, HTTPD_RESP_USE_STRLEN);
-}
+using modesp::http_routes::send_json;
 
 /// GET /api/stations → {"rev":N,"list":{"stations":[...],"presets":[...]}}
 esp_err_t stations_get(httpd_req_t* req) {
@@ -139,15 +134,8 @@ esp_err_t stations_post(httpd_req_t* req) {
     if (!body.p || !list_mem.p || !edit) {
         return send_json(req, "503 Service Unavailable", "{\"error\":\"no_memory\"}");
     }
-    size_t got = 0;
-    int timeouts = 0;
-    while (got < (size_t)req->content_len) {
-        const int r = httpd_req_recv(req, body.p + got, req->content_len - got);
-        if (r == HTTPD_SOCK_ERR_TIMEOUT && ++timeouts < 3) continue;
-        if (r <= 0) return ESP_FAIL;
-        got += (size_t)r;
-    }
-    body.p[got] = '\0';
+    if (!modesp::http_routes::read_body(req, body.p)) return ESP_FAIL;
+    const size_t got = req->content_len;
 
     // The generation leads the object, so it is read without walking the list: `{"rev":N,`.
     static constexpr char LEAD[] = "{\"rev\":";

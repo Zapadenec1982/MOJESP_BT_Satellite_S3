@@ -52,8 +52,10 @@ std::string last_request;
 int esp_transport_write(int,const char* d,int n,int){last_request.assign(d,n);return n;}
 int esp_transport_read(int,char* out,int cap,int){int n=std::min<size_t>(std::min<size_t>(cap,max_read),response.size()-transport_at);memcpy(out,response.data()+transport_at,n);transport_at+=n;return n;}
 void http_close(){s.state.store(ST_CONNECTING);s.tr=0;}
+void close_stream(){http_close();}
+int claims=0;bool paused=false;   // what the radio did to the ring
 namespace audio_core {
- struct PcmRing {enum Owner {OWNER_RADIO=2}; bool claim(Owner){return true;} void set_paused(bool){};
+ struct PcmRing {enum Owner {OWNER_RADIO=2}; bool claim(Owner){++claims;return true;} void set_paused(bool on){paused=on;};
    bool set_eos(Owner,uint32_t,bool){return true;} bool request_flush(Owner,uint32_t){return true;}
    bool flush_pending(){return false;} bool reset(Owner,uint32_t){return true;}
    Owner owner(){return OWNER_RADIO;} uint32_t generation(){return 0;}};
@@ -242,10 +244,23 @@ bool seek_stream(int32_t sec) {
     return true;
 }
 
+// Replaced by the production function (test_network_radio_browser.py).
+bool looks_like_playlist(const char*, const char*) {
+ return false;
+}
+
 int main(){
  s.station.store(1);s.tuned.store(0);s.state.store(ST_PLAYING);
  start_station(1);
  if(tunes!=1 || s.tuned.load()!=1) return 1; // requested station is not the tuned station
+ // Chosen with no network: the ring is the radio's and a push's one_shot is gone before the
+ // wait, since the reconnect path only tunes; only the connect waits.
+ s.net_up.store(false);s.one_shot.store(true);s.retry=3;s.tr=1;paused=true;claims=0;tunes=0;
+ s.state.store(ST_PLAYING);
+ start_station(0);
+ if(s.state.load()!=ST_RECONNECTING || s.one_shot.load() || s.retry || claims!=1 || paused ||
+    s.tr || tunes || s.tuned.load()!=0) return 4;
+ s.net_up.store(true);
 
  response="HTTP/1.1 200 OK\r\nContent-Type: audio/mpeg\r\nContent-Length: 10000\r\n\r\n";
  response.append(4080-response.size(),'Q');
@@ -292,7 +307,7 @@ int main(){
  connects=0;
  if(http_open("http://h0/a",nullptr,0) || connects!=1) return 52; // nowhere to go
  // A Location longer than a station URL but within a pushed one is followed whole; a longer
- // one is refused rather than cut into a URL that fails as a 403 (deep review 2026-10-12, RP-5).
+ // one is refused rather than cut into a URL that fails as a 403.
  const std::string signed_path="/s?zt="+std::string(230,'t');
  responses={redirect(("http://h1"+signed_path).c_str()),ok};
  connects=0;
@@ -302,6 +317,15 @@ int main(){
  connects=0;
  if(http_open("http://h0/a",nullptr,0) || connects!=1) return 54;
  responses.clear();
+ // A playlist by the answer's type when it says anything: an audio type is a stream whatever
+ // the URL ends in, and only a type that says neither leaves it to the extension.
+ if(looks_like_playlist("http://x/listen.pls","audio/mpeg") ||
+    !looks_like_playlist("http://x/listen.pls","text/plain") ||
+    !looks_like_playlist("http://x/listen.M3U?sid=1",nullptr) ||
+    !looks_like_playlist("http://x/a","audio/x-mpegurl") ||
+    !looks_like_playlist("http://x/a","audio/x-scpls") ||
+    !looks_like_playlist("http://x/listen.pls","audio/x-pls") ||
+    looks_like_playlist("http://x/a","application/octet-stream")) return 60;
  puts("radio network regressions passed");
  return 0;
 }

@@ -97,7 +97,7 @@ message(STATUS "ModESP board: ${_BOARD_DIR}")
 # but config is a CRITICAL module, so the board still goes to safe mode with no HAL, no audio
 # and no screen. Before that refusal existed the failure was worse — fread stopped at the
 # limit and jsmn reported "parse error: -3", with nothing about size — and it cost a flashed
-# panel on 18.09.2026, from adding comments to a label. The limit is read out of the header
+# panel, from adding comments to a label. The limit is read out of the header
 # so there is one copy of the number, the same one the firmware and POST /api/bindings use.
 file(READ "${CMAKE_SOURCE_DIR}/components/modesp_services/include/modesp/services/config_service.h" _CFG_SRC)
 string(REGEX MATCH "MAX_JSON_SIZE[ 	]*=[ 	]*([0-9]+)" _M "${_CFG_SRC}")
@@ -210,6 +210,18 @@ if(Python3_FOUND)
     )
     if(NOT GEN_RESULT EQUAL 0)
         message(FATAL_ERROR "generate_ui.py failed (exit code ${GEN_RESULT})")
+    endif()
+    # GET /api/ui sends ui.json.gz (HttpService::handle_get_ui): the schema is ~86 KB as written
+    # and ~12 KB packed, and every page load and every start of the phone app asks for it.
+    # mtime=0, so the same schema packs to the same bytes and data.bin does not change for nothing.
+    execute_process(
+        COMMAND ${Python3_EXECUTABLE} -c
+            "import gzip, sys; open(sys.argv[2], 'wb').write(gzip.compress(open(sys.argv[1], 'rb').read(), 9, mtime=0))"
+            "${CMAKE_SOURCE_DIR}/data/ui.json" "${CMAKE_SOURCE_DIR}/data/ui.json.gz"
+        RESULT_VARIABLE GZ_RESULT
+    )
+    if(NOT GZ_RESULT EQUAL 0)
+        message(FATAL_ERROR "packing data/ui.json failed (exit code ${GZ_RESULT})")
     endif()
 else()
     message(FATAL_ERROR "Python3 not found — cannot generate UI. Install Python 3.")
@@ -341,6 +353,7 @@ littlefs_create_partition_image(data data FLASH_IN_PROJECT
     DEPENDS "${CMAKE_SOURCE_DIR}/data/board.json"
             "${CMAKE_SOURCE_DIR}/data/bindings.json"
             "${CMAKE_SOURCE_DIR}/data/ui.json"
+            "${CMAKE_SOURCE_DIR}/data/ui.json.gz"
             "${CMAKE_SOURCE_DIR}/data/www/build.txt"             # every bundle, chunk and language
                                                                  # file webui deployed, with hashes
                                                                  # (webui/scripts/deploy.js)
@@ -370,8 +383,8 @@ if(NOT _PART_CSV MATCHES "(^|\n)[ \t]*userdata[ \t]*,")
     message(FATAL_ERROR
         "${CONFIG_PARTITION_TABLE_CUSTOM_FILENAME} has no 'userdata' partition. Runtime user files (eq.json, "
         "stations.json, last_track, devices.json) would go back to living in 'data', which "
-        "`idf.py flash` rewrites whole — the data loss of 18.09.2026 and 22.09.2026. Restore "
-        "the row, or delete this guard knowingly.")
+        "`idf.py flash` rewrites whole, user files and all. Restore the row, or delete this "
+        "guard knowingly.")
 endif()
 if(_PART_CSV MATCHES "(^|\n)[ \t]*userdata[ \t]*,[^\n]*")
     message(STATUS "  userdata partition present; no image is built for it (that is the point)")
@@ -382,7 +395,7 @@ endif()
 # blending, the layout of every label's text — the same kind of code
 # components/audio_dsp/CMakeLists.txt raised to -O2 after measuring what -Os cost there.
 # Scrolling a list redraws the whole content area every frame, which is where it shows.
-# The 4 MB app slots (05.10.2026) leave the room.
+# The 4 MB app slots leave the room.
 idf_build_get_property(_build_components BUILD_COMPONENTS)
 if("lvgl__lvgl" IN_LIST _build_components)
     idf_component_get_property(_lvgl_lib lvgl__lvgl COMPONENT_LIB)

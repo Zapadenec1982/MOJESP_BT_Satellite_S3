@@ -7,8 +7,8 @@
  * opens on the track the queue is on; a tap plays a track and goes back to the Player, which
  * is where the question the list was opened to answer gets its answer.
  *
- * It was a panel over the Player until 24.09.2026. As a page of its own it has the shell's
- * header — ← and a title — like every other list, instead of a close button of its own.
+ * As a page of its own it has the shell's header — ← and a title — like every other list,
+ * instead of a close button of its own.
  */
 
 #include "ui_common.h"
@@ -23,6 +23,7 @@ namespace {
 using i18n::P;
 using i18n::S;
 using i18n::tr;
+using modesp::gen::AUDIO_SOURCE_FILE;
 
 constexpr int32_t CAP_H  = 36;                     // the count, above the list
 
@@ -40,7 +41,7 @@ struct Page {
 Page g;
 
 bool card_playing(const UiLvglModule::Snapshot& s) {
-    return s.source == 4 && strcmp(s.play_state, "playing") == 0;
+    return s.source == AUDIO_SOURCE_FILE && strcmp(s.play_state, "playing") == 0;
 }
 
 /// A file name without its extension: the row is read as a title, and ".mp3" after every one

@@ -118,6 +118,9 @@ private:
     bool ha_discovery_pending_ = false;
 
     // Форматування значення для MQTT payload (на стеку)
+    // player-fork: room for the longest value the store holds (a string of
+    // MODESP_MAX_STRING_VALUE_LENGTH bytes); format_value() returns the bytes it put in buf.
+    static constexpr size_t PAYLOAD_MAX = MODESP_MAX_STRING_VALUE_LENGTH + 1;
     static int format_value(const StateValue& val, char* buf, size_t buf_size);
 
     // Static ESP-IDF callbacks
@@ -127,7 +130,6 @@ private:
     // HTTP handlers
     static esp_err_t handle_get_mqtt(httpd_req_t* req);
     static esp_err_t handle_post_mqtt(httpd_req_t* req);
-    static esp_err_t handle_options(httpd_req_t* req);
     static void set_cors_headers(httpd_req_t* req);
 };
 

@@ -7,7 +7,7 @@
 # that name has to change first, and this mapping with it. The S3 has 512 KB,
 # out of which the caches, the IRAM code, Wi-Fi, lwIP, the I2S DMA rings and every internal stack
 # are paid for — and this firmware's .bss alone filled what the linker had left (99.4 % of
-# D/IRAM with nothing moved, 25.10.2026). CONFIG_SPIRAM_ALLOW_BSS_SEG_EXTERNAL_MEMORY
+# D/IRAM with nothing moved). CONFIG_SPIRAM_ALLOW_BSS_SEG_EXTERNAL_MEMORY
 # (boards/s3_player/sdkconfig.board) already moves lwIP's and Wi-Fi's; these are the
 # framework's and the control plane's, none of them on a path with a deadline:
 #

@@ -16,6 +16,7 @@
 #include <cstddef>
 
 #include "dsp_kernels.h"
+#include "leveler.h"
 
 namespace audio_core {
 
@@ -172,8 +173,7 @@ public:
     static constexpr float LOUD_TAU_S = 0.050f;     ///< how fast the shelves follow the volume
     static constexpr float PORT_Q = 1.4f;           ///< the port lift's peak (set_port)
     static constexpr float PORT_SUB_RATIO = 0.8f;   ///< the subsonic under a port, × its frequency
-    // Бас and Високі (set_tone): where the shelves turn, to be settled by ear on the owner's
-    // speakers, and how far they go.
+    // Бас and Високі (set_tone): where the shelves turn, and how far they go.
     static constexpr float TONE_LO_HZ = 100.0f, TONE_HI_HZ = 10000.0f, TONE_Q = 0.71f;
     static constexpr float TONE_MAX_DB = 6.0f;
     static constexpr float BAL_MAX_DB = 6.0f;       ///< set_balance_db()
@@ -238,7 +238,7 @@ public:
     /// whether the EQ is on or not. They count in B, a change crossfades as an EQ edit does,
     /// and at 0 dB a shelf is a wire, bit-exact.
     void set_tone(float bass_db, float treble_db);
-    /// The balance (S3): `db` > 0 turns the LEFT channel down by that much, so the image moves
+    /// The balance: `db` > 0 turns the LEFT channel down by that much, so the image moves
     /// right; < 0 the right channel; within ±BAL_MAX_DB. Only ever down, so it costs no
     /// headroom. After the stereo stage, before the bass limiter, gliding as the volume does;
     /// 0 is a wire, bit-exact.
@@ -265,7 +265,13 @@ public:
     /// This is the honest half of "spatial" processing: it fixes the real problem (out-of-
     /// phase bass wasting excursion and blurring the image) instead of adding an effect.
     void set_mono_bass(float hz);
-    /// The entry gain, the first thing a block meets: trim · volume · the EQ's headroom.
+    /// «Вирівнювання гучності» (leveler.h): ahead of everything, the volume included. Off is a
+    /// wire, bit-exact; switched off while it holds a gain, it glides back to 0 dB first.
+    void set_leveler(bool on) { lev_.set_on(on); }
+    /// What it does now, dB (> 0 lifts, < 0 cuts).
+    float leveler_db() const { return lev_.gain_db(); }
+    /// The entry gain, the first thing a block meets after the leveler: trim · volume · the EQ's
+    /// headroom.
     ///
     /// Volume: 1 % = −80 dB to 100 % = drive (volume_db); 0 = silence. 100 % is the loudest
     /// CLEAN level — the source's full scale lands on the ceiling — and drive (0…6 dB) is how
@@ -286,8 +292,8 @@ public:
     /// The volume law, dB under the top of the scale at `pct` (> 0): −60·(1 − pct/100) from
     /// VOL_KNEE_PCT up, 0.6 dB a step as it always was; under the knee a term that, with its
     /// slope, starts from zero there grows to VOL_FLOOR_DB at 1 %, about 1.4 dB a step at the
-    /// bottom. The old floor, −59.4 dB at 1 %, was still too loud up close in a quiet room
-    /// (owner, 14.10.2026); −59.4 is now about 17 %.
+    /// bottom. The old floor, −59.4 dB at 1 %, was still too loud up close in a quiet room;
+    /// −59.4 is now about 17 %.
     static float volume_db(float pct);
     void set_mute(bool on)        { if (on != mute_) mute_ramp_ = true; mute_ = on; }
     /// A trim ahead of the EQ, in dB (eq.json's section gain), −24…+12. Part of the entry gain
@@ -307,9 +313,9 @@ public:
     void process(float* stereo, size_t frames);
     /// Blocks thrown away by that guard since start-up.
     uint32_t faults() const { return faults_; }
-    /// The filter sections two to a pass, or one, as the chain ran them until 15.10.2026. The
-    /// output is the same bit for bit either way (the host tests show exactly that); the default
-    /// follows the core — see `paired_`.
+    /// The filter sections two to a pass, or one at a time. The output is the same bit for bit
+    /// either way; the switch exists so the host tests can show exactly that. The default
+    /// follows the core (see `paired_`), and the firmware never changes it.
     void set_paired_passes(bool on) { paired_ = on; }
     /// How many loops over the block the filter sections took in the last process(): a pair
     /// or a lone section is one, a band crossfading three (outgoing, incoming, the blend), the
@@ -421,6 +427,7 @@ private:
     /// g0 = tan(π·f0/fs); g0 ≤ 0 gives a wire.
     static SvfCoef shelf_coef(float g0, float q, float gain_db, bool high);
 
+    Leveler  lev_;                       ///< set_leveler()
     Band     band_[MAX_BANDS];
     Band     sub_[3];                    ///< subsonic: two Butterworth high-passes, the port lift
     float    sub_hz_ = 0.0f;             ///< what set_subsonic() asked for
@@ -441,7 +448,7 @@ private:
     bool     eq_on_ = true;
     /// Two sections a pass on RISC-V: the P4's 32 FP registers hold both, and a pair saves a loop
     /// over the block. One on Xtensa, whose 16 do not: on the S3 a pair spills ~35 loads and stores
-    /// a frame and costs ~52 cycles a section where a lone one costs ~35 (26.10.2026).
+    /// a frame and costs ~52 cycles a section where a lone one costs ~35.
 #if defined(__XTENSA__)
     bool     paired_ = false;            ///< set_paired_passes()
 #else

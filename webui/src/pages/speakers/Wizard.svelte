@@ -2,14 +2,13 @@
   // The speakers' wizard. Step 1 asks what
   // the speakers are; closed ones need nothing more and «Готово» says so. Step 2 finds the port —
   // here with the panel's microphone on a bench, or by hand on the calibration page; the phone's
-  // microphone is the app's (§9.1). Nothing is written by a choice, a skip or a measurement: only
+  // microphone is the app's. Nothing is written by a choice, a skip or a measurement: only
   // «Готово» and «Прийняти» write (lib/speakers.js wizardWrites, tested).
   import { onDestroy } from 'svelte';
-  import { state, setStateKey } from '../../stores/state.js';
+  import { state } from '../../stores/state.js';
   import { t, fmt } from '../../stores/i18n.js';
   import { href, done } from '../../stores/router.js';
   import { live } from '../../lib/live.js';
-  import { apiPost } from '../../lib/api.js';
   import { createSettingSender, writeNow } from '../../lib/settings.js';
   import { toastError } from '../../stores/toast.js';
   import { wizardWrites, meterOutcome, port, SPK_PORTED, SPK_CLOSED } from '../../lib/speakers.js';
@@ -58,8 +57,7 @@
   }
   const meter = (on) => act(async () => {
     if (on) asked = true;
-    setStateKey('audio.port_meas', on);
-    await apiPost('/api/settings', { 'audio.port_meas': on });
+    await writeNow({ 'audio.port_meas': on });      // shown at once, taken back if refused
   });
   const leave = () => done('system/speakers');
 </script>

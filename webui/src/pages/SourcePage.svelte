@@ -1,18 +1,17 @@
 <script>
-  // Source, stage W1: the panel's cards (screen_src.cpp) — only those whose bit is in
+  // Source: the panel's cards (screen_src.cpp) — only those whose bit is in
   // audio.sources, the active one on primary_container with a check, under each what it would
   // give now. A tap is "listen": the source is set and the Player opens, as on the glass.
-  // One grid, the most listened to first (customer, 18.10.2026): Bluetooth, AirPlay, the radio,
-  // then the card, the media servers and USB — the glass's order. USB took AUX's place
-  // (the customer, 24.10.2026): the line input left the hardware on 15.10.2026. DLNA has no card: an app starts
-  // it and the panel follows by itself; while a pushed track plays, the servers' card shows it.
-  // The lists — the stations, the catalog, the library — are the Player's, for the source that
-  // plays.
+  // One grid, the most listened to first: Bluetooth, AirPlay, the radio, then the card, the media
+  // servers and USB — the glass's order. USB is where AUX was: the line input is not in the
+  // hardware. DLNA has no card: an app starts it and the panel follows by itself; while a pushed
+  // track plays, the servers' card shows it. The lists — the stations, the catalog, the library —
+  // are the Player's, for the source that plays.
   import { now } from '../stores/now.js';
-  import { state, setStateKey } from '../stores/state.js';
+  import { state } from '../stores/state.js';
   import { t, K, plural, language } from '../stores/i18n.js';
   import { go } from '../stores/router.js';
-  import { apiPost } from '../lib/api.js';
+  import { writeNow } from '../lib/settings.js';
   import { toastError } from '../stores/toast.js';
   import { badge } from '../lib/numbers.js';
   import Icon from '../m3/Icon.svelte';
@@ -77,12 +76,12 @@
       return;
     }
     if ($now.kind !== c.id) {
-      // in body order: the source first, then the radio's "play" (screen_src.cpp:90-113)
+      // in body order: the source first, then the radio's "play" (screen_src.cpp:90-113); shown
+      // at once, and taken back if the device refuses it
       const body = { 'audio.source': c.source };
       if (c.id === 'radio') body['radio.cmd'] = 1;
-      setStateKey('audio.source', c.source);
       try {
-        await apiPost('/api/settings', body);
+        await writeNow(body);
       } catch (e) {
         toastError(e.message);
         return;

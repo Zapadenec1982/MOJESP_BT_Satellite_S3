@@ -34,7 +34,7 @@
  * from PSRAM (CONFIG_SPIRAM_XIP_FROM_PSRAM), and with that IDF never switches the cache off for a
  * flash write, so a PSRAM stack is as safe as an internal one. What the S3 does not have is the
  * internal RAM: with Wi-Fi up there was not 12 KB in one piece left, the receiver task could not
- * be created and every AirPlay RECORD answered 500 (26.10.2026).
+ * be created and every AirPlay RECORD answered 500.
  *
  * So, for the upstream files only and only on that board, every task is created with its stack in
  * PSRAM and deleted the way such a task must be: vTaskDeleteWithCaps, which IDF 5.5 also accepts

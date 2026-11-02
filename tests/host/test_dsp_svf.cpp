@@ -92,7 +92,7 @@ EqBand band(BandType t, float f, float g, float q) {
     return b;
 }
 
-/// The customer's EQ as it was on the panel (backup of 26.09.2026).
+/// The customer's EQ as it was on the panel (from a backup).
 std::vector<EqBand> customer_eq() {
     return {
         band(BandType::LOW_SHELF, 40, 2.6f, 0.71f),  band(BandType::PEAK, 62, 1.8f, 1.0f),
@@ -245,8 +245,8 @@ TEST_CASE("SVF kernel: two sections in one pass are the two passes, bit for bit"
 }
 
 TEST_CASE("SVF kernel: the customer's EQ adds no audible noise on bass, at any rate") {
-    // Direct Form II measured −51/−49/−36/−23 dB here (research §3.1); the threshold is the
-    // research's for the SVF, which measured −130/−127/−125/−114.
+    // Direct Form II measured −51/−49/−36/−23 dB here; the threshold is the one set for the
+    // SVF, which measured −130/−127/−125/−114.
     for (double fs : {44100.0, 48000.0, 96000.0, 192000.0}) {
         const double db = kernel_noise_db(customer_eq(), fs, 0.25f);
         MESSAGE("customer EQ, " << fs << " Hz: kernel noise " << db << " dB");

@@ -19,7 +19,7 @@
   export let mini = true;
   // ... and where nothing plays and nothing could go on from it: switched off, no phone, a
   // computer that sends nothing — «Телефон не підключено» over the navigation was a line with
-  // nothing to do. A pause it can resume keeps it.
+  // nothing to do. A pause it can resume keeps it, and so does a stopped station.
   $: np = $now;
   $: showMini = mini && (np.playing || !!(np.toggle && np.live));
   /** The Player's background: ui.cover_rgb, the colour

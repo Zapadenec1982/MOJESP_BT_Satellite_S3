@@ -3,33 +3,34 @@
  * @brief The frame every page lives in: the header, the one menu (a modal drawer), the
  *        snackbar, the standby face — and page switching.
  *
- * The structure agreed on 24.09.2026: the Player is the
+ * The structure: the Player is the
  * home and owns the screen; nothing permanent stands beside a 48 px header. There is ONE
  * menu, the drawer — opened by ≡, by a press on the left edge or by holding the encoder —
- * with the three sections: Плеєр · Джерело · Налаштування (DSP left it in S1:
+ * with the three sections: Плеєр · Джерело · Налаштування (DSP is not one of them:
  * the equalizer is a list under Налаштування › Звук, for
  * those who want it, and the daily sound goes to the Player). Nothing else is in it: the rail
  * the design package drew was dropped (88 px off every page for something wanted a few times
  * a day), and so were its "sleep" and "off" actions — standby comes by itself on the idle
  * timer, and switching the output off is not a touch interface's job. Lists (stations, DLNA,
- * the service readout) are reached from a page and their ← goes back to it.
+ * the service readout) are reached from a page and their ← goes back to it. Left alone for a
+ * minute, any page goes back to the Player by itself (idle_home.h).
  *
- * Pages are built once and shown/hidden, as before. In U1 the pages are still the old
- * screens; U2–U5 replace them one by one and the shell does not change for it.
+ * Pages are built once and shown/hidden, and a page can be redrawn without the shell changing
+ * for it.
  *
  * Volume is a moment, not a readout: a turn of the encoder brings up a slider for two
  * seconds, and the Player's loudspeaker button does the same.
  *
- * The knob has one job on every page (customer, 18.10.2026):
- * a turn is the volume, a press plays and pauses, a hold opens the drawer. It used to walk each
- * page's rows with a ring, and set the volume where a page did not take it — what a turn did
- * depended on the page and on whether a ring was up: a mode, where people err. What is on the
- * glass is chosen by touch.
+ * The knob has one job on every page: a turn is the volume, a press plays and pauses (mutes a
+ * station), a hold opens the drawer. It used to walk each page's rows with a ring, and set the
+ * volume where a page did not take it — what a turn did depended on the page and on whether a
+ * ring was up: a mode, where people err. What is on the glass is chosen by touch.
  */
 
 #include "ui_common.h"
 #include "ui_m3_widgets.h"
 #include "i18n.h"
+#include "idle_home.h"
 #include "device_name.h"
 #include "bt_settings.h"
 #include "eq_store.h"
@@ -98,9 +99,9 @@ static_assert(PAGES[1].kind == Kind::SECTION && PAGES[2].kind == Kind::SECTION &
 
 // ── geometry ──
 constexpr int32_t D_RADIUS = m3::shape::XL;     ///< the drawer's right-hand corners
-/// Rows, their text and their icons well above the M3 drawer's (label_m, 24 px icons): the
-/// customer found the menu too small to read from where a stereo is looked at, and 24 px still
-/// small (11.10.2026). The rows are set in headline (32 px), the title stays at title_m.
+/// Rows, their text and their icons well above the M3 drawer's (label_m, 24 px icons): those
+/// are too small to read from where a stereo is looked at, and 24 px still small. The rows are
+/// set in headline (32 px), the title stays at title_m.
 constexpr int32_t D_ROW_H  = 72;
 constexpr int32_t D_ROW_Y0 = 84;
 constexpr int32_t D_PITCH  = D_ROW_H + 4;
@@ -136,7 +137,8 @@ struct Shell {
     touch::Slide vol_touch;          ///< a finger on it (touch_gesture.h)
     uint32_t    vol_at = 0;          ///< when it last had a reason to be on screen; 0 = hidden
     bool        vol_drag = false;    ///< a finger is on it: the snapshot does not move it
-    int32_t     vol_posted = -1;
+    int32_t     vol_posted = -1;     ///< the level the glass asked for last: the knob, or a finger on the pop-up
+    uint32_t    vol_posted_at = 0;   ///< when
     // «Скасувати» (ui_shell_undo)
     lv_obj_t*   undo_bar = nullptr;
     lv_obj_t*   undo_lbl = nullptr;
@@ -179,6 +181,9 @@ struct Shell {
 };
 
 Shell g;
+/// Outside `g`, which a rebuild starts over (ui_shell_build): a scheme or a language changed from
+/// the web must not give an idle period that is spent a second return to the Player.
+idle_home::Period s_idle;
 
 void set_drawer(bool open);
 void paint_drawer();
@@ -214,8 +219,7 @@ void edge_cb(lv_event_t*) { set_drawer(true); }
 // ── drawer ─────────────────────────────────────────────────────────────────────────────────
 
 /// The web at the menu's foot: the panel's address and a QR code of the web's front page, from
-/// any page (the customer, 25.10.2026: «переносимо QR у меню ≡» — it stood on Колонки alone);
-/// nothing while the panel has no address.
+/// any page; nothing while the panel has no address.
 void paint_web() {
     if (!g.web || !g.ctx) return;
     const char* ip = g.ctx->s.wifi_ip;
@@ -331,19 +335,21 @@ void build_drawer(lv_obj_t* scr) {
 // ── the volume pop-up ──────────────────────────────────────────────────────────────────────
 //
 // A slider that appears when the volume is being changed and leaves two seconds after it
-// stops: a permanent one would be a readout of the thing the encoder already is (customer,
-// 24.09.2026). It follows the snapshot, so the encoder and the web page both move it, and
-// a finger on it posts the value it is dragged to.
+// stops: a permanent one would be a readout of the thing the encoder already is. It follows
+// the snapshot, so the encoder and the web page both move it, and a finger on it posts the
+// value it is dragged to.
 
 constexpr uint32_t VOL_MS = 2000;
+/// A level asked for reaches the snapshot within ~0.1 s (the next request drain, then the 20 Hz
+/// mirror, then a refresh); until this long after it, the knob steps from it, not the snapshot.
+constexpr uint32_t VOL_HOLD_MS = 300;
 
 void vol_show() {
     g.vol_at = lv_tick_get();
-    if (lv_obj_has_flag(g.vol, LV_OBJ_FLAG_HIDDEN)) {
-        uih::show(g.vol, true);
-        lv_obj_move_foreground(g.vol);
-        if (g.drawer_open) { lv_obj_move_foreground(g.scrim); lv_obj_move_foreground(g.drawer); }
-    }
+    // Not raised: built before every other overlay, it stays under the menu, the «Звук» sheet, the
+    // pick list and the dialogs (docs/UI.md, "Overlays") rather than over their buttons, where it
+    // took the taps meant for them for as long as it showed.
+    if (lv_obj_has_flag(g.vol, LV_OBJ_FLAG_HIDDEN)) uih::show(g.vol, true);
 }
 
 void vol_hide() {
@@ -366,6 +372,7 @@ void vol_touch_cb(lv_event_t* e) {
     m3w::slider_set(g.vol_sl, pct);
     if (pct != g.vol_posted && g.ctx && g.ctx->mod) {
         g.vol_posted = pct;
+        g.vol_posted_at = lv_tick_get();
         g.ctx->mod->lvgl_post(UiLvglModule::Req::VOLUME, pct);
     }
 }
@@ -440,21 +447,9 @@ void build_undo(lv_obj_t* scr) {
 
 // ── standby ────────────────────────────────────────────────────────────────────────────────
 
-const char* source_name(int32_t src) {
-    switch (src) {
-    case 2: return tr(S::src_aux);
-    case 3: return tr(S::src_bt);
-    case 4: return tr(S::src_card);
-    case 5: return tr(S::src_radio);
-    case 6: return tr(S::src_airplay);
-    case 7: return tr(S::src_usb);
-    default: return nullptr;
-    }
-}
-
 /// A click on the face wakes it. A finger on the glass already has through the touch driver
 /// (UiLvglModule::publish_touch), and a second WAKE only re-syncs the shell's standby face with
-/// the module (UI-1); this is for the presses that do
+/// the module; this is for the presses that do
 /// not come from the touch controller — the bench's tap=, which could not wake the panel.
 void sb_click_cb(lv_event_t*) {
     if (g.ctx && g.ctx->mod) g.ctx->mod->lvgl_post(UiLvglModule::Req::WAKE, 0);
@@ -463,7 +458,7 @@ void sb_click_cb(lv_event_t*) {
 // The face has two layouts. With music playing: the clock and the date at the top, one line
 // of what is playing under them, and the spectrum at the bottom. With nothing playing: the
 // clock and the date alone, centred. The line and the spectrum share one window, 80 % of the
-// screen's width (the customer's choice, 11.10.2026); a line wider than that scrolls.
+// screen's width; a line wider than that scrolls.
 constexpr int32_t SB_WIN_W  = uig::SCR_W * 80 / 100;                 // 640
 constexpr int32_t SB_WIN_X  = (uig::SCR_W - SB_WIN_W) / 2;
 constexpr int32_t SB_TOP    = 28;        ///< the clock row, music layout
@@ -473,7 +468,7 @@ constexpr int32_t SB_SPEC_BASE = uig::SCR_H - 24;
 constexpr int32_t SB_SPEC_H    = 180;
 /// 23 px a band and 12 of it bar: 28 bands come to 633 px, the nearest the pitch gets to the
 /// window without bars of two widths. Otherwise the Player's row exactly — no peak caps, which
-/// were tried and dropped so the spectrum looks the same wherever it is (customer, 11.10.2026).
+/// were tried and dropped so the spectrum looks the same wherever it is.
 constexpr uih::SpecStyle SB_SPEC = {23, 12};
 constexpr int32_t SB_SPEC_X = (uig::SCR_W - uih::spec_drawn_w(SB_SPEC)) / 2;
 static_assert(uih::spec_drawn_w(SB_SPEC) <= SB_WIN_W, "the spectrum fits the window");
@@ -584,13 +579,11 @@ void refresh_standby(UiCtx& c) {
 
     // The play_* fields belong to whichever source has a track; with AUX selected they still
     // hold the card's last one, so AUX says only what it is.
-    const bool radio = (s.source == 5 && !s.network_push);
-    const bool track = s.source == 3 || s.source == 4 || s.source == 6 ||
-                       (s.source == 5 && s.network_push);
-    const char* src = source_name(s.source);
-    if (radio)      sb_set_line(s.radio_name, s.radio_now, tr(S::src_radio));
-    else if (track) sb_set_line(s.play_artist, s.play_title, src ? src : "");
-    else            sb_set_line("", "", src ? src : "");
+    const PlayerFace face = ui_face(s);
+    const char* name = tr(ui_src_def(ui_src(s)).name);     // "" for the output off and the tone
+    if (face == PlayerFace::RADIO)      sb_set_line(s.radio_name, s.radio_now, name);
+    else if (face == PlayerFace::TRACK) sb_set_line(s.play_artist, s.play_title, name);
+    else                                sb_set_line("", "", name);
 
     float db[audio_core::SPECTRUM_BANDS];
     uih::spectrum_set(g.sb_spec, audio_core::spectrum_bus().read(db) ? db : nullptr);
@@ -712,6 +705,31 @@ void refresh_pairing(UiCtx& c) {
     }
 }
 
+// ── a minute alone ─────────────────────────────────────────────────────────────────────────
+
+/// Something on the glass waits for an answer: a keyboard, or a dialog other than the pick list —
+/// the pairing dialog, «Забути …?». A minute alone throws away neither half a password nor a
+/// question, as a rebuild does not (rebuild_look); the pick list it answers «Скасувати».
+bool waiting_for_answer() { return m3w::modal_shown(lv_screen_active(), ui_pick_scrim()); }
+
+/// Back to the bare Player after idle_home::AFTER_MS alone (idle_home.h).
+void refresh_idle(const UiCtx& c) {
+    // The standby's idle time, or less while a press LVGL has seen has not reached it yet: that
+    // goes round the main loop first, and the tap that closes a keyboard must not pass for a
+    // minute alone. The knob's input comes that way too, but the knob ends nothing that holds a
+    // page.
+    const uint32_t idle = LV_MIN(c.s.idle_ms, lv_display_get_inactive_time(nullptr));
+    const bool over = g.drawer_open || ui_sound_is_open() || ui_pick_shown();
+    const bool test = c.s.source == modesp::gen::AUDIO_SOURCE_TONE || c.s.port_meas;
+    if (!s_idle.pass(idle, g.standby, PAGES[g.cur].def->id, over,
+                     [test] { return test || waiting_for_answer(); }))
+        return;
+    set_drawer(false);
+    ui_pick_hide();                             // as its «Скасувати»
+    ui_sound_close();
+    select_page(PAGE_HOME);
+}
+
 } // namespace
 
 // ═══════════════════════════════════════════════════════════════════════════════════════════
@@ -782,6 +800,7 @@ void ui_shell_build(lv_obj_t* scr, UiCtx& c) {
 void ui_shell_refresh(UiCtx& c) {
     if (g.undo_at && lv_tick_elaps(g.undo_at) > touch::UNDO_MS) undo_hide();
     refresh_pairing(c);
+    refresh_idle(c);          // first, so the page painted below is the one it leaves on the glass
     if (g.standby) {
         refresh_standby(c);
         return;
@@ -865,12 +884,6 @@ void ui_shell_nav() {
     select_page(g.from);
 }
 
-void ui_shell_show_volume() {
-    if (g.standby || !g.vol) return;
-    if (g.ctx && g.ctx->s.volume >= 0) m3w::slider_set(g.vol_sl, g.ctx->s.volume);
-    vol_show();
-}
-
 bool ui_shell_peek(const char* what) {
     static bool     peeked_standby = false;
     static bool     peeked_pair = false;
@@ -925,15 +938,21 @@ void ui_shell_encoder(int32_t delta, uint8_t event, UiCtx& c) {
         if (!ui_pick_shown() && !ui_sound_is_open() && !ui_shell_modal_open()) set_drawer(!g.drawer_open);
         return;
     }
-    if (event == 1) {                       // press: the Player's play button, from anywhere
-        ui_now_play_pause();
+    if (event == 1) {                       // press: the Player's play button (a station's mute), anywhere
+        ui_now_press();
         return;
     }
     if (!delta || !c.mod || c.s.volume < 0) return;
-    int32_t v = c.s.volume + delta * 2;
+    // From the level asked for last while the snapshot may not have it yet, or a brisk turn
+    // posts one level twice and loses the detent; after that from the snapshot, which is where a
+    // level set on the web or by MQTT shows.
+    const bool fresh = g.vol_posted >= 0 && lv_tick_elaps(g.vol_posted_at) < VOL_HOLD_MS;
+    int32_t v = (fresh ? g.vol_posted : c.s.volume) + delta * 2;
     if (v < 0) v = 0; else if (v > 100) v = 100;
     // A turn is wanting sound at that level: a mute set on the web ends with it, or the knob
     // would turn a silent panel up with nothing to hear.
     if (c.s.mute) c.mod->lvgl_post(UiLvglModule::Req::MUTE, 0);
+    g.vol_posted = v;
+    g.vol_posted_at = lv_tick_get();
     c.mod->lvgl_post(UiLvglModule::Req::VOLUME, v);
 }

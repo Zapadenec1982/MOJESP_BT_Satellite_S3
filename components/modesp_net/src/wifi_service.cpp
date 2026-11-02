@@ -43,6 +43,18 @@ bool is_refusal(uint8_t reason) {
         return false;
     }
 }
+
+/// player-fork: a wifi_config_t SSID or password is a byte array, not a C string — a 32-byte SSID
+/// and a 64-character password (a raw hex PSK) fill it with no NUL after them. strncpy() to
+/// sizeof - 1 dropped the last byte: such a network was searched for under 31 characters, or its
+/// key hashed as a 63-character passphrase, and never joined. The config comes zeroed, so a
+/// shorter value stays terminated. Returns the bytes copied.
+template <size_t N>
+size_t copy_field(uint8_t (&dst)[N], const char* src) {
+    const size_t n = strnlen(src, N);
+    memcpy(dst, src, n);
+    return n;
+}
 }  // namespace
 
 // ── Event handler (static, dispatches to instance) ──────────────
@@ -66,8 +78,9 @@ void WiFiService::handle_wifi_event(int32_t event_id, void* event_data) {
                 try_phase_ = TryPhase::CONNECTING;
             }
             // При AP→STA probe connect викликається явно з attempt_ap_sta_probe()
-            if (ap_sta_probing_) {
-                ESP_LOGD(TAG, "STA started (probe mode, connect deferred)");
+            // player-fork: and a scan's own AP→APSTA switch starts the STA to scan, not to join.
+            if (ap_sta_probing_ || scan_busy_) {
+                ESP_LOGD(TAG, "STA started (probe or scan, connect deferred)");
             } else {
                 ESP_LOGI(TAG, "STA started, connecting...");
                 esp_wifi_connect();
@@ -207,7 +220,8 @@ void WiFiService::on_update(uint32_t dt_ms) {
     // Deferred reconnect (after save_credentials HTTP response was sent)
     if (deferred_reconnect_) {
         deferred_reconnect_timer_ += dt_ms;
-        if (deferred_reconnect_timer_ >= DEFERRED_RECONNECT_DELAY_MS) {
+        // player-fork: not while a scan holds the radio (start_scan() says why); it runs after it.
+        if (deferred_reconnect_timer_ >= DEFERRED_RECONNECT_DELAY_MS && !scan_busy_) {
             deferred_reconnect_ = false;
             deferred_reconnect_timer_ = 0;
 
@@ -270,8 +284,8 @@ void WiFiService::on_update(uint32_t dt_ms) {
     // esp_wifi_sta_get_ap_info() is not a local read here — it is a synchronous RPC to the
     // C6 with a five-second timeout, made from the task that feeds the five-second
     // watchdog. While the SDIO link is carrying a radio stream that RPC takes long enough
-    // that the two meet, and the board resets (bench, 17.09.2026: task_wdt on main, stack
-    // shows eh_host_wifi_sta_get_ap_info). And it buys nothing: the note below records that
+    // that the two meet, and the board resets (task_wdt on main, the stack shows
+    // eh_host_wifi_sta_get_ap_info). And it buys nothing: the note below records that
     // this path returns 0 on this stack anyway. Revisit after an esp_hosted bump, and then
     // only off the main loop.
     //
@@ -296,8 +310,8 @@ void WiFiService::on_update(uint32_t dt_ms) {
             // player-fork: over esp_wifi_remote 1.6.4 + esp_hosted 3.0.7 this reads 0 — the
             // sta_get_ap_info RPC response omits rssi (host glue copies ssid/bssid/channel/
             // authmode only) and esp_wifi_sta_get_rssi() cannot even be composed by the host
-            // RPC layer (msg_id 341 "pack_req_payload failed", bench 2026-09-15). Kept as the
-            // upstream code path; revisit after an esp_hosted bump.
+            // RPC layer (msg_id 341 "pack_req_payload failed"). Kept as the upstream code
+            // path; revisit after an esp_hosted bump.
             wifi_ap_record_t ap_info;
             if (esp_wifi_sta_get_ap_info(&ap_info) == ESP_OK) {
                 state_set("wifi.rssi", static_cast<int32_t>(ap_info.rssi));
@@ -307,18 +321,21 @@ void WiFiService::on_update(uint32_t dt_ms) {
 #endif
 
     // ── AP→STA periodic probe ──
-    if (ap_mode_ && !ap_sta_probing_ && !deferred_reconnect_ && ssid_[0] != '\0') {
+    // player-fork: and not while a scan holds the radio; the countdown waits for it.
+    if (ap_mode_ && !ap_sta_probing_ && !deferred_reconnect_ && !scan_busy_ && ssid_[0] != '\0') {
         if (ap_sta_probe_timer_ > dt_ms) {
             ap_sta_probe_timer_ -= dt_ms;
         } else {
             ap_sta_probe_timer_ = 0;
         }
         if (ap_sta_probe_timer_ == 0) {
-            if (esp_get_free_heap_size() >= AP_STA_PROBE_HEAP_MIN) {
+            // player-fork: internal RAM, as start_scan() measures it, not the whole heap.
+            const size_t free_internal = heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+            if (free_internal >= AP_STA_PROBE_HEAP_MIN) {
                 attempt_ap_sta_probe();
             } else {
-                ESP_LOGW(TAG, "AP→STA probe skipped: low heap %lu",
-                         (unsigned long)esp_get_free_heap_size());
+                ESP_LOGW(TAG, "AP→STA probe skipped: low internal heap %lu",
+                         (unsigned long)free_internal);
                 ap_sta_probe_timer_ = ap_sta_probe_interval_;
             }
         }
@@ -338,6 +355,7 @@ void WiFiService::on_update(uint32_t dt_ms) {
     }
 
     // STA Watchdog: рестарт при тривалому disconnect
+#if CONFIG_MODESP_WIFI_RESTART_ON_LONG_DISCONNECT
     if (!ap_mode_) {
         if (connected_) {
             stable_timer_ms_ += dt_ms;
@@ -356,6 +374,7 @@ void WiFiService::on_update(uint32_t dt_ms) {
             }
         }
     }
+#endif
 }
 
 // ── Credentials ─────────────────────────────────────────────────
@@ -465,23 +484,40 @@ void WiFiService::forget_credentials() {
 // ── WiFi Scan ───────────────────────────────────────────────────
 
 bool WiFiService::start_scan() {
-    scan_done_ = false;
-
-    // Скасувати AP→STA probe перед scan (APSTA вже активний при probe)
-    if (ap_sta_probing_) {
-        cancel_ap_sta_probe();
+    // player-fork: one scan at a time, and none while a join or a probe has the radio. The glass
+    // scans from its own task and the web from the server's, and nothing kept them apart, from
+    // each other or from the main loop: a second scan stopped the first, the AP restore at the
+    // end of a scan put a join's STA back to AP (a right password failed after 25 s), and a scan
+    // cancelled a probe and doubled its backoff. scan_busy_ is claimed before the main loop's
+    // flags are read; the main loop sets its flag before it reads scan_busy_ (the deferred
+    // reconnect, attempt_ap_sta_probe()), so whichever comes second sees the other and waits.
+    bool idle = false;
+    if (!scan_busy_.compare_exchange_strong(idle, true)) {
+        ESP_LOGW(TAG, "Cannot scan: another scan is running");
+        return false;
     }
+    if (trying_ || deferred_reconnect_ || ap_sta_probing_) {
+        ESP_LOGW(TAG, "Cannot scan: a join or an AP->STA attempt has the radio");
+        scan_busy_ = false;
+        return false;
+    }
+    scan_done_ = false;
 
     if (!wifi_started_) {
         ESP_LOGW(TAG, "Cannot scan: WiFi not started");
+        scan_busy_ = false;
         return false;
     }
 
-    // Перевірка heap — APSTA + scan потребує ~30-40KB додатково
-    size_t free_heap = esp_get_free_heap_size();
-    ESP_LOGI(TAG, "Scan requested (heap: %u)", (unsigned)free_heap);
+    // APSTA + scan need ~30-40 KB more. player-fork: of internal RAM, the kind the Wi-Fi path
+    // allocates from and the kind that runs out. With CONFIG_SPIRAM_USE_MALLOC=y the whole heap
+    // also counts every free byte of PSRAM, tens of MB, and a check on it could never refuse.
+    size_t free_heap = heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+    ESP_LOGI(TAG, "Scan requested (internal heap: %u)", (unsigned)free_heap);
     if (free_heap < 50000) {
-        ESP_LOGW(TAG, "Cannot scan: low memory (%u bytes free, need 50000)", (unsigned)free_heap);
+        ESP_LOGW(TAG, "Cannot scan: low memory (%u bytes of internal heap free, need 50000)",
+                 (unsigned)free_heap);
+        scan_busy_ = false;
         return false;
     }
 
@@ -497,6 +533,7 @@ bool WiFiService::start_scan() {
             esp_err_t mode_err = esp_wifi_set_mode(WIFI_MODE_APSTA);
             if (mode_err != ESP_OK) {
                 ESP_LOGW(TAG, "Cannot switch to APSTA: %s", esp_err_to_name(mode_err));
+                scan_busy_ = false;
                 return false;
             }
             wifi_config_t sta_cfg = {};
@@ -519,6 +556,7 @@ bool WiFiService::start_scan() {
                  (unsigned)esp_get_free_heap_size());
         esp_wifi_scan_stop();
         if (was_ap_only) esp_wifi_set_mode(WIFI_MODE_AP);
+        scan_busy_ = false;
         return false;
     }
 
@@ -563,12 +601,15 @@ int WiFiService::get_scan_results(ScanResult* out, size_t max_results) {
 
     // Повертаємо AP mode ПІСЛЯ зчитування результатів —
     // esp_wifi_scan_get_ap_records() звільняє внутрішні буфери ESP-IDF
-    if (restore_ap_after_scan_) {
+    // player-fork: unless a join was asked for meanwhile — its reconnect waited for this scan and
+    // takes the radio from here, so it is not put back to AP under it.
+    if (restore_ap_after_scan_ && !trying_) {
         ESP_LOGI(TAG, "Restoring AP mode after scan results read (heap: %u)",
                  (unsigned)esp_get_free_heap_size());
         esp_wifi_set_mode(WIFI_MODE_AP);
-        restore_ap_after_scan_ = false;
     }
+    restore_ap_after_scan_ = false;
+    scan_busy_ = false;
 
     return static_cast<int>(ap_count);
 }
@@ -596,10 +637,8 @@ bool WiFiService::start_sta() {
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
 
     wifi_config_t wifi_config = {};
-    strncpy(reinterpret_cast<char*>(wifi_config.sta.ssid),
-            ssid_, sizeof(wifi_config.sta.ssid) - 1);
-    strncpy(reinterpret_cast<char*>(wifi_config.sta.password),
-            password_, sizeof(wifi_config.sta.password) - 1);
+    copy_field(wifi_config.sta.ssid, ssid_);
+    copy_field(wifi_config.sta.password, password_);
     // player-fork: an open network has no password, and a WPA2 floor refuses it outright
     // (reason 211, "no AP in the authmode threshold") — the panel could list it and never
     // join it. A network with a password keeps the WPA2 floor.
@@ -656,7 +695,7 @@ bool WiFiService::start_ap() {
     char ap_ssid[33];
     snprintf(ap_ssid, sizeof(ap_ssid), "ModESP-%02X%02X", mac[4], mac[5]);
 
-    char ap_pass[65] = {};
+    char ap_pass[64];
     int32_t ap_channel = 1;
 
     // Читаємо кастомну конфігурацію AP з NVS (якщо є)
@@ -666,21 +705,22 @@ bool WiFiService::start_ap() {
         strncpy(ap_ssid, custom_ssid, sizeof(ap_ssid) - 1);
         ap_ssid[sizeof(ap_ssid) - 1] = '\0';
     }
-    nvs_helper::read_str("wifi", "ap_pass", ap_pass, sizeof(ap_pass));
+    const size_t stored_pass = read_ap_password(ap_pass);
+    if (stored_pass > strlen(ap_pass)) {
+        ESP_LOGE(TAG, "AP password is %u bytes and WPA2 takes 63: the AP uses its first 63 - "
+                      "set it again", (unsigned)stored_pass);
+    }
     nvs_helper::read_i32("wifi", "ap_chan", ap_channel);
     if (ap_channel < 1 || ap_channel > 13) ap_channel = 1;
 
     wifi_config_t wifi_config = {};
-    strncpy(reinterpret_cast<char*>(wifi_config.ap.ssid),
-            ap_ssid, sizeof(wifi_config.ap.ssid) - 1);
-    wifi_config.ap.ssid_len = static_cast<uint8_t>(strlen(ap_ssid));
+    wifi_config.ap.ssid_len = static_cast<uint8_t>(copy_field(wifi_config.ap.ssid, ap_ssid));
     wifi_config.ap.channel = static_cast<uint8_t>(ap_channel);
     wifi_config.ap.max_connection = 2;
 
     // Пароль >= 8 символів → WPA2, інакше відкрита мережа
     if (strlen(ap_pass) >= 8) {
-        strncpy(reinterpret_cast<char*>(wifi_config.ap.password),
-                ap_pass, sizeof(wifi_config.ap.password) - 1);
+        copy_field(wifi_config.ap.password, ap_pass);
         wifi_config.ap.authmode = WIFI_AUTH_WPA2_PSK;
     } else {
         wifi_config.ap.authmode = WIFI_AUTH_OPEN;
@@ -726,16 +766,35 @@ bool WiFiService::start_ap() {
     return true;
 }
 
+size_t WiFiService::read_ap_password(char (&out)[64]) {
+    // player-fork: with room for anything POST /api/wifi/ap could ever store (its body is 256
+    // bytes). Read into 65, a longer password did not read at all and was taken for none: the
+    // access point came up open while its owner believed it was WPA2. A stored password is
+    // never taken for none now; one longer than WPA2 takes is cut to it, and start_ap() says so.
+    char stored[256] = {};
+    out[0] = '\0';
+    if (!nvs_helper::read_str("wifi", "ap_pass", stored, sizeof(stored))) return 0;
+    strncpy(out, stored, sizeof(out) - 1);
+    out[sizeof(out) - 1] = '\0';
+    return strlen(stored);
+}
+
 // ── AP→STA Probe ─────────────────────────────────────────────────
 
 void WiFiService::attempt_ap_sta_probe() {
+    // Встановити ДО mode switch — STA_START handler перевіряє цей прапорець
+    // player-fork: and before scan_busy_ is read, as start_scan() claims scan_busy_ before it
+    // reads this one: a scan that started meanwhile keeps the radio, and the probe waits.
+    ap_sta_probing_ = true;
+    if (scan_busy_) {
+        ap_sta_probing_ = false;
+        return;
+    }
     ap_sta_probe_count_++;
     ESP_LOGI(TAG, "AP→STA probe #%u (interval %lus)",
              ap_sta_probe_count_,
              (unsigned long)(ap_sta_probe_interval_ / 1000));
 
-    // Встановити ДО mode switch — STA_START handler перевіряє цей прапорець
-    ap_sta_probing_ = true;
     ap_sta_probe_timeout_ = AP_STA_PROBE_TIMEOUT_MS;
 
     ensure_sta_netif();
@@ -743,10 +802,8 @@ void WiFiService::attempt_ap_sta_probe() {
 
     // Config + connect ПІСЛЯ mode switch (STA_START не викликає auto-connect)
     wifi_config_t sta_cfg = {};
-    strncpy(reinterpret_cast<char*>(sta_cfg.sta.ssid),
-            ssid_, sizeof(sta_cfg.sta.ssid) - 1);
-    strncpy(reinterpret_cast<char*>(sta_cfg.sta.password),
-            password_, sizeof(sta_cfg.sta.password) - 1);
+    copy_field(sta_cfg.sta.ssid, ssid_);
+    copy_field(sta_cfg.sta.password, password_);
     sta_cfg.sta.scan_method = WIFI_ALL_CHANNEL_SCAN;
     sta_cfg.sta.sort_method = WIFI_CONNECT_AP_BY_SIGNAL;
     esp_wifi_set_config(WIFI_IF_STA, &sta_cfg);

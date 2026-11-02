@@ -5,19 +5,16 @@
   // controls outside the steps; the settings the port sets are Налаштування › Тонке налаштування
   // (TuningPage). The Speakers wizard's «Знайти вручну» comes here.
   //
-  // The amplifier's ceiling had a task of its own here — a multimeter, a search by ear, the
-  // supply's sag — and the customer took it out (18.10.2026): «Максимум» is the one limit a person
-  // sets, and the ceiling stays the datasheet's (audio.amp_clip_db10, −9.8 dBFS), a setting the API
-  // still changes. What a person chose here stays in this tab (sessionStorage): a phone that left
+  // The amplifier's ceiling has no task here: «Максимум» is the one limit a person sets, and the
+  // ceiling stays the datasheet's (audio.amp_clip_db10, −9.8 dBFS), a setting the API still
+  // changes. What a person chose here stays in this tab (sessionStorage): a phone that left
   // the page for its spectrum app comes back to the same step. The tone bar is the shell's: a tone
   // shows on every page.
   import { onDestroy } from 'svelte';
   import { t, fmt, msg } from '../../stores/i18n.js';
   import { state } from '../../stores/state.js';
   import { live } from '../../lib/live.js';
-  import { apiPost } from '../../lib/api.js';
-  import { setStateKey } from '../../stores/state.js';
-  import { createSettingSender } from '../../lib/settings.js';
+  import { createSettingSender, writeNow } from '../../lib/settings.js';
   import { toastError, toastSuccess } from '../../stores/toast.js';
   import { playTone, stopTone, CHAIN } from '../../lib/tone.js';
   import { portWrites, meterOutcome } from '../../lib/speakers.js';
@@ -48,20 +45,20 @@
   $: measuring = !!s['audio.port_meas'];
   $: measCh = s['audio.port_meas_ch'] ?? 1;
   $: measHz = Number(ro('audio.port_meas_hz')) || 0;
-  $: measSays = msg($t, ro('audio.port_meas_status') || '');   // a message of the catalog (U8.5)
-  const portMeas = (on) => act(async () => { setStateKey('audio.port_meas', on); await apiPost('/api/settings', { 'audio.port_meas': on }); });
-  // The meter offers what it found and writes nothing (S6): «Застосувати» writes it, as measured.
+  $: measSays = msg($t, ro('audio.port_meas_status') || '');   // a message of the catalog
+  // the meter and what it found are shown at once, and taken back if the device refuses them
+  const portMeas = (on) => act(() => writeNow({ 'audio.port_meas': on }));
+  // The meter offers what it found and writes nothing: «Застосувати» writes it, as measured.
   $: measFound = meterOutcome(ro('audio.port_meas_status'), measuring) === 'found' && measHz > 0;
   const portApply = () => act(async () => {
     const keys = portWrites(measHz, true);
-    Object.entries(keys).forEach(([k, v]) => setStateKey(k, v));
-    await apiPost('/api/settings', keys);
+    await writeNow(keys);
     toastSuccess(fmt($t['cal.port_is'], { hz: keys['audio.port_hz'] }));
   });
   const measChSend = createSettingSender('audio.port_meas_ch', { debounceMs: 0 });
 
   // The port off and the volume at most 20 % for as long as the tone plays: keys the device never
-  // saves and drops with the tone (S0b), so closing the page mid-search changes nothing.
+  // saves and drops with the tone, so closing the page mid-search changes nothing.
   function portStart() {
     act(() => playTone({ mode: CHAIN, hz: w.hz }, { extra: { 'audio.cal_port_off': true, 'audio.cal_vol_cap': 20 } }));
   }
@@ -69,7 +66,7 @@
     w = { ...w, hz: Math.max(20, Math.min(100, Math.round(hz))) };
     if (s['audio.source'] === 1) act(() => playTone({ mode: CHAIN, hz: w.hz }));
   }
-  // found by hand: written with where it came from, and the speakers are ported (S6)
+  // found by hand: written with where it came from, and the speakers are ported
   const portWrite = () => act(async () => {
     const keys = portWrites(w.hz, false);
     await stopTone({ restore: true, extra: keys });

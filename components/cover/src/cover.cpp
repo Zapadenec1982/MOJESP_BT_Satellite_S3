@@ -20,6 +20,7 @@
 #if CONFIG_COVER_DECODE_TILE
 
 #include "cover_guard.h"
+#include "cover_thumb.h"
 
 #include "driver/jpeg_decode.h"
 #include "driver/ppa.h"
@@ -37,7 +38,7 @@
 // The software fallback, in its own translation unit because stb_image is C.
 extern "C" {
 int            cover_soft_info(const unsigned char* jpg, int len, int* w, int* h);
-unsigned char* cover_soft_decode(const unsigned char* jpg, int len, int* w, int* h);
+unsigned char* cover_soft_decode(const unsigned char* jpg, int len, int* w, int* h, int comp);
 void           cover_soft_free(unsigned char* px);
 const char*    cover_soft_reason(void);
 }
@@ -56,7 +57,7 @@ const char* TAG = "Cover";
 /// w2 x h2 x sizeof(short) coefficient buffer per component all at once (stb_image.h:3337
 /// and :3346) - about 7.5 times the pixel count at 4:2:0, so 2048 a side wants 31 MB and
 /// 2560 49 MB. What the running firmware has free is less than either: about 23 MB in one
-/// block on the bench (05.10.2026). So MAX_SIDE is only the outer cap; the limit that decides
+/// block, measured on the bench. So MAX_SIDE is only the outer cap; the limit that decides
 /// is decode_soft()'s check of stb's own peak against the largest free block at the time
 /// (cover_guard.h). At the bench's figure that refuses progressive 4:2:0 from about 1670 px.
 ///
@@ -69,9 +70,9 @@ constexpr uint32_t MAX_SIDE_HW   = 4096;   ///< the hardware path
 /// Which SOF marker the file carries, which decides whether the hardware engine can have it
 /// at all: the P4's JPEG decoder is baseline only.
 ///
-/// Worth naming rather than inferring. A 2560x2560 cover that never displayed (22.09.2026)
-/// is a completely different problem depending on the answer - baseline means raise the
-/// hardware limit and it works, progressive means no decoder on this chip can do it.
+/// Worth naming rather than inferring. A 2560x2560 cover that never displays is a completely
+/// different problem depending on the answer - baseline means raise the hardware limit and
+/// it works, progressive means no decoder on this chip can do it.
 enum class Sof { Baseline, Progressive, Other };
 /// `frame`, when given, also gets what the header says about stb_image's memory: the
 /// components and their sampling factors.
@@ -172,27 +173,31 @@ uint16_t* alloc_slot() {
                                               MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
 }
 
-/// Brings up the two engines (for every source, the first time any asks) and this source's
-/// two slots. Once: if the JPEG engine cannot be had, asking again at every track would log
-/// the same failure for every track. Called under the DecodeLock.
-bool ensure_ready(Store& g) {
-    if (!s_engines_tried) {
-        s_engines_tried = true;
-        jpeg_decode_engine_cfg_t eng = {};
-        eng.timeout_ms = 1000;
-        if (jpeg_new_decoder_engine(&eng, &s_jpeg) != ESP_OK) {
-            s_jpeg = nullptr;
-            ESP_LOGW(TAG, "no JPEG engine — artwork disabled");
-        } else {
-            ppa_client_config_t pc = {};
-            pc.oper_type = PPA_OPERATION_SRM;
-            pc.max_pending_trans_num = 1;
-            if (ppa_register_client(&pc, &s_ppa) != ESP_OK) {
-                s_ppa = nullptr;
-                ESP_LOGW(TAG, "no PPA client — artwork disabled");
-            }
+/// Brings up the two engines, for every source, the first time anything asks. Once: if the
+/// JPEG engine cannot be had, asking again at every track would log the same failure for every
+/// track. Called under the DecodeLock.
+void ensure_engines() {
+    if (s_engines_tried) return;
+    s_engines_tried = true;
+    jpeg_decode_engine_cfg_t eng = {};
+    eng.timeout_ms = 1000;
+    if (jpeg_new_decoder_engine(&eng, &s_jpeg) != ESP_OK) {
+        s_jpeg = nullptr;
+        ESP_LOGW(TAG, "no JPEG engine — artwork disabled");
+    } else {
+        ppa_client_config_t pc = {};
+        pc.oper_type = PPA_OPERATION_SRM;
+        pc.max_pending_trans_num = 1;
+        if (ppa_register_client(&pc, &s_ppa) != ESP_OK) {
+            s_ppa = nullptr;
+            ESP_LOGW(TAG, "no PPA client — artwork disabled");
         }
     }
+}
+
+/// The engines (ensure_engines) and this source's two slots, once. Called under the DecodeLock.
+bool ensure_ready(Store& g) {
+    ensure_engines();
     if (g.tried) return s_jpeg && s_ppa && g.slot[0] && g.slot[1];
     g.tried = true;
     if (!s_jpeg || !s_ppa) return false;
@@ -257,17 +262,17 @@ int free_slot(Store& g) {
     return g.last_slot == 0 ? 1 : 0;
 }
 
-/// The whole software path: decode with stb_image, then average it down into the tile.
-/// Runs on the decoder's own task, never on the caller's stack - see set_jpeg_soft().
-bool decode_soft(Store& g, const uint8_t* jpg, size_t len, uint32_t expected) {
-    int w = 0, h = 0;
+/// Whether stb_image may be handed this picture: its size, the work its scans would cost and the
+/// memory the decode would hold, all judged from the file before anything is spent. `w`, `h` and
+/// `png` come back for the decode; a refusal is said at WARN.
+bool soft_admit(const uint8_t* jpg, size_t len, int& w, int& h, bool& png) {
     // Ask the size before spending anything on it. The size decides the memory the decode will
     // ask for (see MAX_SIDE); it says nothing about the time, which is the scan count's, below.
     if (!cover_soft_info(jpg, (int)len, &w, &h)) {
         ESP_LOGW(TAG, "not a JPEG at all: %s", soft_reason());
         return false;
     }
-    const bool png = is_png(jpg, len);
+    png = is_png(jpg, len);
     cover_guard::Frame frame;
     const Sof kind = png ? Sof::Other : sof_kind(jpg, len, &frame);
     // What stb will hold at once for this picture. Byte 24 is the PNG header's bit depth.
@@ -276,8 +281,8 @@ bool decode_soft(Store& g, const uint8_t* jpg, size_t len, uint32_t expected) {
     // Split from the test above, and not for tidiness. A JPEG this decoder can read but will
     // not spend memory on is not a broken JPEG: stb never failed, so it recorded no reason,
     // and the single test printed that absent reason through %s. A panel died in vfprintf
-    // walking it on 22.09.2026, on a 488 KB cover embedded in a track on the card. The
-    // message was wrong as well as fatal - it said "not a JPEG at all" about a good one.
+    // walking it, on a 488 KB cover embedded in a track on the card. The message was wrong
+    // as well as fatal - it said "not a JPEG at all" about a good one.
     if (w <= 0 || h <= 0 || w > (int)MAX_SIDE || h > (int)MAX_SIDE) {
         // The kind is the actionable half of this message. Baseline here means the hardware
         // engine refused it for some other reason and the fix is on that side; progressive
@@ -306,16 +311,34 @@ bool decode_soft(Store& g, const uint8_t* jpg, size_t len, uint32_t expected) {
     // And the memory, against what is free now rather than what the chip has. stb asks for
     // its output only after the last scan, so a picture that does not fit used to cost the
     // whole decode - seconds, at the sizes where this bites - and then fail on "outofmem".
-    const size_t largest = heap_caps_get_largest_free_block(MALLOC_CAP_SPIRAM);
-    if (!cover_guard::soft_memory_ok(peak, largest)) {
-        ESP_LOGW(TAG, "a %s at %dx%d: the software decoder would hold about %u KB at once and "
-                      "the largest free PSRAM block is %u KB",
-                 kind_name(kind, png), w, h, (unsigned)(peak >> 10), (unsigned)(largest >> 10));
+    //
+    // Asked by taking the block and giving it straight back: TLSF finds one or refuses in
+    // constant time. heap_caps_get_largest_free_block() answers the same question by walking
+    // every block of the 32 MB pool with interrupts off on this core, 2.6-4.3 ms - longer than
+    // the satellite UART's FIFO lasts at 460800 baud, so a decode during a Bluetooth cover
+    // lost a frame of it (main.cpp took the same call out of its once-a-second report).
+    const uint64_t need = cover_guard::soft_memory_need(peak);
+    void* room = need <= SIZE_MAX
+               ? heap_caps_malloc((size_t)need, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT) : nullptr;
+    if (!room) {
+        ESP_LOGW(TAG, "a %s at %dx%d: the software decoder would hold about %u KB at once, and "
+                      "PSRAM has no free block of %u KB for that and the reserve",
+                 kind_name(kind, png), w, h, (unsigned)(peak >> 10), (unsigned)(need >> 10));
         return false;
     }
-    ESP_LOGI(TAG, "software path: %dx%d, PSRAM free %u, largest %u", w, h,
-             (unsigned)heap_caps_get_free_size(MALLOC_CAP_SPIRAM), (unsigned)largest);
-    uint8_t* rgb = cover_soft_decode(jpg, (int)len, &w, &h);
+    heap_caps_free(room);
+    ESP_LOGI(TAG, "software path: %dx%d, PSRAM free %u", w, h,
+             (unsigned)heap_caps_get_free_size(MALLOC_CAP_SPIRAM));
+    return true;
+}
+
+/// The whole software path: decode with stb_image, then average it down into the tile.
+/// Runs on the decoder's own task, never on the caller's stack - see set_jpeg_soft().
+bool decode_soft(Store& g, const uint8_t* jpg, size_t len, uint32_t expected) {
+    int w = 0, h = 0;
+    bool png = false;
+    if (!soft_admit(jpg, len, w, h, png)) return false;
+    uint8_t* rgb = cover_soft_decode(jpg, (int)len, &w, &h, 3);
     if (!rgb) {
         ESP_LOGW(TAG, "software decode failed: %s", soft_reason());
         return false;
@@ -352,9 +375,9 @@ bool decode_soft(Store& g, const uint8_t* jpg, size_t len, uint32_t expected) {
 ///
 /// A PNG takes 8736 bytes of stack under cover_soft_decode(): the inflate state with both
 /// Huffman tables in it, 4112; the code-length table built under that, 2544; the PNG
-/// reader's palette above both, 1296. A progressive JPEG takes 868. Measured on 05.10.2026
-/// by running the firmware's own cover_soft.c.obj under QEMU on a painted stack, and within
-/// 16 bytes of -fstack-usage. The callers had 6 KB
+/// reader's palette above both, 1296. A progressive JPEG takes 868. Measured by running the
+/// firmware's own cover_soft.c.obj under QEMU on a painted stack, and within 16 bytes of
+/// -fstack-usage. The callers had 6 KB
 /// (Bluetooth, AirPlay), 8 KB (the player) and 12 KB with 2.7 KB of it their own (DLNA), so a
 /// PNG cover through any of them was a stack overflow and a reboot - which the radio's art
 /// task, then 8 KB, met first, on a station's logo.
@@ -365,12 +388,11 @@ bool decode_soft(Store& g, const uint8_t* jpg, size_t len, uint32_t expected) {
 /// decoded exactly as urgently as it was on the caller's own stack.
 constexpr uint32_t SOFT_STACK = 16 * 1024;
 
+/// What the decoder's task is to run: `run(arg)`, a tile's decode or a thumbnail's.
 struct SoftJob {
-    Store*         g;
-    const uint8_t* jpg;
-    size_t         len;
-    uint32_t       expected;
-    bool           ok;
+    bool (*run)(void* arg);
+    void* arg;
+    bool  ok;
 };
 TaskHandle_t soft_task = nullptr;
 SoftJob*     soft_job  = nullptr;   ///< the waiting caller's, valid until soft_done() is given
@@ -384,14 +406,14 @@ SemaphoreHandle_t soft_done() {
 void soft_worker(void*) {
     for (;;) {
         ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
-        soft_job->ok = decode_soft(*soft_job->g, soft_job->jpg, soft_job->len, soft_job->expected);
+        soft_job->ok = soft_job->run(soft_job->arg);
         xSemaphoreGive(soft_done());
     }
 }
 
-/// decode_soft() on the decoder's task. Every caller holds the DecodeLock, so there is one
-/// job at a time and soft_job belongs to it.
-bool set_jpeg_soft(Store& g, const uint8_t* jpg, size_t len, uint32_t expected) {
+/// `run(arg)` on the decoder's task, the caller waiting. Every caller holds the DecodeLock, so
+/// there is one job at a time and soft_job belongs to it.
+bool on_soft_task(bool (*run)(void*), void* arg) {
     const UBaseType_t prio = uxTaskPriorityGet(nullptr);
     if (!soft_task &&
         xTaskCreatePinnedToCoreWithCaps(soft_worker, "cover_soft", SOFT_STACK, nullptr, prio,
@@ -400,7 +422,7 @@ bool set_jpeg_soft(Store& g, const uint8_t* jpg, size_t len, uint32_t expected) 
         return false;
     }
     vTaskPrioritySet(soft_task, prio);
-    SoftJob job{&g, jpg, len, expected, false};
+    SoftJob job{run, arg, false};
     soft_job = &job;
     xTaskNotifyGive(soft_task);
     // A task that blocks on the DecodeLock meanwhile lends the caller its priority, but it is
@@ -409,6 +431,55 @@ bool set_jpeg_soft(Store& g, const uint8_t* jpg, size_t len, uint32_t expected) 
     while (xSemaphoreTake(soft_done(), pdMS_TO_TICKS(10)) != pdTRUE)
         vTaskPrioritySet(soft_task, uxTaskPriorityGet(nullptr));
     return job.ok;
+}
+
+struct TileJob {
+    Store*         g;
+    const uint8_t* jpg;
+    size_t         len;
+    uint32_t       expected;
+};
+
+/// decode_soft() on the decoder's task.
+bool set_jpeg_soft(Store& g, const uint8_t* jpg, size_t len, uint32_t expected) {
+    TileJob t{&g, jpg, len, expected};
+    return on_soft_task([](void* p) {
+        const TileJob& j = *static_cast<TileJob*>(p);
+        return decode_soft(*j.g, j.jpg, j.len, j.expected);
+    }, &t);
+}
+
+struct ThumbJob {
+    const uint8_t* img;
+    size_t         len;
+    uint16_t*      out;
+    int            side;
+};
+
+/// A thumbnail through stb_image, on the decoder's task: the same admission as a tile, and a PNG
+/// keeps its alpha, which cover_thumb puts over the ground.
+bool thumb_soft(const ThumbJob& j) {
+    int w = 0, h = 0;
+    bool png = false;
+    if (!soft_admit(j.img, j.len, w, h, png)) return false;
+    const int comp = png ? 4 : 3;
+    uint8_t* px = cover_soft_decode(j.img, (int)j.len, &w, &h, comp);
+    if (!px) {
+        ESP_LOGW(TAG, "software decode failed: %s", soft_reason());
+        return false;
+    }
+    if (w <= 0 || h <= 0 || w > (int)MAX_SIDE || h > (int)MAX_SIDE) { cover_soft_free(px); return false; }
+    const auto layout = png ? cover_thumb::Layout::RGBA8888 : cover_thumb::Layout::RGB888;
+    const size_t stride = (size_t)w * comp;
+    cover_thumb::render(px, layout, w, h, stride, j.out, j.side,
+                        cover_thumb::ground(px, layout, w, h, stride));
+    cover_soft_free(px);
+    ESP_LOGI(TAG, "logo %dx%d -> %d px (software)", w, h, j.side);
+    return true;
+}
+
+bool set_thumb_soft(ThumbJob& j) {
+    return on_soft_task([](void* p) { return thumb_soft(*static_cast<ThumbJob*>(p)); }, &j);
 }
 
 }  // namespace
@@ -530,6 +601,56 @@ bool cover_set_jpeg(const uint8_t* jpg, size_t len, CoverSource source, uint32_t
     if (!ok && (expected_generation == UINT32_MAX || g.gen.load() == expected_generation))
         ok = set_jpeg_soft(g, jpg, len, expected_generation);
     return ok;
+}
+
+bool cover_thumb(const uint8_t* img, size_t len, uint16_t* out, int side) {
+    if (!img || len < 4 || !out || side <= 0) return false;
+    DecodeLock lock;
+    ThumbJob job{img, len, out, side};
+    if (is_png(img, len)) return set_thumb_soft(job);
+    ensure_engines();
+    jpeg_decode_picture_info_t info = {};
+    uint32_t aw = 0, ah = 0;
+    // Progressive, grayscale or no engine: the software decoder, as for a cover.
+    if (!s_jpeg || jpeg_decoder_get_info(img, (uint32_t)len, &info) != ESP_OK || !jpeg_layout(info, aw, ah))
+        return set_thumb_soft(job);
+    if (!info.width || !info.height || info.width > MAX_SIDE_HW || info.height > MAX_SIDE_HW) {
+        ESP_LOGW(TAG, "logo %lux%lu is out of range (limit %u a side)",
+                 (unsigned long)info.width, (unsigned long)info.height, (unsigned)MAX_SIDE_HW);
+        return false;
+    }
+    // The whole picture decoded at its macroblock-aligned size, then averaged down here: the PPA
+    // scales by sixteen at most, and a logo of a few hundred pixels needs more than that.
+    size_t full_size = 0, in_size = 0;
+    jpeg_decode_memory_alloc_cfg_t mem = {};
+    mem.buffer_direction = JPEG_DEC_ALLOC_OUTPUT_BUFFER;
+    uint8_t* full = (uint8_t*)jpeg_alloc_decoder_mem((size_t)aw * ah * 2, &mem, &full_size);
+    jpeg_decode_memory_alloc_cfg_t in_mem = {};
+    in_mem.buffer_direction = JPEG_DEC_ALLOC_INPUT_BUFFER;
+    uint8_t* in = full ? (uint8_t*)jpeg_alloc_decoder_mem(len, &in_mem, &in_size) : nullptr;
+    if (!full || !in) {
+        free(in);
+        free(full);
+        ESP_LOGW(TAG, "no room to decode a %lux%lu logo", (unsigned long)aw, (unsigned long)ah);
+        return false;
+    }
+    memcpy(in, img, len);
+    jpeg_decode_cfg_t dec = {};
+    dec.output_format = JPEG_DECODE_OUT_FORMAT_RGB565;
+    dec.rgb_order     = JPEG_DEC_RGB_ELEMENT_ORDER_BGR;   // native little-endian RGB565, as for a tile
+    uint32_t out_size = 0;
+    const bool ok = jpeg_decoder_process(s_jpeg, &dec, in, (uint32_t)len, full, full_size, &out_size) == ESP_OK &&
+                    out_size == aw * ah * 2;
+    if (ok) {
+        const size_t stride = (size_t)aw * 2;
+        const int w = (int)info.width, h = (int)info.height;
+        cover_thumb::render(full, cover_thumb::Layout::RGB565, w, h, stride, out, side,
+                            cover_thumb::ground(full, cover_thumb::Layout::RGB565, w, h, stride));
+        ESP_LOGI(TAG, "logo %dx%d -> %d px", w, h, side);
+    }
+    free(in);
+    free(full);
+    return ok || set_thumb_soft(job);
 }
 
 void cover_clear(CoverSource source) {

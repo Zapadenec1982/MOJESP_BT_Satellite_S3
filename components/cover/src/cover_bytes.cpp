@@ -281,6 +281,11 @@ bool cover_set_jpeg(const uint8_t* jpg, size_t len, CoverSource source, uint32_t
     return true;
 }
 
+/// A preset's logo is drawn on the panel's Player only (the web fetches its own from Radio
+/// Browser), and a board without a display has none: no thumbnail, and the radio module does not
+/// keep the presets' logos on such a board (radio_module.cpp).
+bool cover_thumb(const uint8_t*, size_t, uint16_t*, int) { return false; }
+
 void cover_clear(CoverSource source) {
     Store& g = stores[(int)source];
     Blob* old = nullptr;

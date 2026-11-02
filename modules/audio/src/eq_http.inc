@@ -16,25 +16,22 @@
 /// A whole band set is about 800 bytes; room for the envelope and stray whitespace.
 constexpr size_t EQ_HTTP_MAX = 2048;
 
-esp_err_t eq_send(httpd_req_t* req, const char* status, const char* body) {
-    httpd_resp_set_status(req, status);
-    httpd_resp_set_type(req, "application/json");
-    httpd_resp_set_hdr(req, "Cache-Control", "no-store");
-    return httpd_resp_send(req, body, HTTPD_RESP_USE_STRLEN);
-}
+using modesp::http_routes::send_json;
 
 /// GET /api/eq → {"rev","fs","preset","presets","bands"} (eq_web.h)
 esp_err_t eq_get(httpd_req_t* req) {
     if (!modesp::http_routes::authorized(req)) return ESP_OK;
     audio_core::EqStore& st = audio_core::eq_store();
-    if (!st.loaded()) return eq_send(req, "503 Service Unavailable", "{\"error\":\"not_loaded\"}");
+    if (!st.loaded()) return send_json(req, "503 Service Unavailable", "{\"error\":\"not_loaded\"}");
     static audio_core::EqDoc doc;
-    static char json[EQ_HTTP_MAX];
+    static char* json_slot = nullptr;       // PSRAM, kept (http_routes::scratch())
+    char* json = modesp::http_routes::scratch(json_slot, EQ_HTTP_MAX);
+    if (!json) return send_json(req, "503 Service Unavailable", "{\"error\":\"no_memory\"}");
     const uint32_t rev = st.get(doc);
-    if (!audio_core::eq_web_json(doc, rev, audio_core::fs_hz(), json, sizeof(json))) {
-        return eq_send(req, "500 Internal Server Error", "{\"error\":\"too_large\"}");
+    if (!audio_core::eq_web_json(doc, rev, audio_core::fs_hz(), json, EQ_HTTP_MAX)) {
+        return send_json(req, "500 Internal Server Error", "{\"error\":\"too_large\"}");
     }
-    return eq_send(req, "200 OK", json);
+    return send_json(req, "200 OK", json);
 }
 
 /// POST /api/eq ← {"rev",bands} | {"rev",preset} | {"keep":true}  → {"rev":N}, or 409
@@ -42,25 +39,20 @@ esp_err_t eq_get(httpd_req_t* req) {
 esp_err_t eq_post(httpd_req_t* req) {
     if (!modesp::http_routes::authorized(req)) return ESP_OK;
     if (req->content_len <= 0 || (size_t)req->content_len >= EQ_HTTP_MAX) {
-        return eq_send(req, "413 Content Too Large", "{\"error\":\"size\"}");
+        return send_json(req, "413 Content Too Large", "{\"error\":\"size\"}");
     }
-    static char body[EQ_HTTP_MAX];
-    size_t got = 0;
-    int timeouts = 0;
-    while (got < (size_t)req->content_len) {
-        const int r = httpd_req_recv(req, body + got, req->content_len - got);
-        if (r == HTTPD_SOCK_ERR_TIMEOUT && ++timeouts < 3) continue;
-        if (r <= 0) return ESP_FAIL;
-        got += (size_t)r;
-    }
-    body[got] = '\0';
+    static char* body_slot = nullptr;       // PSRAM, kept (http_routes::scratch())
+    char* body = modesp::http_routes::scratch(body_slot, EQ_HTTP_MAX);
+    if (!body) return send_json(req, "503 Service Unavailable", "{\"error\":\"no_memory\"}");
+    if (!modesp::http_routes::read_body(req, body)) return ESP_FAIL;
+    const size_t got = req->content_len;
 
     static audio_core::EqWebEdit edit;
     if (!audio_core::eq_web_parse(body, got, edit)) {
-        return eq_send(req, "400 Bad Request", "{\"error\":\"bad_edit\"}");
+        return send_json(req, "400 Bad Request", "{\"error\":\"bad_edit\"}");
     }
     audio_core::EqStore& st = audio_core::eq_store();
-    if (!st.loaded()) return eq_send(req, "503 Service Unavailable", "{\"error\":\"not_loaded\"}");
+    if (!st.loaded()) return send_json(req, "503 Service Unavailable", "{\"error\":\"not_loaded\"}");
 
     uint32_t rev = 0;
     switch (edit.kind) {
@@ -72,7 +64,7 @@ esp_err_t eq_post(httpd_req_t* req) {
     char reply[64];
     if (!rev) {
         snprintf(reply, sizeof(reply), "{\"error\":\"changed\",\"rev\":%lu}", (unsigned long)st.revision());
-        return eq_send(req, "409 Conflict", reply);
+        return send_json(req, "409 Conflict", reply);
     }
     // a drag sends an edit per step: the write waits for it to stop (own_eq)
     if (edit.kind != audio_core::EqWebEdit::KEEP) {
@@ -80,7 +72,7 @@ esp_err_t eq_post(httpd_req_t* req) {
         if (edit.keep) st.keep();
     }
     snprintf(reply, sizeof(reply), "{\"rev\":%lu}", (unsigned long)rev);
-    return eq_send(req, "200 OK", reply);
+    return send_json(req, "200 OK", reply);
 }
 
 /// Called by HttpService in the window before the static wildcard (modesp/net/http_routes.h).

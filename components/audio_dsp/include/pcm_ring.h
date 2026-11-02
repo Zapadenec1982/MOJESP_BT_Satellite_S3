@@ -163,11 +163,11 @@ public:
     /// Whether the output clock is settled for this listening session and will not move.
     ///
     /// The clock is chosen once, by the first track a source plays, and left alone until the
-    /// source changes — because moving it is what the customer's bench hears as a click at
-    /// every track boundary of a mixed-rate playlist. The mechanism is the DAC's: a PCM5102A
-    /// takes its internal PLL from the bit clock, retuning stops that clock, and the PLL
-    /// unlocking and relocking is an event in the analogue part of the converter. Muting the
-    /// data path around it does not help and was measured not to.
+    /// source changes — because moving it is heard as a click at every track boundary of a
+    /// mixed-rate playlist. The mechanism is the DAC's: a PCM5102A takes its internal PLL from
+    /// the bit clock, retuning stops that clock, and the PLL unlocking and relocking is an
+    /// event in the analogue part of the converter. Muting the data path around it does not
+    /// help and was measured not to.
     ///
     /// A producer that knows the clock is settled can skip the one thing a moving clock
     /// forced on it: draining the previous track's tail before asking for a rate, so that the
@@ -185,10 +185,15 @@ public:
     /// for a playlist. A computer playing over USB is different: it chooses the rate itself,
     /// the panel's clock is what paces it (asynchronous feedback), and it can switch from
     /// 44.1 to 96 kHz between two tracks. Following it costs the clock's relock at the switch
-    /// and keeps every sample as sent — the customer's choice, 24.10.2026.
+    /// and keeps every sample as sent.
     ///
     /// Only the owner can ask, and a new owner's claim drops a request it did not make.
     /// The consumer takes it once (take_new_session) and treats it as a source change does.
+    ///
+    /// The owner asks for the session's rate after this, never before: the release store of
+    /// ask_rate() then carries this request with it, and a consumer that reads the new rate can
+    /// count on finding the request, even one made after its own take_new_session() came back
+    /// empty.
     bool request_new_session(Owner who) {
         if (owner() != who) return false;
         session_req_.store((uint8_t)who, std::memory_order_release);
@@ -221,6 +226,14 @@ public:
     /// producer about to claim the ring from someone else (claim_after_fade below).
     void set_consumer_live(bool on) { live_.store(on, std::memory_order_release); }
     bool consumer_live() const      { return live_.load(std::memory_order_acquire); }
+
+    /// Whether nothing at all is heard, whatever the source: the consumer's output gate is shut
+    /// and the silence behind it has filled the port's TX queue, so the last of what played has
+    /// left the pins — what the amplifier waits for before it goes off. True until the consumer
+    /// first says otherwise. Written by the consumer every block; read by a module about to do
+    /// what a listener would hear, such as a flash write, which stops both cores' caches.
+    void set_output_quiet(bool on) { quiet_.store(on, std::memory_order_release); }
+    bool output_quiet() const      { return quiet_.load(std::memory_order_acquire); }
 
     /// The producer has no more data. The consumer uses it to tell "track finished" from
     /// "decoder is behind", which look identical from an empty ring.
@@ -289,6 +302,7 @@ private:
     std::atomic<uint32_t> prime_{0};
     std::atomic<uint32_t> downstream_{0};
     std::atomic<bool>     live_{false};
+    std::atomic<bool>     quiet_{true};
 };
 
 /// The rest of the rate handshake, for a producer that is already playing.
@@ -298,10 +312,10 @@ private:
 /// only later. It retunes once the old frames have played out and its envelope has closed,
 /// and behind a source change that can outlast any wait a producer can afford. A producer
 /// that never looks again converts for a clock the output is not at, for as long as it plays.
-/// On 05.10.2026 an AirPlay session that started while the panel was booting fed 44.1 kHz
-/// frames converted to 48 into an output that had settled at 44.1: 8 % slow, and the
-/// receiver's timing engine threw away 48 ms every 0.6 s to keep up — a click each time,
-/// until the source was switched away and back.
+/// An AirPlay session that started while the panel was booting fed 44.1 kHz frames converted to
+/// 48 into an output that had settled at 44.1: 8 % slow, and the receiver's timing engine threw
+/// away 48 ms every 0.6 s to keep up — a click each time, until the source was switched away
+/// and back.
 ///
 /// So the wait is only where a producer starts. While it plays it keeps reading out_rate(),
 /// and this says when what it reads means the clock it converts for is wrong: an answer other

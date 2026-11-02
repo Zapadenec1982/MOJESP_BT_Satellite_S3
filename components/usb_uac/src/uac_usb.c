@@ -164,23 +164,40 @@ static const tusb_desc_device_qualifier_t s_desc_qualifier = {
     .bReserved          = 0x00,
 };
 
-/// At full speed the panel offers no audio: a configuration with no interfaces. A full-speed-only
-/// host still enumerates it and simply finds nothing to play to.
-static const uint8_t s_desc_other_speed[] = {
-    9, TUSB_DESC_OTHER_SPEED_CONFIG, U16_TO_U8S_LE(9), 0x00, 0x01, 0x00,
-    TU_BIT(7) | TUSB_DESC_CONFIG_ATT_SELF_POWERED, 50,
+/// At full speed the panel offers no audio: a configuration with no interfaces. The audio function
+/// is built for high speed — a packet every microframe, high-speed feedback — and cannot stream
+/// at full speed; behind a full-speed-only hub the host enumerates the panel and simply finds
+/// nothing to play to.
+static const uint8_t s_desc_config_fs[] = {
+    TUD_CONFIG_DESCRIPTOR(1, 0, 0, TUD_CONFIG_DESC_LEN, TUSB_DESC_CONFIG_ATT_SELF_POWERED, 100),
 };
 
+/// The configuration of the speed not in use, under its own descriptor type (USB 2.0 §9.6.4).
+static uint8_t s_desc_other_speed[UAC_CONFIG_TOTAL_LEN];
+
+uint8_t const* tud_descriptor_device_cb(void) { return (uint8_t const*)&s_desc_device; }
+/// TinyUSB serves GET_DESCRIPTOR(CONFIGURATION) and SET_CONFIGURATION from this at whatever speed
+/// the bus reset settled on.
+uint8_t const* tud_descriptor_configuration_cb(uint8_t index) {
+    (void)index;
+    return tud_speed_get() == TUSB_SPEED_HIGH ? s_desc_config : s_desc_config_fs;
+}
 uint8_t const* tud_descriptor_device_qualifier_cb(void) { return (uint8_t const*)&s_desc_qualifier; }
 uint8_t const* tud_descriptor_other_speed_configuration_cb(uint8_t index) {
     (void)index;
+    const bool hs = tud_speed_get() == TUSB_SPEED_HIGH;
+    memcpy(s_desc_other_speed, hs ? s_desc_config_fs : s_desc_config,
+           hs ? sizeof(s_desc_config_fs) : sizeof(s_desc_config));
+    s_desc_other_speed[1] = TUSB_DESC_OTHER_SPEED_CONFIG;
     return s_desc_other_speed;
 }
-#endif  // TUD_OPT_HIGH_SPEED: a full-speed-only device STALLs DEVICE_QUALIFIER (TinyUSB's weak
-        // callbacks return NULL), which is what the USB 2.0 spec asks of it.
-
+#else
+/// Full speed only (the S3): the audio function is built for full speed, so there is one
+/// configuration and no other speed. DEVICE_QUALIFIER STALLs (TinyUSB's weak callbacks return
+/// NULL), which is what the USB 2.0 spec asks of a full-speed-only device.
 uint8_t const* tud_descriptor_device_cb(void) { return (uint8_t const*)&s_desc_device; }
 uint8_t const* tud_descriptor_configuration_cb(uint8_t index) { (void)index; return s_desc_config; }
+#endif
 
 // ── Strings ─────────────────────────────────────────────────────────────────────────────────────
 
@@ -236,8 +253,12 @@ static uint32_t s_prev_fn;
 static int64_t  s_prev_us;
 static bool     s_prev_valid;
 
-void tud_mount_cb(void)   { g_uac.mounted = 1; g_uac.suspended = 0; }
-void tud_umount_cb(void)  { g_uac.mounted = 0; g_uac.alt = 0; g_uac.stream_gen++; }
+/// A configured panel starts with every interface at alternate setting 0, TinyUSB's own state
+/// included. Reset here because nothing else does after a bus reset — a cable moved to another
+/// computer, a reset-resume: TinyUSB calls back nothing for it, and with VBUS tied (below) no
+/// unplug ever comes. Kept, the old setting played a stream that was not there.
+void tud_mount_cb(void)   { g_uac.suspended = 0; g_uac.alt = 0; g_uac.stream_gen++; }
+void tud_umount_cb(void)  { g_uac.alt = 0; g_uac.stream_gen++; }
 /// Also what pulling the cable looks like on this board: VBUS stays up through the other port
 /// (docs/CONCEPT.md, "Tied VBUS"), so the controller never sees a disconnect — only the bus
 /// going quiet.
@@ -504,6 +525,7 @@ bool uac_usb_init(void) {
 
 void uac_usb_task(void) { tud_task(); }
 
+bool uac_usb_mounted(void) { return tud_mounted(); }
 int  uac_usb_rhport(void) { return TUD_OPT_RHPORT; }
 bool uac_usb_high_speed(void) { return TUD_OPT_HIGH_SPEED != 0; }
 

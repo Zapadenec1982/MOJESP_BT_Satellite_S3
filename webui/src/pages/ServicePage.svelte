@@ -66,7 +66,7 @@
   $: seen = !!d['bt.sat'];
   $: phone = d['bt.state'] === 'connected' || d['bt.state'] === 'streaming';
 
-  // ── calibration in one line: the speakers' port (the amplifier's ceiling left it, 18.10.2026) ──
+  // ── calibration in one line: the speakers' port ──
   $: portLine = s['audio.port_hz'] ? fmt($t['cal.port_is'], { hz: s['audio.port_hz'] }) : $t['cal.port_none'];
   $: tail = longTail($pages);
   $: tailCount = tail.reduce((a, p) => a + p.cards.reduce((b, c) => b + c.widgets.length, 0), 0);
@@ -128,7 +128,7 @@
       <Reading label={$t['svc.largest']} value={bytes('system.heap_largest')} />
       <Reading label="PSRAM" value={bytes('system.heap_psram')} />
       <Reading label={$t['svc.free']} value={bytes('system.heap_free')} />
-      <Reading label={$t['svc.min']} value={bytes('system.heap_min')} />
+      <Reading label={$t['svc.internal_min']} value={bytes('system.heap_internal_min')} grade={svc.internalFree(n('system.heap_internal_min'))} />
     </Group>
 
     <Group caps caption={$t['svc.sat']}>

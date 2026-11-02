@@ -59,6 +59,11 @@ public:
     /// player-fork: a saved network exists (the AP fallback may be up regardless).
     bool has_credentials() const { return ssid_[0] != '\0'; }
 
+    /// player-fork: the access point's password (NVS wifi/ap_pass) as start_ap() uses it. WPA2
+    /// takes 8..63 bytes, so `out` gets at most 63, and fewer than 8 mean an open access point.
+    /// Returns the length stored: more than 63 means `out` holds the first 63 of it.
+    static size_t read_ap_password(char (&out)[64]);
+
     // Scan
     static constexpr size_t MAX_SCAN_RESULTS = 20;
     struct ScanResult {
@@ -78,7 +83,7 @@ private:
     // WAIT_START ignores the disconnect our own teardown produces (reason 8, leaving): it is
     // queued before STA_START, so it is not the new network refusing anything.
     enum class TryPhase : uint8_t { IDLE, WAIT_START, CONNECTING };
-    bool     trying_ = false;
+    std::atomic<bool>     trying_{false};        ///< player-fork: atomic, start_scan() reads it
     std::atomic<TryPhase> try_phase_{TryPhase::IDLE};
     std::atomic<bool>     try_refused_{false};   ///< set on the event task, read on the loop
     std::atomic<int32_t>  last_reason_{0};
@@ -105,9 +110,12 @@ private:
     // Scan state
     bool scan_done_ = false;
     bool restore_ap_after_scan_ = false;  // AP mode restore deferred until results read
+    /// player-fork: a scan holds the radio, from start_scan() until get_scan_results() has put
+    /// it back. Scans run on the glass's task and on the server's; see start_scan().
+    std::atomic<bool> scan_busy_{false};
 
     // Deferred reconnect (give HTTP response time to reach client)
-    bool deferred_reconnect_ = false;
+    std::atomic<bool> deferred_reconnect_{false};   // player-fork: atomic, start_scan() reads it
     uint32_t deferred_reconnect_timer_ = 0;
     static constexpr uint32_t DEFERRED_RECONNECT_DELAY_MS = 1500;
 
@@ -130,7 +138,7 @@ private:
     static constexpr uint32_t WIFI_STABLE_RESET_MS = 3600000;    // 1 hour
 
     // AP→STA periodic probe: спроби STA підключення з AP mode
-    bool     ap_sta_probing_        = false;
+    std::atomic<bool> ap_sta_probing_{false};    // player-fork: atomic, start_scan() reads it
     uint32_t ap_sta_probe_timer_    = 0;
     uint32_t ap_sta_probe_interval_ = 30000;
     uint32_t ap_sta_probe_timeout_  = 0;
@@ -138,7 +146,7 @@ private:
     static constexpr uint32_t AP_STA_PROBE_INITIAL_MS  = 30000;   // 30s
     static constexpr uint32_t AP_STA_PROBE_MAX_MS      = 300000;  // 5 min
     static constexpr uint32_t AP_STA_PROBE_TIMEOUT_MS  = 15000;   // 15s
-    static constexpr uint32_t AP_STA_PROBE_HEAP_MIN    = 51200;   // 50KB
+    static constexpr uint32_t AP_STA_PROBE_HEAP_MIN    = 51200;   // 50KB of internal heap
 
     bool load_credentials();
     bool start_sta();

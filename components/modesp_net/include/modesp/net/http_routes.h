@@ -19,6 +19,7 @@
 
 #pragma once
 
+#include "esp_heap_caps.h"
 #include "esp_http_server.h"
 #include <cstddef>
 
@@ -37,9 +38,9 @@ using Registrar = void (*)(httpd_handle_t server, void* ctx);
 /// GET path there is, so with it registered, EVERY later GET registration is refused with
 /// "already registered" — not shadowed, refused.
 ///
-/// Measured on the panel, 18.09.2026: four of those warnings in a row, then a load access
-/// fault inside the library that had just had its routes turned down. So a subsystem coming
-/// up late takes the wildcard down first, registers, and puts it back.
+/// Measured on the panel: four of those warnings in a row, then a load access fault inside
+/// the library that had just had its routes turned down. So a subsystem coming up late
+/// takes the wildcard down first, registers, and puts it back.
 using WildcardCtl = void (*)(void* self, bool on);
 
 inline WildcardCtl& wildcard_fn() { static WildcardCtl f = nullptr; return f; }
@@ -53,6 +54,11 @@ inline void set_wildcard_ctl(WildcardCtl fn, void* ctx) {
 
 /// false takes the catch-all off the server, true puts it back on the end. Does nothing
 /// when nothing set it — then there is no catch-all in the way either.
+///
+/// Between the two the server answers nothing: its task is held still, between two requests,
+/// because httpd changes its handler table with no lock against its own lookups (see
+/// HttpService::unregister_static_handler()). Keep the window to the registrations, and call it
+/// from a task of your own — from a route handler, false would wait for itself.
 inline void wildcard(bool on) { if (wildcard_fn()) wildcard_fn()(wildcard_ctx(), on); }
 
 /// The server's login check, for routes that live outside HttpService. main.cpp sets it with
@@ -74,11 +80,75 @@ inline bool authorized(httpd_req_t* req) {
     return false;
 }
 
-/// Room for eight. Four was meant as a smell threshold — a fifth subsystem wanting routes
-/// would mean the seam needed revisiting — and it was revisited when the player reached it
-/// (11.10.2026): DLNA, the station list, the screenshot, the EQ, Bluetooth and the user's
-/// files each own their routes, which is the seam doing its job, not a fault in it. Each slot
-/// is two pointers; add() still says no when the table is full, and the caller logs it.
+/// The request's whole body, req->content_len bytes, into `buf`, NUL-terminated — room for both
+/// is the caller's to check. The server's own policy for a body: a receive timeout is retried
+/// while bytes keep coming, and three in a row (recv_wait_timeout each) end the request, since a
+/// client that vanished without a FIN would otherwise hold the server's only task. A failure is
+/// answered 408 for the timeouts or 400 for a broken connection, unless `reply` is false — for a
+/// route with an error format of its own, such as a SOAP fault. False on failure either way.
+inline bool read_body(httpd_req_t* req, char* buf, bool reply = true) {
+    size_t got = 0;
+    int timeouts = 0;
+    while (got < req->content_len) {
+        const int r = httpd_req_recv(req, buf + got, req->content_len - got);
+        if (r <= 0) {
+            if (r == HTTPD_SOCK_ERR_TIMEOUT && ++timeouts < 3) continue;
+            if (reply) {
+                httpd_resp_send_err(req, r == HTTPD_SOCK_ERR_TIMEOUT ? HTTPD_408_REQ_TIMEOUT
+                                                                     : HTTPD_400_BAD_REQUEST,
+                                    "Receive error");
+            }
+            return false;
+        }
+        timeouts = 0;
+        got += (size_t)r;
+    }
+    buf[got] = '\0';
+    return true;
+}
+
+/// read_body() into a fixed buffer of `size` bytes. An empty body is refused with 400 and one that
+/// does not fit with its NUL with 413, both before a byte of it is read. Returns the body's length,
+/// or -1 when the request has been answered already.
+inline int read_small_body(httpd_req_t* req, char* buf, size_t size) {
+    if (req->content_len == 0) {
+        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Empty body");
+        return -1;
+    }
+    if (req->content_len >= size) {
+        httpd_resp_send_err(req, HTTPD_413_CONTENT_TOO_LARGE, "Body too large");
+        return -1;
+    }
+    if (!read_body(req, buf)) return -1;
+    return static_cast<int>(req->content_len);
+}
+
+/// A route's own buffer: `size` bytes from PSRAM, allocated on its first request and kept in
+/// `slot`. The server has one task and runs one handler at a time, so a route needs one buffer,
+/// and the internal RAM that DMA and the Wi-Fi link live on (docs/CONCEPT.md, "Board
+/// constraints") does not pay for it as a static would. Null when there is no memory: answer 503.
+inline char* scratch(char*& slot, size_t size) {
+    if (!slot) {
+        slot = static_cast<char*>(heap_caps_malloc_prefer(size, 2, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT,
+                                                          MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT));
+    }
+    return slot;
+}
+
+/// A JSON answer: `status` as httpd takes it ("200 OK"), the body a NUL-terminated string. Never
+/// cached — what a route answers is the state of the moment.
+inline esp_err_t send_json(httpd_req_t* req, const char* status, const char* body) {
+    httpd_resp_set_status(req, status);
+    httpd_resp_set_type(req, "application/json");
+    httpd_resp_set_hdr(req, "Cache-Control", "no-store");
+    return httpd_resp_send(req, body, HTTPD_RESP_USE_STRLEN);
+}
+
+/// Room for eight. Four would be a smell threshold — a fifth subsystem wanting routes would
+/// mean the seam needs revisiting — but in the player DLNA, the station list, the
+/// screenshot, the EQ, Bluetooth and the user's files each own their routes, which is the
+/// seam doing its job, not a fault in it. Each slot is two pointers; add() still says no
+/// when the table is full, and the caller logs it.
 inline constexpr size_t MAX_REGISTRARS = 8;
 
 struct Entry { Registrar fn; void* ctx; };

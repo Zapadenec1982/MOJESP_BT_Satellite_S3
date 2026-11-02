@@ -5,9 +5,9 @@
   // goes back whole, with the generation it was made from (lib/stations.js), and the page
   // reloads when radio.list_rev says the list moved — by its own hand or the panel's.
   import { onMount, onDestroy } from 'svelte';
-  import { state, setStateKey } from '../../stores/state.js';
+  import { state } from '../../stores/state.js';
   import { t, fmt, plural, language, K } from '../../stores/i18n.js';
-  import { apiPost } from '../../lib/api.js';
+  import { writeNow } from '../../lib/settings.js';
   import { toastError, toastSuccess, toastWarn } from '../../stores/toast.js';
   import * as S from '../../lib/stations.js';
   import Group from '../../m3/Group.svelte';
@@ -46,8 +46,14 @@
   onMount(reload);
 
   // radio.list_rev is the store's generation: when it is not the one we hold, the list moved.
+  // Read once for each generation the state names: reload() replaces `list`, which runs this
+  // again, and with the state's generation stuck (no WebSocket) it would read the list for ever.
   $: rev = $state['radio.list_rev'];
-  $: if (list && rev !== undefined && rev !== list.rev && !saving) reload();
+  let readFor;
+  $: if (list && rev !== undefined && rev !== list.rev && rev !== readFor && !saving) {
+    readFor = rev;
+    reload();
+  }
   $: if (waitRev !== null && rev !== undefined && rev !== waitRev) settle();
   onDestroy(() => clearTimeout(waitTimer));
 
@@ -102,9 +108,8 @@
     const body = i === s['radio.station'] && radioOn
       ? { 'audio.source': 5, 'radio.cmd': 1 }
       : { 'audio.source': 5, 'radio.station': i };
-    setStateKey('audio.source', 5);
     try {
-      await apiPost('/api/settings', body);
+      await writeNow(body);           // shown at once, taken back if the device refuses it
     } catch (e) {
       toastError(e.message);
     }
@@ -122,8 +127,8 @@
 
   // Reactive, not a plain function: the template calls subtitle(st, i), and Svelte re-runs that
   // call only when something in the call itself changes. $t is read inside, so a plain function
-  // kept the bundled Ukrainian text after the English catalog arrived (customer, 25.10.2026:
-  // «кнопка 1» on the English Stations page).
+  // kept the bundled Ukrainian text after the English catalog arrived («кнопка 1» on the English
+  // Stations page).
   $: subtitle = (st, i) => {
     const p = presetOf(i);
     return p >= 0 ? `${S.host(st.url)} · ${fmt($t['st.preset_n'], { n: p + 1 })}` : S.host(st.url);

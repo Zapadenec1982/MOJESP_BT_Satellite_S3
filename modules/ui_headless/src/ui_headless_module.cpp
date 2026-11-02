@@ -5,7 +5,7 @@
  * Everything here is what modules/ui_lvgl does on the main loop, without the screen: the
  * encoder (ui_lvgl_module.cpp, poll_inputs; ui_shell.cpp, ui_shell_encoder), the Player's
  * play/pause (screen_now.cpp, transport; ui_lvgl_module.cpp, apply_requests: TRANSPORT,
- * RADIO_CMD, PLAY_QUEUE) and the Player's picture for the web (mirror_state). Where the panel
+ * PLAY_QUEUE) and the Player's picture for the web (mirror_state). Where the panel
  * goes through its request ring to reach the main loop, this already runs on it and writes
  * SharedState directly.
  */
@@ -18,6 +18,7 @@
 #include "modesp/types.h"
 #include "cover.h"
 #include "playlist.h"
+#include "state_enums.h"   // audio.source values, generated from the manifests
 
 #include "esp_log.h"
 
@@ -122,58 +123,28 @@ void UiHeadlessModule::poll_encoder(uint32_t dt_ms) {
     }
 }
 
-/// The Player's play button, in the source's own language (screen_now.cpp, transport(); the
-/// codes are ui_lvgl's apply_requests TRANSPORT / RADIO_CMD / PLAY_QUEUE).
+/// The Player's play button (screen_now.cpp, transport()): audio.transport's toggle, which the
+/// audio module takes to whatever plays, in that module's codes, and drops where the source takes
+/// none — the tone, AUX, USB, a phone not connected, an AirPlay sender with no remote
+/// (transport_route.h). A station has no pause: the toggle starts and stops it.
 void UiHeadlessModule::play_pause() {
-    const int32_t source = read_int("audio.source", 0);
-    char mode[12] = "";
-    read_string("radio.mode", mode, sizeof(mode));
-    const bool network_push = source == 5 && strcmp(mode, "push") == 0;
-    const bool is_radio = source == 5 && !network_push;
-    const bool has_track = source == 4 || network_push || source == 3 || source == 6;
-    if (!is_radio && !has_track) return;             // the tone, AUX, USB, off: nothing to command
-
-    if (source == 3) {
-        // Nobody to command without a phone.
-        char bt[16] = "";
-        read_string("bt.state", bt, sizeof(bt));
-        if (strcmp(bt, "connected") != 0 && strcmp(bt, "streaming") != 0) return;
-        post_command_to("bt", "bt.cmd", (int32_t)6);  // bt.cmd speaks player.cmd's codes
-        return;
-    }
-    if (source == 6) {
-        // An AirPlay sender that gave no remote (AirPlay 2 mode) gets nothing — and the press must
-        // not fall through to the card player either, which would take the output from the phone.
-        if (read_bool("airplay.remote", false)) post_command_to("airplay", "airplay.cmd", (int32_t)6);
-        return;
-    }
-    if (is_radio) {
-        char st[16] = "";
-        read_string("radio.state", st, sizeof(st));
-        post_command_to("radio", "radio.cmd", (int32_t)(strcmp(st, "playing") == 0 ? 2 : 1));
-        return;
-    }
-    if (network_push) {
-        char st[24] = "";
-        read_string("dlna.state", st, sizeof(st));
-        post_command_to("dlna", "dlna.cmd", (int32_t)(strcmp(st, "PLAYING") == 0 ? 3 : 1));
-        return;
-    }
-    // The card. The toggle only pauses and resumes a track that is open, so from idle it would do
-    // nothing: start the track the cursor is on.
-    char st[12] = "";
-    read_string("player.state", st, sizeof(st));
-    if (strcmp(st, "playing") != 0 && strcmp(st, "paused") != 0) {
-        char full[MODESP_MAX_LONG_STRING_LENGTH];
-        const auto& q = player_core::playlist();
-        if (q.count() > 0 && q.path_at(q.cursor(), full, sizeof(full))) {
-            state_set("player.track", full);
-            post_command_to("player", "player.cmd", (int32_t)1);
-            ESP_LOGI(TAG, "play %d: %s", q.cursor(), full);
+    if (read_int("audio.source", 0) == modesp::gen::AUDIO_SOURCE_FILE) {
+        // The card with nothing open: the toggle only pauses and resumes a track that is open,
+        // so from idle it would do nothing. Start the track the cursor is on.
+        char st[12] = "";
+        read_string("player.state", st, sizeof(st));
+        if (strcmp(st, "playing") != 0 && strcmp(st, "paused") != 0) {
+            char full[MODESP_MAX_LONG_STRING_LENGTH];
+            const auto& q = player_core::playlist();
+            if (q.count() > 0 && q.path_at(q.cursor(), full, sizeof(full))) {
+                state_set("player.track", full);
+                post_command_to("player", "player.cmd", (int32_t)1);
+                ESP_LOGI(TAG, "play %d: %s", q.cursor(), full);
+            }
+            return;
         }
-        return;
     }
-    post_command_to("player", "player.cmd", (int32_t)6);
+    post_command_to("audio", "audio.transport", (int32_t)6);
 }
 
 /// The Player's picture, by the panel's rule (cover_now): ui.cover moves with every new one and

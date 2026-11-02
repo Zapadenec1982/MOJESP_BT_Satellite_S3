@@ -67,6 +67,9 @@ public:
 
     /// Take the wildcard off the server. Nothing else can register a GET path while it is
     /// on, because httpd's duplicate check runs through the same wildcard match function.
+    /// player-fork: it also holds the server's task still, between two requests, until
+    /// register_static_handler() puts the wildcard back — httpd changes its handler table with
+    /// no lock against its own lookups. So never from a route handler: it would wait for itself.
     void unregister_static_handler();
 
 private:
@@ -118,14 +121,13 @@ private:
     static esp_err_t handle_get_log_summary(httpd_req_t* req);
     static esp_err_t handle_get_auth(httpd_req_t* req);
     static esp_err_t handle_post_auth(httpd_req_t* req);
-    // Runtime log verbosity (plan item 11.4). The panel ships at WARN; this is how it is
+    // Runtime log verbosity. The panel ships at WARN; this is how it is
     // made to talk without reflashing it. Not persisted - see modesp/log_policy.h.
     static esp_err_t handle_get_loglevel(httpd_req_t* req);
     static esp_err_t handle_post_loglevel(httpd_req_t* req);
     static esp_err_t handle_static(httpd_req_t* req);
 
     // CORS
-    static esp_err_t handle_options(httpd_req_t* req);
     static void set_cors_headers(httpd_req_t* req);
 };
 

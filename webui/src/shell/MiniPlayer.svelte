@@ -1,6 +1,7 @@
 <script>
   // What is playing, small, over the navigation: the source's glyph, the title and the line
-  // under it, and play/pause. A tap on the text opens the Player.
+  // under it, and play/pause. A tap on the text opens the Player. A station does not pause: its
+  // button starts and stops the stream, as the knob's press does on the glass.
   import { now, subLine } from '../stores/now.js';
   import { t, language } from '../stores/i18n.js';
   import { href } from '../stores/router.js';
@@ -11,8 +12,9 @@
   $: np = $now;
   $: title = np.title ?? $t[np.titleKey];
   $: sub = subLine(np, $t, $language);
-  $: toggleIcon = np.playing ? (np.stopIcon ? 'stop' : 'pause') : 'play_arrow';
-  $: toggleLabel = !np.playing ? $t['transport.play'] : np.stopIcon ? $t['transport.stop'] : $t['transport.pause'];
+  $: stops = np.kind === 'radio';
+  $: icon = np.playing ? (stops ? 'stop' : 'pause') : 'play_arrow';
+  $: label = !np.playing ? $t['transport.play'] : stops ? $t['transport.stop'] : $t['transport.pause'];
 </script>
 
 <div class="mini">
@@ -24,7 +26,7 @@
     </span>
   </a>
   {#if np.toggle && np.live}
-    <IconButton icon={toggleIcon} label={toggleLabel} on:click={() => command(np.toggle.key, np.toggle.value)} />
+    <IconButton {icon} {label} on:click={() => command(np.toggle.key, np.toggle.value)} />
   {/if}
 </div>
 

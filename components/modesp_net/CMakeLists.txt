@@ -7,7 +7,8 @@ if(CONFIG_MODESP_NET_ENABLE)
          "src/wifi_service.cpp"
          "src/mdns_guard.cpp"
          "src/http_service.cpp"
-         "src/ws_service.cpp")
+         "src/ws_service.cpp"
+         "src/state_json.cpp")
 endif()
 
 set(net_reqs modesp_core modesp_services modesp_hal
@@ -23,7 +24,7 @@ idf_component_register(
     SRCS ${net_srcs}
     INCLUDE_DIRS "include"
     REQUIRES ${net_reqs}
-    PRIV_REQUIRES jsmn mbedtls safe_file user_store esp_timer
+    PRIV_REQUIRES jsmn jsmn_util mbedtls safe_file user_store esp_timer
 )
 
 # Доступ до згенерованих headers (state_meta.h для валідації POST /api/settings)

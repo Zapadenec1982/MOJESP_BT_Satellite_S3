@@ -12,8 +12,8 @@
  *
  * The encoder with no screen to interpret it:
  *   - turn  — volume, 2 % a detent (a turn also ends a mute: wanting sound at that level);
- *   - press — play/pause of whatever is playing, in that source's own commands, as the panel's
- *             Player button sends them;
+ *   - press — play/pause of whatever is playing (audio.transport, as the panel's Player button
+ *             sends it; a station starts and stops);
  *   - hold  — mute on/off (650 ms, fired while still held, as the panel's hold).
  *
  * One of ui_lvgl and ui_headless is in a build, never both: project.json's board overlay

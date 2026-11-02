@@ -1,6 +1,6 @@
 import { derived } from 'svelte/store';
 import { state } from './state.js';
-import { K } from './i18n.js';
+import { K, fmt } from './i18n.js';
 import { badge } from '../lib/numbers.js';
 
 /*
@@ -13,6 +13,8 @@ import { badge } from '../lib/numbers.js';
  *   nameKey     catalog key of the source's name
  *   title, subtitle         text from the device, or null
  *   titleKey, subtitleKey   catalog key to show when the text is null
+ *   subtitleArgs            what the subtitle key's {placeholders} take, or absent: the name the
+ *                           phone or the computer lists the panel by
  *   format      the codec badge ("44.1 kHz 128 kbps", "LHDC V5 96.0 kHz"), or ''
  *   fromKey     catalog key of the line over the cover — the source's name, as the glass prints it
  *               («Bluetooth»; it said «Грає з Bluetooth» with nothing playing) — or null where the
@@ -22,17 +24,19 @@ import { badge } from '../lib/numbers.js';
  *   live        the transport has someone to command (Bluetooth needs a phone; AirPlay needs
  *               the sender's DACP remote, which AirPlay 2 senders do not give)
  *   toggle, prev, next      { key, value } commands, null where the source has none
- *   stopIcon    radio stops rather than pauses
- *   progress    'track' (pos/dur), 'buffer' (radio), or null
+ *   progress    'track' (pos/dur), or null
  *   pos, dur    seconds; dur 0 = unknown
  *   seekKey     where to write a position, or null where seeking does not exist
- *   buffer      0..100, the radio's stream buffer
  *   repeat, shuffle   the card's queue modes (null elsewhere)
  */
 
 const join = (...parts) => parts.filter((p) => p).join(' — ');
 const base = (path) => (path ? String(path).split('/').pop().replace(/\.[^.]+$/, '') : '');
 const cmd = (key, value) => ({ key, value });
+// audio.transport in player.cmd's codes, whatever plays: the panel takes it to the source's own
+// module (transport_route.h), as it does the glass's buttons.
+const transport = (code) => cmd('audio.transport', code);
+const TOGGLE = transport(6), PREV = transport(5), NEXT = transport(4);
 // the panel drops " 2 ch" from the format chip (screen_now.cpp:297-307)
 const compact = (f) => (f ? String(f).replace(' 2 ch', '') : '');
 
@@ -49,7 +53,7 @@ function face(s) {
       subtitle: join(s['player.artist'], s['player.album']) || (count ? `${(s['player.index'] || 0) + 1} / ${count}` : ''),
       format: compact(s['player.format']),
       playing, live: true,
-      toggle: cmd('player.cmd', 6), prev: cmd('player.cmd', 5), next: cmd('player.cmd', 4),
+      toggle: TOGGLE, prev: PREV, next: NEXT,
       progress: 'track', pos: s['player.pos_s'] || 0, dur: s['player.dur_s'] || 0, seekKey: 'player.seek_s',
       repeat: s['player.repeat'] || 0, shuffle: !!s['player.shuffle'],
     };
@@ -65,7 +69,7 @@ function face(s) {
       subtitle: join(s['dlna.artist'], s['dlna.album']),
       format: compact(s['radio.format']),
       playing, live: true,
-      toggle: cmd('dlna.cmd', playing ? 3 : 1), prev: cmd('dlna.cmd', 5), next: cmd('dlna.cmd', 4),
+      toggle: TOGGLE, prev: PREV, next: NEXT,
       progress: 'track', pos: s['radio.pos_s'] || 0, dur: s['radio.dur_s'] || 0,
       seekKey: s['radio.seekable'] ? 'radio.seek_s' : null,
       repeat: null, shuffle: null,
@@ -73,8 +77,11 @@ function face(s) {
   }
 
   if (src === 5) {
+    // The station face: who plays — the station — and under it what, the ICY title once it
+    // plays, the state in words until then. No progress; ‹ › are prev and next. A station does
+    // not pause: its toggle starts and stops the stream (the mini-player's button, the knob's
+    // press on the glass).
     const sounding = ['playing', 'buffering', 'connecting', 'reconnecting'].includes(radioState);
-    const np = s['radio.now_playing'];
     const name = s['radio.name'];
     const stateKey = {
       connecting: K('now.connecting'),
@@ -83,12 +90,12 @@ function face(s) {
     }[radioState] || (radioState === 'playing' ? null : K('now.stopped'));
     return {
       kind: 'radio', source: 5, icon: 'radio', nameKey: K('src.radio'), fromKey: K('src.radio'), device: '',
-      title: np || name || null, titleKey: np || name ? null : K('src.radio'),
-      subtitle: np ? name || null : null, subtitleKey: np ? null : stateKey,
+      title: name || null, titleKey: name ? null : K('src.radio'),
+      subtitle: radioState === 'playing' ? s['radio.now_playing'] || null : null, subtitleKey: stateKey,
       format: compact(s['radio.format']),
-      playing: sounding, live: true, stopIcon: true,
-      toggle: cmd('radio.cmd', radioState === 'idle' ? 1 : 2), prev: cmd('radio.cmd', 4), next: cmd('radio.cmd', 3),
-      progress: 'buffer', buffer: s['radio.buffer'] || 0, pos: 0, dur: 0, seekKey: null,
+      playing: sounding, live: true,
+      toggle: TOGGLE, prev: PREV, next: NEXT,
+      progress: null, pos: 0, dur: 0, seekKey: null,
       repeat: null, shuffle: null,
     };
   }
@@ -103,7 +110,7 @@ function face(s) {
       subtitle: join(s['bt.artist'], s['bt.album']) || null, subtitleKey: null,
       format: s['bt.codec'] ? s['bt.codec'] + rate : '',
       playing: s['bt.play_state'] === 'playing', live: phone,
-      toggle: cmd('bt.cmd', 6), prev: cmd('bt.cmd', 5), next: cmd('bt.cmd', 4),
+      toggle: TOGGLE, prev: PREV, next: NEXT,
       progress: 'track', pos: s['bt.pos_s'] || 0, dur: s['bt.dur_s'] || 0, seekKey: null,
       repeat: null, shuffle: null,
     };
@@ -115,9 +122,10 @@ function face(s) {
       kind: 'airplay', source: 6, icon: 'airplay', nameKey: K('src.airplay'), fromKey: K('src.airplay'), device: '',
       title: s['airplay.title'] || (active ? 'AirPlay' : null), titleKey: s['airplay.title'] || active ? null : K('now.airplay_waiting'),
       subtitle: join(s['airplay.artist'], s['airplay.album']) || null, subtitleKey: active ? null : K('now.airplay_pick'),
+      subtitleArgs: { name: s['airplay.name'] || '…' },
       format: 'AirPlay',
       playing: s['airplay.state'] === 'playing', live: !!s['airplay.remote'],
-      toggle: cmd('airplay.cmd', 6), prev: cmd('airplay.cmd', 5), next: cmd('airplay.cmd', 4),
+      toggle: TOGGLE, prev: PREV, next: NEXT,
       progress: 'track', pos: s['airplay.pos_s'] || 0, dur: s['airplay.dur_s'] || 0, seekKey: null,
       repeat: null, shuffle: null,
     };
@@ -139,10 +147,11 @@ function face(s) {
     const st = s['usb_audio.state'];
     const streaming = st === 'playing';
     const rate = s['usb_audio.rate'];
-    const fmt = streaming && rate ? `${(rate / 1000).toFixed(1)} kHz ${s['usb_audio.bits'] || ''} bit` : '';
+    const line = streaming && rate ? `${(rate / 1000).toFixed(1)} kHz ${s['usb_audio.bits'] || ''} bit` : '';
     return { ...still, kind: 'usb', source: 7, icon: 'usb', nameKey: K('src.usb'), fromKey: K('src.usb'),
              title: null, titleKey: streaming || st === 'ready' ? K('now.usb') : K('now.usb_waiting'),
-             subtitle: fmt || null, subtitleKey: fmt ? null : K('now.usb_pick'), playing: streaming };
+             subtitle: line || null, subtitleKey: line ? null : K('now.usb_pick'),
+             subtitleArgs: { name: s['usb_audio.name'] || '…' }, playing: streaming };
   }
   return { ...still, kind: 'off', source: 0, icon: 'power_settings_new', nameKey: K('src.off'), title: null, titleKey: K('now.off'),
            subtitle: null, subtitleKey: K('now.pick') };
@@ -158,6 +167,6 @@ K('unit.khz'); K('unit.hz'); K('unit.kbps'); K('unit.bit'); K('unit.ch');
  * is a technical line, USB's rate and the tone's frequency (numbers.js badge) — or the catalog's.
  */
 export function subLine(np, t, lang) {
-  if (np.subtitle == null) return np.subtitleKey ? t[np.subtitleKey] : '';
+  if (np.subtitle == null) return np.subtitleKey ? fmt(t[np.subtitleKey], np.subtitleArgs || {}) : '';
   return np.kind === 'usb' || np.kind === 'tone' ? badge(np.subtitle, t, lang) : np.subtitle;
 }

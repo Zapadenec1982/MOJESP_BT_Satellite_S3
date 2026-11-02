@@ -22,9 +22,9 @@ namespace audio_core {
 ///
 /// The curvature is what gets heard. A fade that is continuous in value but turns a corner, in
 /// slope (a straight line) or in curvature (smoothstep, p^2(3 - 2p)), spreads that corner across the
-/// spectrum. The review measures that with an 8th-order 500 Hz high-pass. On a -12 dBFS 62 Hz tone
-/// faded over 10 ms, smoothstep leaves -73 dBFS of splatter and this curve -83. Over 20 ms the two
-/// leave -85 and -101.
+/// spectrum. Measured with an 8th-order 500 Hz high-pass, as tests/host/test_out_gate.cpp
+/// measures the gate: on a -12 dBFS 62 Hz tone faded over 10 ms, smoothstep leaves -73 dBFS of
+/// splatter and this curve -83. Over 20 ms the two leave -85 and -101.
 /// Never above 1: in float the polynomial can land an ulp over just short of p = 1, and a gate
 /// after the brickwall must not undo its ceiling, even by that much.
 inline float smootherstep(float p) {
@@ -35,10 +35,9 @@ inline float smootherstep(float p) {
 /// A gain that travels between shut (0) and open (1) along smootherstep, at any rate.
 ///
 /// Closing is the slower half. Splatter is gone at 20 ms, but on loud bass a 20 ms stop still
-/// sounds like the music being cut off, and the customer heard it as exactly that at every source
-/// change (06.10.2026). 100 ms is a fade; it is also the time a producer now waits for its flush to
-/// be acknowledged (FLUSH_WAIT_NAPS in pcm_ring.h). Opening stays at 20 ms, so a track still starts
-/// on its first note.
+/// sounds like the music being cut off, at every source change. 100 ms is a fade; it is also the
+/// time a producer waits for its flush to be acknowledged (FLUSH_WAIT_NAPS in pcm_ring.h).
+/// Opening stays at 20 ms, so a track still starts on its first note.
 class FadeGate {
 public:
     static constexpr float OPEN_S  = 0.020f;

@@ -3,10 +3,11 @@
  * @brief "Станції" — the six presets and every station there is. A tap tunes and goes back
  *        to the Player.
  *
- * The station that is playing, what it says is playing and the transport are the Player's
- * radio face; this page is the choice of station, opened from the Player's list button. The
- * presets sit at the top and scroll away with the list. They live here and not on the Source
- * page, which chooses a source, not a station (24.09.2026).
+ * The station that is playing and what it says is playing are the Player's station face; this
+ * page is the choice of station, opened from the Player's list button. The presets sit at the
+ * top and scroll away with the list. They live here and on the Player's station face, where they
+ * work as they do here (ui_preset_tap and the rest, below), and not on the Source page, which
+ * chooses a source, not a station.
  *
  * A preset works the way a car radio's does: a tap tunes it, and a long press stores the
  * station that is playing in it. An empty preset says "Зберегти сюди" while the radio plays,
@@ -15,7 +16,7 @@
  *
  * Tuning is choosing to listen, so it lands on the Player.
  *
- * The page is the Улюблені tab of the stations (stage 20б): the tab row above it leads to the
+ * The page is the Улюблені tab of the stations: the tab row above it leads to the
  * catalog's Топ · Країни · Жанри · Пошук (screen_catalog.cpp). A station from the catalog that is
  * playing goes into an empty preset the same way, through the catalog's asks.
  */
@@ -32,13 +33,14 @@ namespace {
 
 using i18n::S;
 using i18n::tr;
+using modesp::gen::AUDIO_SOURCE_RADIO;
 
 // ── geometry, all relative to the 752x384 content column ──
 constexpr int32_t TABS_H    = 68;                            // the tab row (screen_catalog.cpp), and a gap
 constexpr int     N_PRE     = radio_core::PRESETS;          // 6
 constexpr int32_t PRE_COLS  = 3;
 constexpr int32_t PRE_GAP   = 8;
-constexpr int32_t PRE_H     = 64;                            // a finger's (20.10.2026: 56)
+constexpr int32_t PRE_H     = 64;                            // a finger's
 constexpr int32_t PRE_X0    = 4;                             // in line with the list's rows
 constexpr int32_t PRE_W     = (uig::CONT_W - 2 * PRE_X0 - (PRE_COLS - 1) * PRE_GAP) / PRE_COLS;
 constexpr int32_t PRE_Y0    = 2;
@@ -68,7 +70,7 @@ void post(UiLvglModule::Req kind, int32_t v) {
 }
 
 /// The radio owns the output and plays a station from the list (not a DLNA push).
-bool radio_on(const UiLvglModule::Snapshot& s) { return s.source == 5 && !s.network_push; }
+bool radio_on(const UiLvglModule::Snapshot& s) { return ui_src(s) == UiSrc::RADIO; }
 
 /// …and is playing it, or on its way to.
 bool radio_live(const UiLvglModule::Snapshot& s) {
@@ -102,15 +104,15 @@ void store(int slot) {
 ///
 /// The source first: the radio module only exists while it owns the output, and drops what
 /// is posted to it before then (radio_module.cpp, on_update) — a preset tapped while
-/// Bluetooth played did nothing until this line (24.09.2026). Then a new station is a tune,
-/// and the station already tuned needs a play, since writing the same number again changes
-/// nothing. The requests are drained in order, so the radio sees the source before the rest.
+/// Bluetooth played did nothing until this line. Then a new station is a tune, and the station
+/// already tuned needs a play, since writing the same number again changes nothing. The
+/// requests are drained in order, so the radio sees the source before the rest.
 void listen(int idx) {
     if (!g.ctx || idx < 0) return;
     const auto& s = g.ctx->s;
-    if (s.source != 5)          post(UiLvglModule::Req::SOURCE, 5);
-    if (idx != s.radio_station) post(UiLvglModule::Req::RADIO_TUNE, idx);
-    else if (!radio_live(s))    post(UiLvglModule::Req::RADIO_CMD, 1);
+    if (s.source != AUDIO_SOURCE_RADIO) post(UiLvglModule::Req::SOURCE, AUDIO_SOURCE_RADIO);
+    if (idx != s.radio_station)         post(UiLvglModule::Req::RADIO_TUNE, idx);
+    else if (!radio_live(s))            post(UiLvglModule::Req::RADIO_CMD, 1);
     ui_shell_show_player();
 }
 
@@ -126,11 +128,13 @@ void host_of(const char* url, char* out, size_t n) {
 
 // ── the list ──
 
+/// The row's texts stay static: VList reads them after this returns, and a station with no name
+/// is titled by its host.
 void fill(int idx, m3w::VItem& it, void*) {
     static radio_core::Station st;
     static char sub[96];
+    static char host[64];
     if (!radio_core::stations().at(idx, st)) { it.title = "—"; return; }
-    char host[64];
     host_of(st.url, host, sizeof(host));
     int slot = -1;
     for (int i = 0; i < N_PRE && slot < 0; i++) if (radio_core::stations().preset(i) == idx) slot = i;
@@ -271,3 +275,8 @@ void shown(lv_obj_t*, UiCtx&) {
 }  // namespace
 
 const UiScreenDef UI_SCREEN_RADIO = {"radio", UI_SYM_RADIO, build, refresh, shown, nullptr};
+
+// The Player's station face has the same six buttons, and they do what these do.
+void ui_preset_tap(int slot)   { preset_tap(slot); }
+void ui_preset_store(int slot) { store(slot); }
+bool ui_preset_storable(const UiLvglModule::Snapshot& s) { return can_store(s); }

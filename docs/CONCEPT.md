@@ -106,7 +106,7 @@ test tone (generator) ───────────────────�
                                                    → I2S0 TX ──► PCM5102A ──► TPA3255 ──► speakers
 ```
 
-`DspChain` (`components/audio_dsp`): input gain (section trim, volume, EQ headroom) → subsonic filter
+`DspChain` (`components/audio_dsp`): volume leveler (while on) → input gain (section trim, volume, EQ headroom) → subsonic filter
 and boost at the port frequency → loudness → bass and treble → PEQ up to 10 bands →
 width and mono bass → balance → bass limiter → brickwall with look-ahead. Float inside; 32-bit slots go onto the bus. Details
 of each stage — [AUDIO.md](AUDIO.md).
@@ -177,7 +177,11 @@ one wire never meet for longer than one greeting. As a slave the P4 receives too
 ### microSD
 
 SDMMC slot 0, 4 bits, 20 MHz: CLK 43, CMD 44, D0–D3 39–42, no card-detect. The pins are the default IOMUX
-pins of slot 0 (`soc/sdmmc_pins.h`). The slot's IO is powered from the P4 LDO, channel 4, 3.3 V. The P4 has one
+pins of slot 0 (`soc/sdmmc_pins.h`), and the public project
+buccaneer-jak/JC4880P443C-P4-to-C6-RS232-communication-and-SD-Card-connection mounts the card on this
+same panel with `SD_MMC.begin()` and no `setPins()`, that is on those defaults, in 4 bits (§8b). 4 bits
+rather than 1: 1-bit mode leaves D3 unconfigured, and D3 also holds an SD card in SD mode, so with nothing
+holding D3 the card never answers. The slot's IO is powered from the P4 LDO, channel 4, 3.3 V. The P4 has one
 SDMMC controller with two slots, and slot 1 is held by ESP-Hosted for the C6, so the card driver
 (`drivers/sdmmc_card`) neither initializes nor deinitializes the controller. FatFs is configured for the
 card: 512 B sector, long file names, UTF-8 (`sdkconfig.board`). `modules/storage` mounts it,
@@ -357,6 +361,10 @@ Only sources 3–7 have cards, and only those whose bit is in `audio.sources` ([
 
 - `*.cmd` keys are commands (`"command": true` in the manifest): a write is queued to the module
   (`BaseModule::post_command`, 8 commands), not to the store, and is not broadcast.
+- A control surface (the glass, the web, MQTT, a phone app) sends the transport as one command,
+  `audio.transport` in `player.cmd`'s codes; the audio module passes it to the command key of the
+  source that plays, and `audio.transport_caps` says which codes that source takes now
+  ([AUDIO.md](AUDIO.md), "Sources").
 - There is one volume: `audio.volume`, 0–100 %, `persist`. `audio.vol_max` (40–100 %) compresses the scale,
   `audio.vol_eff` is what the core applied. Bluetooth, AirPlay and USB translate the volume of the phone or
   computer into `audio.volume` while their source is selected. The volume law — [AUDIO.md](AUDIO.md).
@@ -412,6 +420,7 @@ the server in ~200 ms.
 | Project | What is taken | Where in the tree |
 |---|---|---|
 | csvke/esp32_p4_jc4880p433c_bsp (Apache-2.0) | the DSI constants and the ST7701S init table of this panel | `drivers/dsi_st7701` |
+| buccaneer-jak/JC4880P443C-P4-to-C6-RS232-communication-and-SD-Card-connection | the microSD pins (the slot-0 defaults) and the 4-bit width, §3a | `board.json`, `sd_0` |
 | `esp_hosted`, example `examples/ota/coprocessor_ota/mcu_host` | updating the C6 from the P4 over SDIO | `tools/c6_updater` |
 | TinyUSB `examples/device/uac2_speaker_fb`; `espressif/usb_device_uac` — TinyUSB without `esp_tinyusb` | UAC2 with a feedback endpoint | `components/usb_uac` |
 | ESP-ADF, DLNA example (`release/v2.x`) | the three DLNA renderer services | `components/esp_dlna` (README) |
@@ -453,16 +462,19 @@ The control plane is a fork of [ModESP_Framework](https://github.com/Zapadenec19
   (the number of entries is generated from the manifests): key up to 32 bytes; value int32, float, bool
   or a string up to 64 bytes (keys with `"long": true` — up to 256). Access is under a mutex; changed keys
   go as a delta over WebSocket. `PersistService` writes the `persist` keys to NVS (namespace `persist`) with
-  a 5 s delay and restores them at startup.
+  a 5 s delay, writes what is pending on every `esp_restart()` (a shutdown handler), and restores
+  them at startup.
 - **Who reads and writes the keys.** The panel (`ui_lvgl`), the web interface (Svelte, `data/www/`) over HTTP
   REST and WebSocket `/ws`, MQTT with Home Assistant discovery (`components/modesp_mqtt`, off by
-  default) — all work with the same keys; a write is validated against `state_meta.h`.
+  default) — all work with the same keys; a write is validated against `state_meta.h` by one rule
+  for HTTP, a restore and MQTT (`modesp/net/key_write.h`).
   [NETWORK.md](NETWORK.md), [UI.md](UI.md).
 - **Files.** The `data` partition (LittleFS) carries the build output: `board.json`, `bindings.json`,
   `ui.json`, the web interface, the factory `eq.json`. User files — `eq.json`,
   `eq_custom.json`, `stations.json`, `last_track`, `devices.json` — live in the
   `userdata` partition, which `idf.py flash` does not rewrite; access goes through `UserStore`
-  (`components/user_store`).
+  (`components/user_store`). Beside them, `logos/` keeps the presets' logos, a cache the radio
+  fills and prunes itself ([NETWORK.md](NETWORK.md), "Covers and logos").
 
 ### Product modules
 

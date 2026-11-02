@@ -20,6 +20,7 @@
 #include "esp_log.h"
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
+#include "freertos/semphr.h"
 #include "freertos/task.h"
 
 #include <algorithm>
@@ -41,6 +42,11 @@ bool              s_started = false;
 int               s_core = -1;
 std::atomic<bool> s_output{false};
 std::atomic<bool> s_signal{false};
+SemaphoreHandle_t s_init_done = nullptr;   ///< given by device_task once uac_usb_init() has answered
+bool              s_init_ok   = false;
+
+/// How long start() waits for the PHY and TinyUSB, which come up in milliseconds.
+constexpr TickType_t INIT_WAIT = pdMS_TO_TICKS(1000);
 
 /// Larger than 1 ms of the widest format (97 frames × 8 B); a late wake-up reads in pieces.
 constexpr uint32_t RAW_BYTES  = 4096;
@@ -58,8 +64,9 @@ constexpr float SIGNAL_PEAK = 0.001f;
 constexpr int64_t SIGNAL_HOLD_US = 300000;
 
 void device_task(void*) {
-    if (!uac_usb_init()) {
-        ESP_LOGE(TAG, "USB PHY or TinyUSB did not start");
+    s_init_ok = uac_usb_init();
+    xSemaphoreGive(s_init_done);
+    if (!s_init_ok) {
         vTaskDelete(nullptr);
         return;
     }
@@ -69,7 +76,7 @@ void device_task(void*) {
 }
 
 State current_state() {
-    if (!g_uac.mounted || g_uac.suspended) return State::waiting;
+    if (!uac_usb_mounted() || g_uac.suspended) return State::waiting;
     return g_uac.alt ? State::playing : State::ready;
 }
 
@@ -88,6 +95,7 @@ void producer_task(void*) {
     uint32_t gen_seen = ~0u;
     uint8_t  alt = 0, fb = 0;
     uint32_t rate = 0;
+    bool     wanted = false;        // USB was the output on the last pass
     Phase    phase = Phase::idle;
     uint32_t gen = 0;               // the ring generation we write under
     uint32_t flush_gen = 0;
@@ -121,9 +129,11 @@ void producer_task(void*) {
         // ── The stream: alternate setting and clock ───────────────────────────────────────────
         // A suspended bus ends the stream as alt 0 would. On this board it is also what pulling
         // the cable looks like (uac_usb.c): the alternate setting stayed 2, and the ring was left
-        // in run, starving — 63 000 underruns in eight minutes with nothing plugged in (24.10.2026).
-        // A resume with the setting kept starts the stream again.
-        const uint8_t host_alt = (g_uac.mounted && !g_uac.suspended) ? g_uac.alt : 0;
+        // in run, starving — 63 000 underruns in eight minutes with nothing plugged in.
+        // A resume with the setting kept starts the stream again. A bus reset ends it as well:
+        // TinyUSB drops its configuration there and calls back nothing, so it is TinyUSB that is
+        // asked whether a host has the panel configured.
+        const uint8_t host_alt = (uac_usb_mounted() && !g_uac.suspended) ? g_uac.alt : 0;
         if (g_uac.stream_gen != gen_seen || host_alt != alt || (alt && g_uac.rate != rate)) {
             gen_seen = g_uac.stream_gen;
             alt  = host_alt;
@@ -136,8 +146,14 @@ void producer_task(void*) {
         }
 
         // ── The ring: ours while USB is the output ────────────────────────────────────────────
+        // Taken from whoever holds it when USB becomes the output, and after that only from
+        // nobody. s_output falls when usb_audio's on_update sees audio.source move on, later in
+        // the main-loop pass than the producers' own modules; a producer that claimed in between
+        // — the card, on a tap in the web — had the ring taken back within a millisecond,
+        // cancelled its track and stayed idle, silent under its own source.
         const bool want = s_output.load(std::memory_order_acquire) && ring.capacity() > 0;
-        if (want && ring.owner() != PcmRing::OWNER_USB) {
+        const PcmRing::Owner holder = ring.owner();
+        if (want && holder != PcmRing::OWNER_USB && (!wanted || holder == PcmRing::OWNER_NONE)) {
             // Fade whatever another producer queued instead of cutting it (pcm_ring.h).
             audio_core::claim_after_fade(ring, PcmRing::OWNER_USB, nap);
             gen = ring.generation();
@@ -145,11 +161,12 @@ void producer_task(void*) {
             ring.set_eos(PcmRing::OWNER_USB, gen, alt == 0);
             need_rate = alt != 0;
             phase = Phase::idle;
-        } else if (!want && ring.owner() == PcmRing::OWNER_USB) {
+        } else if (!want && holder == PcmRing::OWNER_USB) {
             ring.release(PcmRing::OWNER_USB);
-            phase = Phase::idle;
         }
+        wanted = want;
         const bool mine = want && ring.owner() == PcmRing::OWNER_USB;
+        if (!mine) phase = Phase::idle;
         if (mine && ring.generation() != gen && phase != Phase::flush) {
             gen = ring.generation();   // the consumer reset the ring under us (a flush of its own)
         }
@@ -161,7 +178,7 @@ void producer_task(void*) {
             // Every stream, the first since the claim too: fade out what is left, and let the
             // reset make the consumer prime again. Without it a stream restarted at the same
             // rate met a consumer reading an empty ring with no cushion — six underruns at the
-            // start of a 48 kHz run (U1, 24.10.2026) — and a new rate would retune under the
+            // start of a 48 kHz run — and a new rate would retune under the
             // old rate's tail. The first stream is no different: a claim made while the
             // computer was silent marks the ring ended, an ended ring stops the consumer's
             // priming, and a first stream at the clock's own rate (nothing to retune, so nothing
@@ -322,10 +339,19 @@ bool start(const Config& cfg) {
     if (s_started) return true;
     uac_usb_set_strings(cfg.product, cfg.serial);
 
+    static StaticSemaphore_t init_storage;
+    s_init_done = xSemaphoreCreateBinaryStatic(&init_storage);
     const size_t before = heap_caps_get_free_size(MALLOC_CAP_INTERNAL);
     if (xTaskCreatePinnedToCore(device_task, "usb_dev", 4096, nullptr, cfg.priority, nullptr,
                                 cfg.core) != pdPASS) {
         ESP_LOGE(TAG, "usb_dev task");
+        return false;
+    }
+    // The PHY and the stack come up on that task, because the controller's interrupt lands on
+    // the core that brings it up. started() promises a device — it is what offers source 7 — so
+    // the answer is waited for here, not assumed.
+    if (xSemaphoreTake(s_init_done, INIT_WAIT) != pdTRUE || !s_init_ok) {
+        ESP_LOGE(TAG, "USB PHY or TinyUSB did not start");
         return false;
     }
     // The producer does arithmetic and ring copies only — no flash, no NVS — so its stack can

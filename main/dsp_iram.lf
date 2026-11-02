@@ -3,8 +3,8 @@
 # The S3 runs its code from PSRAM (CONFIG_SPIRAM_XIP_FROM_PSRAM) through a 16 KB instruction cache
 # that both cores share; while Wi-Fi, lwIP and a decoder run on core 0, the DSP's loops on core 1
 # keep being evicted and fetched again from PSRAM. These are the functions DspChain::process() runs
-# every block (components/audio_dsp: the chain, the SVF kernels, the limiters) — about 8 KB, nothing
-# that designs a filter or parses a file. The P4 is left exactly as it was.
+# every block (components/audio_dsp: the chain, the SVF kernels, the limiters, the leveler's loop) —
+# about 8 KB, nothing that designs a filter or parses a file. The P4 is left exactly as it was.
 
 [mapping:audio_dsp_iram]
 archive: libaudio_dsp.a
@@ -26,5 +26,6 @@ entries:
         dsp_kernels:_ZN10audio_core15svf_stereo_rampEPfjRKNS_7SvfCoefES3_RNS_8SvfStateE (noflash)
         dsp_kernels:_ZN10audio_core10svf_stereoEPfjRKNS_7SvfCoefERNS_8SvfStateE (noflash)
         dsp_kernels:_ZN10audio_core13svf_stereo_toEPKfPfjRKNS_7SvfCoefERNS_8SvfStateE (noflash)
+        leveler:_ZN10audio_core7Leveler7processEPfj (noflash)
     else:
         * (default)

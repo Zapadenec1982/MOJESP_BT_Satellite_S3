@@ -1,6 +1,6 @@
 """Колонки: webui/src/lib/speakers.js in Node.
 
-The DoD of S6: a measurement is not applied without «Прийняти» or «Застосувати», «Пропустити» at
+What must hold: a measurement is not applied without «Прийняти» or «Застосувати», «Пропустити» at
 any step writes nothing, and neither does the choice of step 1. Also what the speakers page says
 for each state, what the port meter's messages mean to the wizard, and the usual volume's scale.
 """
@@ -50,7 +50,7 @@ eq(sp.portWrites(120, true)['audio.port_hz'], 80, 'held to 80');
 def test_what_the_speakers_page_says():
     run("""
 const st = (o) => { const r = sp.speakerState(o); return [r.title, r.line, r.args.hz ?? null, r.again]; };
-// a line only where there is a port to say: the title says the rest (18.10.2026, no notes)
+// a line only where there is a port to say: the title says the rest (no notes)
 eq(st({}), ['spk.unset', '', null, false], 'nothing asked, no port');
 eq(st({ 'audio.port_hz': 62, 'audio.port_src': 1 }), ['spk.unset', 'spk.port_manual', 62, false],
    'a port set before the wizard still plays, and is said');

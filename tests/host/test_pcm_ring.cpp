@@ -226,6 +226,19 @@ TEST_CASE("ring: eos separates 'track finished' from 'decoder is behind'") {
     r.deinit();
 }
 
+TEST_CASE("ring: the output is quiet until the consumer says something is heard") {
+    PcmRing r;
+    CHECK(r.output_quiet());               // no consumer yet: nothing can be heard
+    REQUIRE(r.init(8));
+    r.set_output_quiet(false);
+    CHECK_FALSE(r.output_quiet());
+    r.reset();
+    CHECK_FALSE(r.output_quiet());         // the consumer's word about the pins, not the queue's
+    r.set_output_quiet(true);
+    CHECK(r.output_quiet());
+    r.deinit();
+}
+
 TEST_CASE("ring: reset drops everything") {
     PcmRing r;
     REQUIRE(r.init(16));
@@ -290,10 +303,10 @@ TEST_CASE("ring: init(0) and init(1) are refused rather than producing a useless
 }
 
 TEST_CASE("ring: flush acknowledgement publishes reset before the producer resumes") {
-    // e4c0665: reset() used to clear flush_ BEFORE resetting the indices, so a producer that
-    // resumed the instant the flag dropped could write frames the reset then erased. The
-    // producer here does exactly that — its wait on the flag is the handoff under test and
-    // it writes straight after — and every frame it writes must come out the other side.
+    // reset() used to clear flush_ BEFORE resetting the indices, so a producer that resumed the
+    // instant the flag dropped could write frames the reset then erased. The producer here does
+    // exactly that — its wait on the flag is the handoff under test and it writes straight
+    // after — and every frame it writes must come out the other side.
     //
     // Bounded: 2000 rounds or two seconds, whichever comes first (the 50 000 rounds this ran
     // took forty minutes on a loaded machine), and the waits back off to short sleeps rather
@@ -432,11 +445,11 @@ TEST_CASE("ring: the rate handshake plays the previous track's tail before the c
 }
 
 TEST_CASE("ring: an answer that comes after the producer stopped waiting is still followed") {
-    // 05.10.2026: an AirPlay session started while the output was still moving out of
-    // another source. The producer's bounded wait ran out, it started on the fallback, and
-    // the consumer's answer — 44.1 kHz — arrived after it had stopped looking. Read once,
-    // the handshake left 44.1 kHz frames converted to 48 playing at 44.1 for the whole
-    // session: 8 % slow, and a drop every 0.6 s to keep up.
+    // An AirPlay session started while the output was still moving out of another source. The
+    // producer's bounded wait ran out, it started on the fallback, and the consumer's answer —
+    // 44.1 kHz — arrived after it had stopped looking. Read once, the handshake left 44.1 kHz
+    // frames converted to 48 playing at 44.1 for the whole session: 8 % slow, and a drop every
+    // 0.6 s to keep up.
     PcmRing r;
     REQUIRE(r.init(16));
     r.ask_rate(44100);
@@ -463,7 +476,7 @@ TEST_CASE("ring: an answer that comes after the producer stopped waiting is stil
 }
 
 TEST_CASE("ring: a new owner is a new rate question, and the same owner keeps its own") {
-    // Review of 12.10.2026: the session's clock is chosen by its first track's question, but
+    // The session's clock is chosen by its first track's question, but
     // the consumer read whatever rate the ring held — the boot default, or the previous
     // producer's — before the new one had asked, settled the session on it, and a 44.1 kHz
     // album after boot played converted to 48 kHz for its whole length.
@@ -487,9 +500,9 @@ TEST_CASE("ring: a new owner is a new rate question, and the same owner keeps it
 }
 
 TEST_CASE("ring: every owner is read back as itself, and its frames still flow") {
-    // USB audio, 24.10.2026: OWNER_USB is 4, and with the old two-bit owner field its claim
-    // set READING — owner() answered NONE and read() refused for ever. Each owner, the new
-    // one included, must survive a claim whole and leave the consumer able to read.
+    // USB audio: OWNER_USB is 4, and with the old two-bit owner field its claim set READING —
+    // owner() answered NONE and read() refused for ever. Each owner, the new one included, must
+    // survive a claim whole and leave the consumer able to read.
     const PcmRing::Owner owners[] = {PcmRing::OWNER_FILE, PcmRing::OWNER_RADIO,
                                      PcmRing::OWNER_AIRPLAY, PcmRing::OWNER_USB};
     PcmRing r;
@@ -553,7 +566,7 @@ TEST_CASE("fallback_rate: a rate refused inside the range falls back to its fami
 }
 
 TEST_CASE("the session's clock lock survives a reset between tracks") {
-    // Stage 14: the output clock is settled once, by the first track a source plays, and the
+    // The output clock is settled once, by the first track a source plays, and the
     // producer reads this to know it need not drain the previous track's tail before asking
     // for a rate. reset() runs BETWEEN tracks of the same session — a flush, a seek, a new
     // file — and clearing the lock there would quietly let the next track retune the clock,

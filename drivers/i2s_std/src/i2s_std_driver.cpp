@@ -8,7 +8,7 @@
  *   = 11.5 KB, which is what it costs at EITHER slot width (see RX_DMA_FRAMES).
  * The TX ring must outlast a flash sector erase (Boya BY25Q has no auto-suspend, both
  * caches stall) so the DAC never runs dry; an RX stall only loses a few input samples.
- * Bench 2026-09-15: the whole audio core costs ~110 KB of DMA-SRAM (rings + ASRC + stacks).
+ * Measured on the bench: the whole audio core costs ~110 KB of DMA-SRAM (rings + ASRC + stacks).
  *
  * Two chips, one file. The P4 clocks a master from its audio PLL and has to count who holds
  * that PLL (most of what is below). The ESP32-S3 has no audio PLL: every port runs from the
@@ -147,7 +147,7 @@ void I2sStdDriver::configure(const char* role, const modesp::I2SBusResource* bus
 }
 
 // The rates this BOARD can actually clock, which is narrower than either datasheet
-// suggests and was established on the bench (18.09.2026) rather than derived.
+// suggests and was established on the bench rather than derived.
 //
 // The floor is the DAC's, not the P4's. PCM5102A takes no MCLK here — it locks its
 // internal PLL to BCLK (docs/CONCEPT.md, "DAC — PCM5102A") — and at 22.05 kHz with 32-bit slots
@@ -269,9 +269,9 @@ bool I2sStdDriver::init() {
     // parked on the crystal for the rest of the uptime.
     //
     // The XTAL is comfortable here: 44.1 kHz in 16-bit slots needs MCLK of at least 8 x BCLK,
-    // which is 11.29 MHz, against a source above twice that. 40 MHz clears it. The bench note
-    // of 2026-09-15 about "sample rate is too large" was measured at 48 kHz in 32-BIT slots,
-    // where the requirement is above 49 MHz — a different case, not this one.
+    // which is 11.29 MHz, against a source above twice that. 40 MHz clears it. The "sample
+    // rate is too large" refusal seen on the bench was at 48 kHz in 32-BIT slots, where the
+    // requirement is above 49 MHz — a different case, not this one.
     std_cfg.clk_cfg.clk_src = bus_->master ? MASTER_CLK_SRC : I2S_CLK_SRC_DEFAULT;
     switch (bus_->mclk_multiple) {
         case 128: std_cfg.clk_cfg.mclk_multiple = I2S_MCLK_MULTIPLE_128; break;
@@ -470,9 +470,9 @@ bool I2sStdDriver::set_rate(uint32_t hz, uint16_t mclk_multiple) {
         // descriptor, made while the clock is stopped. With the cache write-back in pieces
         // (sdkconfig.board) every sync from a task takes one global mutex, the display's
         // frame-buffer syncs hold it, and waiting behind them kept the clock stopped long
-        // enough for the DAC to click on every rate change (24.10.2026: clicks with that
-        // option, none without it, none on 78f590f before it). What is left with this is the
-        // faint tick of the DAC relocking, which 78f590f has too (25.10.2026).
+        // enough for the DAC to click on every rate change (clicks with that option, none
+        // without it). What is left with this is the faint tick of the DAC relocking, which a
+        // build without the option has too.
         tx_ring_seeded_ = true;
     }
     const int64_t stopped_at = esp_timer_get_time();
@@ -782,16 +782,16 @@ bool I2sStdDriver::set_link_master(const modesp::audio::LinkPins* pins) {
         gpio_func_sel((gpio_num_t)pins->ws, PIN_FUNC_GPIO);
         gpio_input_enable((gpio_num_t)pins->ws);
         esp_rom_gpio_connect_out_signal(pins->ws, sig.m_tx_ws_sig, false, false);
-        // Pad drive, measured with the satellite counting edges at its pins (30.09.2026):
+        // Pad drive, measured with the satellite counting edges at its pins:
         // this cable is loaded hard enough that drive 0-1 moves neither line at all, and at
         // the default 2 the bit clock couples into WS for ~10 extra edges a frame (940 000 a
         // second where 96 000 belong). WS at 3 arrives clean with BCLK at 2.
         // BCLK stays at 2, the least that arrives, because it is also the least it couples
-        // into WS: on 03.10.2026 BCLK at 3 put 40-65 extra edges a second on WS at 96 kHz,
-        // each one a misframed slot at the satellite and a click; back at 2 WS counted
-        // 96 005-96 007 (the crystals' difference, nothing more). A BCLK that does not arrive
-        // at 2 is a bad contact, not a weak pad: on 02.10.2026 the satellite counted 0 BCLK
-        // edges until the jumper was re-seated.
+        // into WS: BCLK at 3 put 40-65 extra edges a second on WS at 96 kHz, each one a
+        // misframed slot at the satellite and a click; back at 2 WS counted 96 005-96 007 (the
+        // crystals' difference, nothing more). A BCLK that does not arrive at 2 is a bad
+        // contact, not a weak pad: the satellite counted 0 BCLK edges until the jumper was
+        // re-seated.
         gpio_set_drive_capability((gpio_num_t)pins->ws, GPIO_DRIVE_CAP_3);
         gpio_set_drive_capability((gpio_num_t)pins->bclk, GPIO_DRIVE_CAP_2);
         // Data in from the peer's line instead of the (unfitted) ADC's.

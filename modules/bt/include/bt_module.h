@@ -8,7 +8,7 @@
  * pressed.
  *
  * The wire itself is a bound driver (drivers/uart_link) behind modesp/hal/byte_link.h, named
- * by bindings.json under the role `sat_link` (item 8.9). This file therefore knows that bytes
+ * by bindings.json under the role `sat_link`. This file therefore knows that bytes
  * arrive and that some are sometimes lost; it does not know what a baud rate is.
  *
  * The wire format is docs/LINK_PROTOCOL.md and lives in components/sat_link, which has no
@@ -64,6 +64,12 @@ private:
     void gate_on_source(uint32_t dt_ms);
     void say_hello();
     void link_lost(const char* why);
+    /// Everything the satellite told this side, forgotten: what a lost link and a refused one
+    /// (another proto_major) have in common. link_lost() is this and a line in the log.
+    void drop_link();
+    /// The track the phone was playing, its play state, the stream's format and the cover: what
+    /// goes when the phone leaves and when the satellite does.
+    void clear_track();
     void report();
     /// UART overruns, dropped frames and sequence gaps into SharedState.
     void publish_wire_counters();
@@ -159,4 +165,9 @@ private:
     /// contract sends that result once, and nothing else would ever close a lost one.
     uint32_t pair_seq_seen_ = 0;
     uint32_t pair_open_ms_  = 0;
+
+    /// The panel's name went to a satellite that reported another, and no BT_CONFIG has carried
+    /// it back since. Cleared by one that does and by a new link: until then it is not sent
+    /// again (handle(), MSG_BT_CONFIG).
+    bool     name_given_ = false;
 };

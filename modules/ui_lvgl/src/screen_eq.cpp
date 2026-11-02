@@ -1,9 +1,9 @@
 /**
  * @file screen_eq.cpp
  * @brief The equalizer — the sounds' field, the response curve with draggable band handles and
- *        the band panel (S7: the limiter's meter is Service's).
- *        The sounds were chips from S7; since 15.10.2026 (the customer) they are a field that
- *        opens their list, as on the «Звук» sheet (sound_sheet.cpp ui_sound_pick_show).
+ *        the band panel (the limiter's meter is Service's).
+ *        The sounds are a field that opens their list, as on the «Звук» sheet (sound_sheet.cpp
+ *        ui_sound_pick_show).
  *
  * The curve is computed with audio_core::eq_magnitude_db(), the same function the audio core
  * designs its biquads with. There is deliberately no second copy of the RBJ maths here: a
@@ -14,10 +14,10 @@
  * audio core on the next tick and writes eq.json from the main loop once the user leaves
  * this screen — LittleFS writes must not happen per drag event, and never from this task.
  *
- * The sounds do not destroy anything (24.09.2026). «Власний» is the user's own set, kept while
- * a genre plays, and choosing it brings it back; a genre never changes — a hand edit of one is
- * the new «Власний», and the line under the field says so; «Скинути «Власний»» turns its bands
- * off, with «Повернути» for a while. The table and those rules are shared with the web
+ * The sounds do not destroy anything. «Власний» is the user's own set, kept while a genre
+ * plays, and choosing it brings it back; a genre never changes — a hand edit of one is the new
+ * «Власний», and the line under the field says so; «Скинути «Власний»» turns its bands off,
+ * with «Повернути» for a while. The table and those rules are shared with the web
  * (audio_dsp/eq_presets.h), and so is the document: this page edits a local copy, the module
  * puts it into audio_core::eq_store(), and the page takes the store's version back when the web
  * changed it and nothing here is waiting to be put. The audio module hears and keeps it.
@@ -40,9 +40,8 @@ using i18n::S;
 using i18n::tr;
 
 // ── geometry, all relative to the 752x384 content column ──
-// Whatever a finger takes is 64 px (the glass for a finger, 20.10.2026: the rows were 40 to 52, the
-// word by the band's switch 23). The plot gives up the height that costs; «Смуг немає», the one
-// line that stood under the top row, is in the plot, which is empty when it shows.
+// Whatever a finger takes is 64 px. The plot gives up the height that costs; «Смуг немає», the
+// one line that stood under the top row, is in the plot, which is empty when it shows.
 constexpr int32_t TOP_H    = 64;                       // the switch, the sounds, «Скинути «Власний»»
 constexpr int32_t CARD_Y   = TOP_H + 8;                // 72
 constexpr int32_t B2_H     = 64;                       // the three steppers, at the foot
@@ -402,7 +401,7 @@ void refresh_band_panel() {
     lv_label_set_text(g.band_lbl, buf);
     if (b.enabled) lv_obj_add_state(g.band_sw, LV_STATE_CHECKED);
     else           lv_obj_remove_state(g.band_sw, LV_STATE_CHECKED);
-    // Numbers with the language's decimal separator (decision 7), units in its words.
+    // Numbers with the language's decimal separator, units in its words.
     char v[16];
     if (b.freq_hz >= 1000.0f) snprintf(buf, sizeof(buf), "%s %s", i18n::num(v, sizeof(v), (int32_t)lroundf(b.freq_hz / 10.0f), 2), tr(S::unit_khz));
     else                      snprintf(buf, sizeof(buf), "%.0f %s", (double)b.freq_hz, tr(S::unit_hz));
@@ -436,8 +435,7 @@ void paint_top() {
     bool any = false;
     for (int i = 0; i < sec.count; i++) any = any || sec.bands[i].enabled;
     m3w::button_enable(g.reset, any);
-    // The line under the row is a state, not a lesson: «Смуг немає» when «Власний» has none on
-    // (the customer, 18.10.2026: the notes that explained «Власний» and the genres went).
+    // The line under the row is a state, not a lesson: «Смуг немає» when «Власний» has none on.
     uih::set_text(g.note, g.note_txt, sizeof(g.note_txt), mine && !any ? tr(S::eq_no_bands) : "");
 }
 
@@ -556,10 +554,10 @@ void drag_to(int i, int32_t x, int32_t y) {
     refresh_all();
 }
 
-/// A finger on a band's point, and only there (touch_gesture.h; the customer, 14.10.2026 — a
-/// press anywhere on the plot used to move the chosen band to it). The press picks the band; the
-/// point moves once held HOLD_MS or once the finger went SLOP px, and keeps its distance from the
-/// finger so it does not jump. A tap picks, and no more.
+/// A finger on a band's point, and only there (touch_gesture.h): a press elsewhere on the plot
+/// does not move the chosen band to it. The press picks the band; the point moves once held
+/// HOLD_MS or once the finger went SLOP px, and keeps its distance from the finger so it does
+/// not jump. A tap picks, and no more.
 void point_cb(lv_event_t* e) {
     const int i = (int)(intptr_t)lv_event_get_user_data(e);
     const lv_event_code_t code = lv_event_get_code(e);
@@ -649,9 +647,9 @@ void choose_type(int i) {
     refresh_all();
 }
 
-/// The six types as a list (ui_pick.cpp), the band's own ticked. They used to be a button that
-/// stepped through them, and every step on the way changed the response — a low pass at 1 kHz
-/// between a shelf and the type wanted (the customer, 16.10.2026: a list).
+/// The six types as a list (ui_pick.cpp), the band's own ticked. Not a button that steps through
+/// them: every step on the way would change the response — a low pass at 1 kHz between a shelf
+/// and the type wanted.
 void pick_type() {
     constexpr int N = (int)(sizeof(TYPE_NAME) / sizeof(TYPE_NAME[0]));
     const char* names[N];
@@ -687,7 +685,7 @@ void peq_cb(lv_event_t*) {
 
 /// One stepper: − at the left end, + at the right, the value between them — the buttons sit
 /// on either side of what they change, a hundred and fifty pixels apart, so a thumb aimed at
-/// one cannot land on the other (customer, 24.09.2026; they used to be side by side).
+/// one cannot land on the other.
 lv_obj_t* stepper(lv_obj_t* parent, int32_t x, int i) {
     const auto& t = m3::theme();
     constexpr int32_t BTN = NAV_BTN;
@@ -742,7 +740,6 @@ lv_obj_t* build(lv_obj_t* parent, UiCtx& c) {
     lv_obj_set_pos(peq_lbl, 6 + 52 + 12, (TOP_H - lv_font_get_line_height(t.t.label_m)) / 2);
     lv_obj_set_width(peq_lbl, PEQ_W - (6 + 52 + 12));
     lv_label_set_long_mode(peq_lbl, LV_LABEL_LONG_DOT);
-    m3w::switch_row(peq_row, g.peq);
 
     g.sounds = ui_sound_field(root, FIELD_W, FIELD_H, &g.sound_val);
     lv_obj_set_pos(g.sounds, FIELD_X, (TOP_H - FIELD_H) / 2);
@@ -812,13 +809,12 @@ lv_obj_t* build(lv_obj_t* parent, UiCtx& c) {
     m3w::Button next = m3w::icon_button(g.band_box, BAND_W - NAV_BTN, 0, NAV_BTN, UI_SYM_CHEVRON, t.t.icon_m);
     lv_obj_add_event_cb(next.obj, band_next_cb, LV_EVENT_CLICKED, nullptr);
 
-    // the band's switch and its word, one row a finger takes anywhere: the word alone was 23 px
+    // the band's switch and its word; only the switch takes a finger
     lv_obj_t* sw_row = m3w::box(root, BSW_X, B1_Y, BSW_W, B1_H);
     g.band_sw = m3w::switch_m3(sw_row, 8, (B1_H - 32) / 2, true);
     lv_obj_add_event_cb(g.band_sw, band_sw_cb, LV_EVENT_VALUE_CHANGED, nullptr);
     lv_obj_t* sw_lbl = m3w::text(sw_row, t.t.label_m, t.c.on_surface, tr(S::eq_band_on));
     lv_obj_set_pos(sw_lbl, 8 + 52 + 12, (B1_H - lv_font_get_line_height(t.t.label_m)) / 2);
-    m3w::switch_row(sw_row, g.band_sw);
 
     lv_obj_t* type_cap = m3w::text(root, t.t.label_s, t.c.on_surface_var, tr(S::eq_type));
     lv_obj_set_pos(type_cap, uig::CONT_W - TYPE_W - 44, B1_Y + (B1_H - lv_font_get_line_height(t.t.label_s)) / 2);

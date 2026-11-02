@@ -205,10 +205,10 @@ uint32_t now_ms() { return (uint32_t)(esp_timer_get_time() / 1000); }
 /// Each call says how wide the key it feeds is, and the text is cut here to that width —
 /// on a character boundary, like every other string from the link — rather than in the store,
 /// which would log a warning for every long name. It used to be a byte count, and a Cyrillic
-/// title ended in half a letter: "…Слаане�" on the web (12.10.2026).
+/// title ended in half a letter: "…Слаане�" on the web.
 ///
 /// bt.title is marked `long` in the manifest (256 bytes), as airplay.title is: the 64-byte
-/// inline value cut an audiobook's chapter name short on the panel and the web (12.10.2026).
+/// inline value cut an audiobook's chapter name short on the panel and the web.
 /// What the satellite sends is the real limit now, 127 bytes. bt.artist/album and the rest
 /// stay at the inline width.
 /// One file-static buffer rather than three stack copies: only the module task runs this path
@@ -338,6 +338,12 @@ bool BtModule::on_init() {
         if (modesp::I2SBusResource* i2s = hal_->find_i2s_bus(i2s_id_))
             slot_bits_ = i2s->slot_bits;
 
+    // Before the wire task exists. The probe pulls the RX pin low, which the UART takes for a
+    // break, and then drops the zeros that put in the driver's ring; a reader already running
+    // (core 0, priority 8, above this task) woke on them first, and the first link-down report
+    // showed "00" and a delimiter — a talking partner — for a pin attached to nothing.
+    probe_rx();
+
     // ── the wire task ──
     // Internal RAM for both the ring and the stack: this task runs while the flash cache is
     // off during an NVS or LittleFS write, and a PSRAM stack dies there (docs/CONCEPT.md,
@@ -370,7 +376,6 @@ bool BtModule::on_init() {
              link_->describe(),
              (unsigned)sat::PROTO_MAJOR, (unsigned)sat::PROTO_MINOR,
              (unsigned long)our_caps);
-    probe_rx();
     say_hello();
     return true;
 }
@@ -388,8 +393,8 @@ void BtModule::on_update(uint32_t dt_ms) {
     drain_frames();                    // frames the wire task collected; handle() runs here
 
     bt_cover::tick(now_ms());
-    // Protocol 1.7. A cover that lost one frame used to be lost for good — the bench log of
-    // 21.09.2026 shows a 53 KiB image thrown away over 501 missing bytes. Ask for it again,
+    // Protocol 1.7. A cover that lost one frame used to be lost for good — a 53 KiB image
+    // was thrown away over 501 missing bytes. Ask for it again,
     // but only of a satellite that said it would answer: an older one never sets the bit,
     // and against it this line does nothing at all, which is the 1.6 behaviour exactly.
     if (linked_ && (peer_caps_ & sat::DEV_CAP_COVER_RETRY)) {
@@ -487,9 +492,10 @@ void BtModule::on_update(uint32_t dt_ms) {
         }
         gate_on_source(dt_ms);
     } else {
-        // Keep saying hello, once a second, until the satellite's HELLO arrives (protocol
-        // section 3): it may be powered later than us, or reflashed, and a greeting of ours
-        // that landed inside its one-second reply window got no answer of its own.
+        // Keep saying hello, once a second, until the satellite's HELLO arrives
+        // (docs/LINK_PROTOCOL.md, "Negotiation: `HELLO`"): it may be powered later than us, or
+        // reflashed, and a greeting of ours that landed inside its one-second reply window got
+        // no answer of its own.
         if (since_hello_ms_ >= HELLO_EVERY_MS) say_hello();
         if (since_report_ms_ >= REPORT_EVERY_MS) report();
     }
@@ -845,19 +851,25 @@ void BtModule::report() {
 }
 
 void BtModule::link_lost(const char* why) {
-    bt_cover::clear();
+    drop_link();
+    ESP_LOGW(TAG, "link lost (%s)", why);
+}
+
+void BtModule::drop_link() {
     linked_ = false;
     state_set("bt.link", false);
+    // What the satellite said about the phone goes with it. Left behind, a satellite that went
+    // quiet left the Player looking exactly like a playing one — a title, a codec and a frozen
+    // bar, for good — and a "playing" that kept standby bright, kept USB from taking the output
+    // (usb_audio's panel_playing) and, on the next link, had the stall kick send a PLAY to a
+    // phone paused meanwhile.
     state_set("bt.state", "off");
     state_set("bt.peer", "");
-    // The announced stream format belongs to the connection that announced it. Leaving it
-    // behind let a stale rate drive the converter's ratio after the satellite came back on a
-    // different one, and the servo has nowhere near the authority to argue with an 8.8 %
-    // error. Zero means "measure it" and the measurement is self-correcting.
-    state_set("bt.rate_hz", (int32_t)0);
-    sat::stream_control().clear();
+    state_set("bt.codec", "");
+    clear_track();
     // Nobody left to be a slave: the link's clock lines go back to being inputs.
     sat::stream_control().set_host_clocks(false);
+    state_set("bt.link_master", false);
     modern_format_ = false;
     // The capabilities belonged to that satellite. A replacement may be an older build, and
     // assuming the old bits would send it a message it has never heard of.
@@ -868,6 +880,8 @@ void BtModule::link_lost(const char* why) {
     // unpaired, replaced or restarted in between.
     streaming_   = false;
     auto_paused_ = false;
+    // stall_ is left alone: a pause somebody asked for holds across a lost link, as the
+    // satellite's suspend does (bt_stall_kick.h).
     // And the volume must be pushed again on the next link, or a reconnecting phone shows its
     // own slider while the room plays at the panel's level.
     vol_echo_ = -1;
@@ -876,7 +890,23 @@ void BtModule::link_lost(const char* why) {
     // answered over a link that is gone.
     bt_settings::set_link(false, false);
     bt_settings::pair_abandon();
-    ESP_LOGW(TAG, "link lost (%s)", why);
+}
+
+void BtModule::clear_track() {
+    bt_cover::clear();
+    // The announced stream format belongs to the connection that announced it. Leaving it
+    // behind let a stale rate drive the converter's ratio after the satellite came back on a
+    // different one, and the servo has nowhere near the authority to argue with an 8.8 %
+    // error. Zero means "measure it" and the measurement is self-correcting.
+    sat::stream_control().clear();
+    state_set("bt.rate_hz", (int32_t)0);
+    state_set("bt.bits", (int32_t)0);
+    state_set("bt.title", "");
+    state_set("bt.artist", "");
+    state_set("bt.album", "");
+    state_set("bt.pos_s", (int32_t)0);
+    state_set("bt.dur_s", (int32_t)0);
+    state_set("bt.play_state", "idle");
 }
 
 void BtModule::on_frame(void* ctx, const sat::Frame& f) {
@@ -923,14 +953,7 @@ void BtModule::handle(const sat::Frame& f) {
             // sulks. So we say it once and keep answering pings.
             ESP_LOGE(TAG, "satellite speaks protocol %u.%u, we speak %u.%u — link refused",
                      h.major, h.minor, sat::PROTO_MAJOR, sat::PROTO_MINOR);
-            bt_cover::clear();
-            linked_ = false;
-            sat::stream_control().clear();
-            sat::stream_control().set_host_clocks(false);
-            modern_format_ = false;
-            peer_caps_ = 0;
-            state_set("bt.link", false);
-            bt_settings::set_link(false, false);
+            drop_link();
             break;
         }
         // 1.9: drive BCLK/WS only while this HELLO says the satellite is a slave. Cleared
@@ -957,10 +980,12 @@ void BtModule::handle(const sat::Frame& f) {
                      (unsigned long)link_->stats().rx_bytes);
             if (!(h.caps & sat::DEV_CAP_A2DP))
                 ESP_LOGI(TAG, "satellite reports no A2DP — a link-only build");
+            name_given_ = false;   // maybe another satellite: it may be given the panel's name once
         }
         // The satellite acts on no command from a host that has not greeted it since it
-        // started or since we went quiet (protocol section 3), and a greeting of ours from
-        // under a second ago may have reached a satellite that was still booting. So a link
+        // started or since we went quiet (docs/LINK_PROTOCOL.md, "Negotiation: `HELLO`"), and a
+        // greeting of ours from under a second ago may have reached a satellite that was still
+        // booting. So a link
         // coming up gets our HELLO now, ahead of the first command, past the reply limit.
         // The satellite does not answer it inside its own one-second window: no loop.
         if (!was) since_hello_ms_ = HELLO_EVERY_MS;
@@ -990,7 +1015,7 @@ void BtModule::handle(const sat::Frame& f) {
         sat::BtState s;
         if (!sat::parse(f, s)) break;
         state_set("bt.state", state_name(s.state));
-        // Whether A2DP audio is actually flowing, which is the condition item 12.6 acts on.
+        // Whether A2DP audio is actually flowing, which is what gate_on_source() acts on.
         // BT_STREAMING and not TRACK_POS: a phone with no AVRCP metadata never sends a
         // TRACK_POS at all, and it is still decoding into our I2S port.
         streaming_ = (s.state == sat::BT_STREAMING);
@@ -998,19 +1023,10 @@ void BtModule::handle(const sat::Frame& f) {
         // along is not taken (bt_volume_gate.h).
         if (vol_gate_.on_state(s.state >= sat::BT_CONNECTED)) vol_echo_ = -1;
         if (s.state < sat::BT_CONNECTED) {
-            bt_cover::clear();
-            sat::stream_control().clear();
-            state_set("bt.rate_hz", (int32_t)0);
-            state_set("bt.bits", (int32_t)0);
-            // The track left with the phone. A title and a frozen progress bar left behind
-            // is how a disconnected player looks exactly like a playing one — the same
-            // reason the cover above it is cleared here.
-            state_set("bt.title", "");
-            state_set("bt.artist", "");
-            state_set("bt.album", "");
-            state_set("bt.pos_s", (int32_t)0);
-            state_set("bt.dur_s", (int32_t)0);
-            state_set("bt.play_state", "idle");
+            // The track left with the phone, and its cover with it. A title and a frozen
+            // progress bar left behind is how a disconnected player looks exactly like a
+            // playing one.
+            clear_track();
             // A pause we placed on the phone that has just left must not be resumed on the
             // next phone that connects.
             auto_paused_ = false;
@@ -1181,16 +1197,23 @@ void BtModule::handle(const sat::Frame& f) {
                                 c.codecs_supported, c.codecs_enabled, name, strlen(name));
         // The panel's one name (device_name.h): the first the satellite tells is kept — somebody
         // gave it that name — and after that a satellite that comes up with another (reflashed,
-        // swapped) is given the panel's back. A rename that crossed this report is sent again,
-        // which changes nothing.
+        // swapped) is given the panel's back, once. A rename that crossed this report is sent
+        // again, which changes nothing. Only once: a name the satellite does not apply leaves its
+        // old one in the answer (LINK_PROTOCOL.md, BT_CONFIG_SET), and answering every such
+        // BT_CONFIG bounced the two frames off each other at wire speed. A report that agrees
+        // ends the wait, so a satellite that later comes up with another name gets one more.
         if (name[0]) {
             if (!device_name::kept()) {
                 device_name::keep(name);
             } else {
                 char mine[device_name::CAP];
                 device_name::get(mine, sizeof mine);
-                if (strcmp(mine, name) != 0) {
-                    ESP_LOGI(TAG, "satellite named \"%s\", the panel \"%s\": giving it the panel's", name, mine);
+                if (strcmp(mine, name) == 0) {
+                    name_given_ = false;
+                } else if (!name_given_) {
+                    name_given_ = true;
+                    ESP_LOGI(TAG, "satellite named \"%s\", the panel \"%s\": giving it the panel's, "
+                                  "once on this link", name, mine);
                     bt_settings::request_name(mine);
                 }
             }
@@ -1218,7 +1241,7 @@ void BtModule::handle(const sat::Frame& f) {
 
     default:
         // Anything else is dropped, including a 1.9 satellite's GPIO_MAP: 1.10 retired
-        // the expander's codes 0x30..0x35 (docs/LINK_PROTOCOL.md, section 11).
+        // the expander's codes 0x30..0x35 (docs/LINK_PROTOCOL.md, "Reserved codes and bits").
         break;
     }
 }

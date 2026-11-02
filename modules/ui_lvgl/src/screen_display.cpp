@@ -3,9 +3,9 @@
  * @brief Налаштування → Екран: the screen's brightness, the standby face's brightness while music
  *        plays, auto-standby and the colour scheme.
  *
- * Налаштування's «Екран» group until S1 (14.10.2026), when the
- * first column went to Звук and these four rows became a page of their own, touched as they were.
- * The rows are the full column's width now, so the two sliders are longer than they were.
+ * Налаштування's «Екран» group until the first column went to Звук and these four rows became
+ * a page of their own, touched as they were. The rows are the full column's width now, so the
+ * two sliders are longer than they were.
  */
 
 #include "ui_common.h"
@@ -31,6 +31,10 @@ static_assert(4 * RH + 2 * INSET <= uig::CONT_H, "the four rows fit the column")
 /// auto-standby's steps, in minutes; 0 is never
 constexpr int32_t SLEEP_STEPS[] = {0, 5, 10, 15, 20, 30, 45, 60};
 constexpr int     N_SLEEP = (int)(sizeof(SLEEP_STEPS) / sizeof(SLEEP_STEPS[0]));
+/// After − or +, the row shows what was pressed and the next press steps from it: the snapshot
+/// takes up to half a second to follow (mirror_diag, 2 Hz). As long as Тембр holds its times
+/// (sound_sheet.cpp, TIME_HOLD_MS).
+constexpr uint32_t SLEEP_HOLD_MS = 800;
 
 enum RowId { R_BRIGHT, R_SB_BRIGHT, R_SLEEP, R_SCHEME, R_COUNT };
 constexpr int N_SCHEME  = (int)m3::Scheme::COUNT;
@@ -53,6 +57,8 @@ struct Page {
     bool        sb_drag = false;
     lv_obj_t*   sleep_val = nullptr;
     m3w::Button sleep_dec, sleep_inc;
+    int32_t     sleep_want = -1;         ///< the minutes − or + asked for last...
+    uint32_t    sleep_at = 0;            ///< ...and when
     lv_obj_t*   swatch[N_SCHEME] = {};
     int32_t     backlight = -1;
     int32_t     standby_bl = -1;
@@ -66,17 +72,44 @@ void post(UiLvglModule::Req kind, int32_t v) {
     if (g.ctx && g.ctx->mod) g.ctx->mod->lvgl_post(kind, v);
 }
 
-int sleep_index(int32_t min) {
-    int best = 0;
-    for (int i = 0; i < N_SLEEP; i++) if (SLEEP_STEPS[i] <= min) best = i;
-    return best;
+/// The step after `min` that way: the next one strictly above or below, so minutes between two
+/// steps (the API and MQTT take any multiple of 5) go to a neighbour, not past it; at an end, that end.
+int32_t sleep_step(int32_t min, int dir) {
+    if (dir > 0) {
+        for (int i = 0; i < N_SLEEP; i++) if (SLEEP_STEPS[i] > min) return SLEEP_STEPS[i];
+        return SLEEP_STEPS[N_SLEEP - 1];
+    }
+    for (int i = N_SLEEP - 1; i >= 0; i--) if (SLEEP_STEPS[i] < min) return SLEEP_STEPS[i];
+    return SLEEP_STEPS[0];
 }
+
+/// Auto-standby's minutes in its row, and − and + as far as they go.
+void show_sleep(int32_t min) {
+    g.standby_min = min;
+    char buf[96];
+    if (min <= 0) {
+        snprintf(buf, sizeof(buf), "%s", tr(S::sys_never));
+    } else {
+        char n[12];
+        snprintf(n, sizeof(n), "%ld", (long)min);
+        i18n::fmt(buf, sizeof(buf), tr(S::sys_minutes), {{"n", n}});
+    }
+    lv_label_set_text(g.sleep_val, buf);
+    m3w::button_enable(g.sleep_dec, min > 0);
+    m3w::button_enable(g.sleep_inc, min < SLEEP_STEPS[N_SLEEP - 1]);
+}
+
+bool sleep_held() { return g.sleep_want >= 0 && lv_tick_elaps(g.sleep_at) < SLEEP_HOLD_MS; }
 
 void set_sleep_step(int dir) {
     if (!g.ctx) return;
-    int i = sleep_index(g.ctx->s.standby_min) + dir;
-    if (i < 0) i = 0; else if (i >= N_SLEEP) i = N_SLEEP - 1;
-    post(UiLvglModule::Req::STANDBY_MIN, SLEEP_STEPS[i]);
+    const int32_t cur = sleep_held() ? g.sleep_want : g.ctx->s.standby_min;
+    const int32_t to = sleep_step(cur, dir);
+    if (to == cur) return;
+    g.sleep_want = to;
+    g.sleep_at = lv_tick_get();
+    show_sleep(to);
+    post(UiLvglModule::Req::STANDBY_MIN, to);
 }
 
 void set_brightness(int32_t pct) {
@@ -171,7 +204,7 @@ lv_obj_t* build(lv_obj_t* parent, UiCtx& c) {
     r = row(card, 1, R_SB_BRIGHT, UI_SYM_GRAPHIC_EQ, tr(S::sys_standby_bl_short), SLIDER_W + 10, false);
     slider(r, g.sb_bright, sb_bright_cb);
 
-    // − and + a finger's 64 px (20.10.2026: 48), the minutes between them
+    // − and + a finger's 64 px, the minutes between them
     r = row(card, 2, R_SLEEP, UI_SYM_MOON, tr(S::sys_sleep), 210, false);   // the minutes are its value
     g.sleep_dec = m3w::icon_button(r, RW - 204, 0, 64, UI_SYM_REMOVE, t.t.icon_m);
     g.sleep_inc = m3w::icon_button(r, RW - 70, 0, 64, UI_SYM_ADD, t.t.icon_m);
@@ -208,7 +241,6 @@ void set_sub(RowId id, const char* txt) {
 
 void refresh(lv_obj_t*, UiCtx& c) {
     const auto& s = c.s;
-    char buf[96];
     if (s.backlight != g.backlight) {
         g.backlight = s.backlight;
         if (!g.bright_drag) { g.bright_posted = s.backlight; m3w::slider_set(g.bright, s.backlight); }
@@ -217,19 +249,7 @@ void refresh(lv_obj_t*, UiCtx& c) {
         g.standby_bl = s.standby_bl;
         if (!g.sb_drag) { g.sb_posted = s.standby_bl; m3w::slider_set(g.sb_bright, s.standby_bl); }
     }
-    if (s.standby_min != g.standby_min) {
-        g.standby_min = s.standby_min;
-        if (s.standby_min <= 0) {
-            snprintf(buf, sizeof(buf), "%s", tr(S::sys_never));
-        } else {
-            char n[12];
-            snprintf(n, sizeof(n), "%ld", (long)s.standby_min);
-            i18n::fmt(buf, sizeof(buf), tr(S::sys_minutes), {{"n", n}});
-        }
-        lv_label_set_text(g.sleep_val, buf);
-        m3w::button_enable(g.sleep_dec, s.standby_min > 0);
-        m3w::button_enable(g.sleep_inc, s.standby_min < SLEEP_STEPS[N_SLEEP - 1]);
-    }
+    if (!sleep_held() && s.standby_min != g.standby_min) show_sleep(s.standby_min);
     if (s.theme != g.theme) {
         g.theme = s.theme;
         // A new scheme rebuilds the whole UI; until then the swatch already says which it is.

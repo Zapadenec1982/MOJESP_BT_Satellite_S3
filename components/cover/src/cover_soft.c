@@ -32,7 +32,7 @@
 // Bound the DEFLATE blocks stb will walk in a PNG's IDAT. stb rebuilds both fixed Huffman
 // tables for every block (stbi__parse_zlib), so a crafted PNG of empty blocks spends CPU in
 // proportion to its byte length, not its size, and can keep this core-0 task busy past the
-// 5 s task watchdog (CV-1-R2, deep review 2026-10-12). cover.cpp refuses anything over
+// 5 s task watchdog. cover.cpp refuses anything over
 // MAX_SIDE (2048) a side before decoding, so a PNG here has at most ~2048 rows; an encoder
 // that flushes a block every row still fits several times over inside this cap.
 #define STBI_MAX_DEFLATE_BLOCKS 8192
@@ -57,9 +57,11 @@ int cover_soft_info(const unsigned char* jpg, int len, int* w, int* h) {
     return stbi_info_from_memory(jpg, len, w, h, &comp);
 }
 
-unsigned char* cover_soft_decode(const unsigned char* jpg, int len, int* w, int* h) {
-    int comp = 0;
-    return stbi_load_from_memory(jpg, len, w, h, &comp, 3);   // forced to RGB, 8 bits each
+/// `comp` channels of 8 bits each: 3 for RGB (a cover), 4 for RGBA (a logo, whose transparent
+/// pixels go over a ground of their own).
+unsigned char* cover_soft_decode(const unsigned char* jpg, int len, int* w, int* h, int comp) {
+    int in_comp = 0;
+    return stbi_load_from_memory(jpg, len, w, h, &in_comp, comp);
 }
 
 void cover_soft_free(unsigned char* px) { stbi_image_free(px); }

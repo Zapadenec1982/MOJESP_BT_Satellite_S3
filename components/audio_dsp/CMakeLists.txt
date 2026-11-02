@@ -12,6 +12,7 @@
 idf_component_register(
     SRCS "src/dsp_chain.cpp"
          "src/dsp_kernels.cpp"
+         "src/leveler.cpp"
          "src/eq_config.cpp"
          "src/eq_presets.cpp"
          "src/eq_store.cpp"
@@ -21,7 +22,7 @@ idf_component_register(
          "src/port_finder.cpp"
     INCLUDE_DIRS "include"
     REQUIRES espressif__esp-dsp
-    PRIV_REQUIRES jsmn safe_file
+    PRIV_REQUIRES jsmn jsmn_util safe_file
 )
 
 # Speed here, size everywhere else.
@@ -41,4 +42,4 @@ target_compile_options(${COMPONENT_LIB} PRIVATE -O2)
 # nothing else (GCC's default for GNU C is -ffp-contract=fast). Then the host test build,
 # which never contracts, and the P4 round every operation identically, and what the host
 # measures about noise is what the panel does (dsp_kernels.h).
-set_source_files_properties(src/dsp_kernels.cpp src/dsp_chain.cpp PROPERTIES COMPILE_OPTIONS "-ffp-contract=off")
+set_source_files_properties(src/dsp_kernels.cpp src/dsp_chain.cpp src/leveler.cpp PROPERTIES COMPILE_OPTIONS "-ffp-contract=off")

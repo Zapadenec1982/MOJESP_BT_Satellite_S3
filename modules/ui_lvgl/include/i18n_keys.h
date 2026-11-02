@@ -195,6 +195,10 @@ enum class S : uint16_t {
     sound_bass,              // sound.bass
     sound_eq_off,            // sound.eq_off
     sound_eq_on,             // sound.eq_on
+    sound_lev_from,          // sound.lev_from
+    sound_lev_sched,         // sound.lev_sched
+    sound_lev_to,            // sound.lev_to
+    sound_leveler,           // sound.leveler
     sound_styles,            // sound.styles
     sound_treble,            // sound.treble
     sound_undo,              // sound.undo
@@ -252,12 +256,12 @@ enum class S : uint16_t {
     svc_free,                // svc.free
     svc_gaps,                // svc.gaps
     svc_internal,            // svc.internal
+    svc_internal_min,        // svc.internal_min
     svc_largest,             // svc.largest
     svc_limiter,             // svc.limiter
     svc_link,                // svc.link
     svc_link_lost,           // svc.link_lost
     svc_link_up,             // svc.link_up
-    svc_min,                 // svc.min
     svc_none,                // svc.none
     svc_peer,                // svc.peer
     svc_peer_on,             // svc.peer_on

@@ -108,7 +108,7 @@ network sources: [docs/NETWORK.md](docs/NETWORK.md).
 | PCM5102A | Stereo DAC on I2S; the P4 is the clock master, no MCLK |
 | TPA3255 | Class-D amplifier |
 | ESP32 Bluetooth satellite | A2DP sink with its own firmware: [Bluetooth satellite](#bluetooth-satellite) |
-| Rotary encoder | Volume; its button plays and pauses, a hold opens the menu |
+| Rotary encoder | Volume; its button plays and pauses (mutes a station), a hold opens the menu |
 
 Pinout, signal path and the reasons behind them: [docs/CONCEPT.md](docs/CONCEPT.md) and
 [docs/AUDIO.md](docs/AUDIO.md); the panel's display, touch and encoder:
@@ -225,7 +225,7 @@ one.
 ### On a running panel
 
 - Logging ships at WARN. To open it up until the next reboot:
-  `curl -u <user>:<password> -X POST http://<panel>/api/loglevel -d '{"tag":"*","level":"info"}'`
+  `curl -u <user>:<password> -X POST -H 'Content-Type: application/json' http://<panel>/api/loglevel -d '{"tag":"*","level":"info"}'`
   (the HTTP API asks for Basic auth while it is enabled, which is the default).
 - The console is the P4's USB-Serial/JTAG, and DTR is its reset line: `idf.py monitor` restarts
   the panel each time it attaches. To watch a running panel, open the port with DTR and RTS

@@ -108,7 +108,8 @@ static esp_err_t check_partition_has_firmware(const esp_partition_t* partition)
  *
  * WHY, in one sentence: the C6 is the panel's only network interface, the P4 is the only
  * thing that can reflash it, and an activated bad image leaves neither — recovery is a
- * USB-TTL adapter on JP1 with the P4 held in download mode (docs/C6_UPDATE.md, section 5).
+ * USB-TTL adapter on JP1 with the P4 held in download mode (docs/C6_UPDATE.md, "Recovery:
+ * flashing the C6 directly over UART (JP1)").
  *
  * What was here before parsed the image header for a SIZE and trusted every byte after it.
  * Nothing checked that the partition held the image it was supposed to hold. A download
@@ -376,7 +377,7 @@ esp_err_t ota_partition_perform(const char* partition_label)
 
 		/* player-fork: the CP image's app description carries the git tag ("v3.0.7") while the
 		 * co-processor reports "3.0.7"; without stripping the prefix the updater re-flashed an
-		 * up-to-date CP on every boot (seen on the bench 2026-09-15). */
+		 * up-to-date CP on every boot (seen on the bench). */
 		const char *new_ver = new_app_version;
 		if (*new_ver == 'v' || *new_ver == 'V') {
 			new_ver++;

@@ -61,6 +61,15 @@ struct UiScreen {
 
 namespace {
 
+using modesp::gen::AIRPLAY_MODE_MAX;
+using modesp::gen::AIRPLAY_MODE_MIN;
+using modesp::gen::AUDIO_SOURCE_AIRPLAY;
+using modesp::gen::AUDIO_SOURCE_AUX;
+using modesp::gen::AUDIO_SOURCE_BT;
+using modesp::gen::AUDIO_SOURCE_FILE;
+using modesp::gen::AUDIO_SOURCE_RADIO;
+using modesp::gen::AUDIO_SOURCE_USB;
+
 UiScreen s_ui;
 
 // Draw-buffer size in pixels of the panel's native width. Partial buffers in PSRAM, copied to
@@ -95,8 +104,8 @@ void liveness_timer_cb(lv_timer_t*) { modesp::liveness::tick(s_lvgl_beat); }
 /// interrupt, which is not IRAM-safe here (CONFIG_DMA2D_ISR_IRAM_SAFE=n) and so never runs
 /// with the cache off, or from the drawing task itself. IDF also refuses a user context
 /// outside internal RAM, and the LVGL display object lives in PSRAM, so the display is
-/// handed over through this internal static instead (the first image, 04.10.2026, passed
-/// it as the context, failed registration and boot-looped on the task watchdog).
+/// handed over through this internal static instead (an image that passed it as the context
+/// failed registration and boot-looped on the task watchdog).
 lv_display_t* s_flush_disp = nullptr;
 
 IRAM_ATTR bool dpi_flush_done_cb(esp_lcd_panel_handle_t, esp_lcd_dpi_panel_event_data_t*, void*) {
@@ -219,9 +228,9 @@ bool UiLvglModule::start_lvgl() {
     // Core 0 at the main loop's own priority (1), time-sliced with it. On core 1 the UI drew
     // under the audio task (22), the satellite reader (23) and AirPlay's three, and a
     // scrolling list ran at 1.5-4 frames/s; on core 0 the same list ran 3.5-5.5x faster
-    // (/api/ui/scrollbench, 05.10.2026). Priority 3 there was faster still, but above the
-    // main loop it held the 100 Hz loop off for up to ~90 ms a frame; at 1 the longest gap
-    // was ~45 ms, what it already was with the UI on the other core.
+    // (/api/ui/scrollbench). Priority 3 there was faster still, but above the main loop it held
+    // the 100 Hz loop off for up to ~90 ms a frame; at 1 the longest gap was ~45 ms, what it
+    // already was with the UI on the other core.
     port_cfg.task_priority    = 1;
     port_cfg.task_stack       = 16 * 1024;
     port_cfg.task_affinity    = 0;
@@ -251,8 +260,7 @@ bool UiLvglModule::start_lvgl() {
     // Rotated, with the PPA at hand: the PPA turns each block straight into the frame buffer
     // while LVGL draws the next (ppa_flush.cpp). LVGL keeps drawing RGB888: XRGB8888, which the
     // PPA would pack to RGB888 on the way, was measured slower here — 80 against 76 ms a frame of
-    // a scrolling list (05.10.2026), the extra byte a pixel costing PSRAM more than LVGL's 32-bit
-    // paths save.
+    // a scrolling list, the extra byte a pixel costing PSRAM more than LVGL's 32-bit paths save.
     const bool direct = geo.rotation != 0 && geo.color_bits == 24 &&
                         ppa_flush_prepare(panel_->panel(), geo.h_res, geo.v_res);
     // esp_lvgl_port refuses DMA-capable draw buffers for anything but RGB565 ("not aligned
@@ -277,7 +285,7 @@ bool UiLvglModule::start_lvgl() {
     // is a completion nobody hears: LVGL then waits in while(disp->flushing) for ever, holding
     // its lock, and this init blocks behind it before the task watchdog is armed to panic.
     // Pinned to the other core the gap was microseconds; a task free to run on this one made
-    // it certain (05.10.2026, the boot hung in wait_for_flushing).
+    // it certain (the boot hung in wait_for_flushing).
     if (!lvgl_port_lock(0)) return false;
     s_ui.disp = lvgl_port_add_disp_dsi(&disp_cfg, &dsi_cfg);
     if (!s_ui.disp) {
@@ -394,11 +402,20 @@ void UiLvglModule::lvgl_refresh() {
     // including over widgets that consume their own press events.
     if (s_ui.indev) {
         const bool down = (lv_indev_get_state(s_ui.indev) == LV_INDEV_STATE_PRESSED);
-        lv_point_t p = {0, 0};
+        // Read on the release too: LVGL keeps a pointer's last point after it lifts
+        // (indev_read_core), so ui.touch_x/y say where the touch ended — what docs/PANEL.md's
+        // four-corner check reads — rather than 0,0.
+        lv_point_t p;
+        lv_indev_get_point(s_ui.indev, &p);
         if (down) {
-            lv_indev_get_point(s_ui.indev, &p);
             lv_obj_set_pos(s_ui.dot, p.x - 15, p.y - 15);
-            if (!s_ui.dot_on) { lv_obj_remove_flag(s_ui.dot, LV_OBJ_FLAG_HIDDEN); s_ui.dot_on = true; }
+            if (!s_ui.dot_on) {
+                // Above everything (docs/UI.md, "Overlays"): the menu, a sheet or a dialog raises
+                // itself as it opens, so the ring is raised again with every touch.
+                lv_obj_move_foreground(s_ui.dot);
+                lv_obj_remove_flag(s_ui.dot, LV_OBJ_FLAG_HIDDEN);
+                s_ui.dot_on = true;
+            }
         } else if (s_ui.dot_on) {
             lv_obj_add_flag(s_ui.dot, LV_OBJ_FLAG_HIDDEN);
             s_ui.dot_on = false;
@@ -484,6 +501,12 @@ void UiLvglModule::poll_inputs(uint32_t dt_ms) {
     if (encoder_ && encoder_->read(v)) pos = (int32_t)v;
     if (encoder_sw_ && encoder_sw_->read(v)) sw = (v > 0.5f);
 
+    // Asleep, the knob's gesture is a wake and nothing else (ui_shell_encoder): the detents that
+    // wake the panel are not handed on, and the press that wakes it gives neither a click nor a
+    // hold. Settled here, where the wake is: set_standby() below wakes the shell at once, so the
+    // screen lights on the press, and the shell's own guard would see an awake panel by the time
+    // the click comes with the release.
+    const bool asleep = standby_ && ui_;
     bool input = false;
     if (pos != last_encoder_pos_) {
         const int32_t delta = pos - last_encoder_pos_;
@@ -491,6 +514,7 @@ void UiLvglModule::poll_inputs(uint32_t dt_ms) {
         state_set("ui.encoder_pos", pos);
         changed = true;
         input = true;
+        if (!asleep) enc_ui_pos_ += delta;
         // With no screen there is no one to interpret the encoder, so keep the plain
         // behaviour: 2 % of volume per detent.
         if (!ui_ && state_get("audio.volume").has_value()) {
@@ -508,10 +532,12 @@ void UiLvglModule::poll_inputs(uint32_t dt_ms) {
         if (!sw_hold_fired_ && sw_held_ms_ >= 650) {
             sw_hold_fired_ = true;
             input = true;
-            portENTER_CRITICAL(&mux_);
-            snap_.enc_event = 2;
-            snap_.enc_event_seq++;
-            portEXIT_CRITICAL(&mux_);
+            if (!sw_wake_) {
+                portENTER_CRITICAL(&mux_);
+                snap_.enc_event = 2;
+                snap_.enc_event_seq++;
+                portEXIT_CRITICAL(&mux_);
+            }
         }
     }
     if (sw != last_encoder_sw_) {
@@ -519,8 +545,10 @@ void UiLvglModule::poll_inputs(uint32_t dt_ms) {
         state_set("ui.encoder_sw", sw);
         changed = true;
         input = true;
-        if (!sw) {                                  // released
-            if (!sw_hold_fired_) {
+        if (sw) {                                   // pressed
+            sw_wake_ = asleep;
+        } else {                                    // released
+            if (!sw_hold_fired_ && !sw_wake_) {
                 if (ui_) {
                     portENTER_CRITICAL(&mux_);
                     snap_.enc_event = 1;
@@ -532,11 +560,13 @@ void UiLvglModule::poll_inputs(uint32_t dt_ms) {
             }
             sw_held_ms_ = 0;
             sw_hold_fired_ = false;
+            sw_wake_ = false;
         }
     }
 
     // Auto-standby. Any encoder or touch activity restarts the timer; the touch side feeds
-    // it through publish_touch(), which is the only place that knows a finger arrived.
+    // it through publish_touch(), which is the only place that knows a finger arrived. The
+    // shell reads the same timer to go back to the Player after a minute alone (idle_home.h).
     if (input) { idle_ms_ = 0; if (standby_) set_standby(false); }
     else       { idle_ms_ += dt_ms; }
     const int32_t sleep_min = read_int("ui.standby_min", 5);
@@ -565,7 +595,7 @@ void UiLvglModule::poll_inputs(uint32_t dt_ms) {
 
     if (changed || clock_changed) {
         portENTER_CRITICAL(&mux_);
-        snap_.encoder_pos = pos;
+        snap_.encoder_pos = enc_ui_pos_;
         snap_.encoder_sw = sw;
         if (clock_changed) {
             strncpy(snap_.clock, clock_txt, sizeof(snap_.clock) - 1);
@@ -603,6 +633,7 @@ void UiLvglModule::mirror_state() {
     const int32_t sources = has_audio ? read_int("audio.sources", 0) : 0;
     const int32_t volume = has_audio ? read_int("audio.volume", 0) : -1;
     const bool mute = has_audio && read_bool("audio.mute", false);
+    const bool leveler = has_audio && read_bool("audio.leveler", false);
     const float level_l = has_audio ? read_float("audio.level_l", -120.0f) : -120.0f;
     const float level_r = has_audio ? read_float("audio.level_r", -120.0f) : -120.0f;
     const bool eq_on = has_audio && read_bool("audio.eq_enabled", false);
@@ -618,6 +649,7 @@ void UiLvglModule::mirror_state() {
     const int32_t cpu_pct = has_audio ? read_number("audio.cpu_pct", 0) : 0;
     const int32_t in_rate = has_audio ? read_number("audio.in_rate", 0) : 0;
     const int32_t tone_hz = has_audio ? read_int("audio.tone_hz", 0) : 0;
+    const bool port_meas = has_audio && read_bool("audio.port_meas", false);
     char audio_state[16] = "";
     if (has_audio) read_string("audio.state", audio_state, sizeof(audio_state));
 
@@ -635,7 +667,7 @@ void UiLvglModule::mirror_state() {
     read_string("player.state", play_state, sizeof(play_state));
     char radio_mode[12] = "";
     read_string("radio.mode", radio_mode, sizeof(radio_mode));
-    const bool network_push = source == 5 && strcmp(radio_mode, "push") == 0;
+    const bool network_push = source == AUDIO_SOURCE_RADIO && strcmp(radio_mode, "push") == 0;
 
     // The Player's picture, for the web: the tile screen_now.cpp draws, by the same rule. ui.cover
     // goes out over the WebSocket when it changes, and GET /api/cover sends that tile. The
@@ -662,7 +694,7 @@ void UiLvglModule::mirror_state() {
     read_string("bt.state", bt_state, sizeof(bt_state));
     const bool bt_connected =
         strcmp(bt_state, "connected") == 0 || strcmp(bt_state, "streaming") == 0;
-    if (source == 3) {
+    if (source == AUDIO_SOURCE_BT) {
         read_string("bt.title", play_title, sizeof(play_title));
         read_string("bt.artist", play_artist, sizeof(play_artist));
         read_string("bt.album", play_album, sizeof(play_album));
@@ -686,7 +718,7 @@ void UiLvglModule::mirror_state() {
     const bool ap_connected =
         ap_playing || strcmp(ap_state, "paused") == 0 || strcmp(ap_state, "connected") == 0;
     const bool ap_remote = read_bool("airplay.remote", false);
-    if (source == 6) {
+    if (source == AUDIO_SOURCE_AIRPLAY) {
         read_string("airplay.title", play_title, sizeof(play_title));
         read_string("airplay.artist", play_artist, sizeof(play_artist));
         read_string("airplay.album", play_album, sizeof(play_album));
@@ -699,7 +731,7 @@ void UiLvglModule::mirror_state() {
     read_string("usb_audio.state", usb_state, sizeof(usb_state));
     const bool usb_streaming = strcmp(usb_state, "playing") == 0;
     const bool usb_connected = usb_streaming || strcmp(usb_state, "ready") == 0;
-    if (source == 7) {
+    if (source == AUDIO_SOURCE_USB) {
         play_title[0] = play_artist[0] = play_album[0] = '\0';
         snprintf(play_state, sizeof(play_state), "%s", usb_streaming ? "playing" : "idle");
         const int32_t usb_rate = read_int("usb_audio.rate", 0);
@@ -731,9 +763,11 @@ void UiLvglModule::mirror_state() {
         snprintf(play_state, sizeof(play_state), "%.*s", (int)sizeof(play_state)-1,
                  !strcmp(transport,"PAUSED_PLAYBACK")?"paused":radio_state);
     }
-    const char* pos_key = source == 3 ? "bt.pos_s" : source == 6 ? "airplay.pos_s"
+    const char* pos_key = source == AUDIO_SOURCE_BT      ? "bt.pos_s"
+                        : source == AUDIO_SOURCE_AIRPLAY ? "airplay.pos_s"
                         : network_push ? "radio.pos_s" : "player.pos_s";
-    const char* dur_key = source == 3 ? "bt.dur_s" : source == 6 ? "airplay.dur_s"
+    const char* dur_key = source == AUDIO_SOURCE_BT      ? "bt.dur_s"
+                        : source == AUDIO_SOURCE_AIRPLAY ? "airplay.dur_s"
                         : network_push ? "radio.dur_s" : "player.dur_s";
     const int32_t play_pos   = read_int(pos_key, 0);
     const int32_t play_dur   = read_int(dur_key, 0);
@@ -761,7 +795,6 @@ void UiLvglModule::mirror_state() {
     // to be inside SharedState at that instant, which is exactly what a busy link or a
     // finger on the screen produces.
     const int32_t radio_station = read_int("radio.station", 0);
-    const int32_t radio_buffer  = read_int("radio.buffer", 0);
     const int32_t backlight     = read_int("ui.backlight", 80);
     const int32_t standby_bl    = read_int("ui.standby_bl", 25);
     const float   lim_gr_db     = has_audio ? read_float("audio.lim_gr", 0.0f) : 0.0f;
@@ -770,13 +803,15 @@ void UiLvglModule::mirror_state() {
 
     // What the standby face needs to know: is there music to show. A station has its own
     // state; every other source with a track (card, DLNA, Bluetooth, AirPlay) reports through
-    // play_state above. AUX has no state at all — it is an input, and while it is selected the
+    // play_state above, and so does USB, which has none: play_state says whether the computer
+    // sends sound. AUX has no state at all — it is an input, and while it is selected the
     // spectrum is the only thing there is to show of it. On at once, off after four seconds
     // of quiet: a track change or a station rebuffering is a gap, not the end of the music.
-    const bool radio_src = source == 5 && !network_push;
-    const bool playing = source == 2
-        || (radio_src ? strcmp(radio_state, "playing") == 0
-                      : source >= 3 && strcmp(play_state, "playing") == 0);
+    const PlayerFace face = ui_face(source, network_push);
+    const bool reports = face == PlayerFace::TRACK || source == AUDIO_SOURCE_USB;
+    const bool playing = source == AUDIO_SOURCE_AUX
+        || (face == PlayerFace::RADIO ? strcmp(radio_state, "playing") == 0
+                                      : reports && strcmp(play_state, "playing") == 0);
     if (playing) { sb_music_ = true; sb_quiet_ms_ = 0; }
     else if (sb_music_ && (sb_quiet_ms_ += 50) >= 4000) sb_music_ = false;
 
@@ -791,6 +826,7 @@ void UiLvglModule::mirror_state() {
     snap_.sources = sources;
     snap_.volume = volume;
     snap_.mute = mute;
+    snap_.leveler = leveler;
     snap_.level_l = level_l;
     snap_.level_r = level_r;
     snap_.eq_enabled = eq_on;
@@ -805,13 +841,13 @@ void UiLvglModule::mirror_state() {
     snap_.cpu_pct = cpu_pct;
     snap_.in_rate = in_rate;
     snap_.tone_hz = tone_hz;
+    snap_.port_meas = port_meas;
     strncpy(snap_.play_title, play_title, sizeof(snap_.play_title) - 1);
     strncpy(snap_.radio_name, radio_name, sizeof(snap_.radio_name) - 1);
     strncpy(snap_.radio_now, radio_now, sizeof(snap_.radio_now) - 1);
     strncpy(snap_.radio_fmt, radio_fmt, sizeof(snap_.radio_fmt) - 1);
     strncpy(snap_.radio_state, radio_state, sizeof(snap_.radio_state) - 1);
     snap_.radio_station = radio_station;
-    snap_.radio_buffer  = radio_buffer;
     strncpy(snap_.play_artist, play_artist, sizeof(snap_.play_artist) - 1);
     strncpy(snap_.play_album, play_album, sizeof(snap_.play_album) - 1);
     strncpy(snap_.play_fmt, play_fmt, sizeof(snap_.play_fmt) - 1);
@@ -833,6 +869,7 @@ void UiLvglModule::mirror_state() {
     snap_.sb_music = sb_music_;
     snap_.lim_gr_db = lim_gr_db;
     snap_.standby = standby_;
+    snap_.idle_ms = idle_ms_;       // the return to the Player reads the standby's own timer
     portEXIT_CRITICAL(&mux_);
 }
 
@@ -847,7 +884,7 @@ void UiLvglModule::mirror_state() {
 ///
 /// Every read happens BEFORE portENTER_CRITICAL, for the reason spelled out at the end of
 /// mirror_state(): read_int/read_float take a FreeRTOS mutex, and taking one with interrupts
-/// disabled is a crash rather than a delay (fixed in 44d4cbc; do not undo it here).
+/// disabled is a crash rather than a delay; keep every read outside it.
 void UiLvglModule::mirror_diag() {
     // read_number and not read_int, for every number below.
     //
@@ -856,13 +893,13 @@ void UiLvglModule::mirror_diag() {
     // not the generator, not a host test, not the compiler. read_int is
     // etl::get_if<int32_t>, which on a variant holding a float hands back the default
     // silently and for ever. That is exactly how the CPU figure came to read zero on every
-    // build that ever shipped (plan item 12.4), and the keys that mismatch there at least had
+    // build that ever shipped, and the keys that mismatch there at least had
     // a manifest saying `float`. These have nothing. read_number takes either.
     const int32_t loop_max_ms   = read_number("system.main_loop_max_ms", 0);
     const int32_t stack_min     = read_number("system.main_stack_min", 0);
     const int32_t heap_free     = read_number("system.heap_free", 0);
-    const int32_t heap_min      = read_number("system.heap_min", 0);
     const int32_t heap_internal = read_number("system.heap_internal", 0);
+    const int32_t heap_internal_min = read_number("system.heap_internal_min", 0);
     const int32_t heap_dma      = read_number("system.heap_dma", 0);
     const int32_t heap_largest  = read_number("system.heap_largest", 0);
     const int32_t heap_psram    = read_number("system.heap_psram", 0);
@@ -892,12 +929,17 @@ void UiLvglModule::mirror_diag() {
     read_string("bt.peer", bt_peer, sizeof(bt_peer));
     read_string("bt.codec", bt_codec, sizeof(bt_codec));
     read_string("airplay.name", ap_name, sizeof(ap_name));
+    char usb_name[33] = "";
+    read_string("usb_audio.name", usb_name, sizeof(usb_name));
     const bool    ap_enabled  = read_bool("airplay.enabled", false);
     const int32_t ap_mode     = read_int("airplay.mode", 0);
     const bool    ap_switching = read_bool("airplay.switching", false);
     char ap_mode_error[64] = "";
     read_string("airplay.mode_error", ap_mode_error, sizeof(ap_mode_error));
     const int32_t standby_min = read_int("ui.standby_min", 5);
+    const bool    lev_sched   = read_bool("audio.lev_sched", false);
+    const int32_t lev_from    = read_int("audio.lev_from", 1320);
+    const int32_t lev_to      = read_int("audio.lev_to", 420);
     // set once at boot (out_caps.h); a build without the audio module plays nothing, and the
     // crossover page then says stereo, which is what the board is
     const int32_t out_caps    = read_number("audio.out_caps", audio_core::OUT_STEREO);
@@ -918,8 +960,8 @@ void UiLvglModule::mirror_diag() {
     snap_.loop_max_ms   = loop_max_ms;
     snap_.stack_min     = stack_min;
     snap_.heap_free     = heap_free;
-    snap_.heap_min      = heap_min;
     snap_.heap_internal = heap_internal;
+    snap_.heap_internal_min = heap_internal_min;
     snap_.heap_dma      = heap_dma;
     snap_.heap_largest  = heap_largest;
     snap_.heap_psram    = heap_psram;
@@ -936,11 +978,15 @@ void UiLvglModule::mirror_diag() {
     strncpy(snap_.bt_peer, bt_peer, sizeof(snap_.bt_peer) - 1);
     strncpy(snap_.bt_codec, bt_codec, sizeof(snap_.bt_codec) - 1);
     strncpy(snap_.ap_name, ap_name, sizeof(snap_.ap_name) - 1);
+    strncpy(snap_.usb_name, usb_name, sizeof(snap_.usb_name) - 1);
     snap_.ap_enabled  = ap_enabled;
     snap_.ap_mode     = ap_mode;
     snap_.ap_switching = ap_switching;
     snap_.ap_mode_error = ap_mode_error[0] != '\0';
     snap_.standby_min = standby_min;
+    snap_.lev_sched   = lev_sched;
+    snap_.lev_from    = lev_from;
+    snap_.lev_to      = lev_to;
     snap_.out_caps    = out_caps;
     snap_.dlna_built   = dlna_built;
     snap_.dlna_enabled = dlna_enabled;
@@ -1029,6 +1075,23 @@ void UiLvglModule::apply_requests() {
                 state_set("audio.mute", it.value < 0 ? !cur : (it.value != 0));
             }
             break;
+        case Req::LEVELER:
+            if (state_get("audio.leveler").has_value()) {
+                const bool cur = read_bool("audio.leveler", false);
+                state_set("audio.leveler", it.value < 0 ? !cur : (it.value != 0));
+            }
+            break;
+        case Req::LEV_SCHED:
+            if (state_get("audio.lev_sched").has_value()) state_set("audio.lev_sched", it.value != 0);
+            break;
+        case Req::LEV_FROM:
+        case Req::LEV_TO:
+            // the manifest's range and step
+            if (it.value >= 0 && it.value <= 1435 && it.value % 5 == 0) {
+                const char* key = it.kind == Req::LEV_FROM ? "audio.lev_from" : "audio.lev_to";
+                if (state_get(key).has_value()) state_set(key, it.value);
+            }
+            break;
         case Req::EQ_ENABLED:
             if (state_get("audio.eq_enabled").has_value()) {
                 state_set("audio.eq_enabled", it.value != 0);
@@ -1042,10 +1105,13 @@ void UiLvglModule::apply_requests() {
             if (it.value >= -6 && it.value <= 6 && state_get("audio.treble_db").has_value())
                 state_set("audio.treble_db", it.value);
             break;
-        case Req::LOUDNESS:
-            if (it.value >= 0 && it.value <= 100 && state_get("audio.loudness").has_value())
-                state_set("audio.loudness", it.value);
+        case Req::LOUDNESS: {
+            // −1: on again, at the strength it had when it went off (the audio module keeps it)
+            const int32_t v = it.value < 0 ? read_int("audio.loud_back", 70) : it.value;
+            if (v >= 0 && v <= 100 && state_get("audio.loudness").has_value())
+                state_set("audio.loudness", v);
             break;
+        }
         case Req::BALANCE:
             // the manifest's range and step: half a dB, as the web's slider moves it
             if (it.value >= -60 && it.value <= 60 && it.value % 5 == 0 &&
@@ -1072,7 +1138,7 @@ void UiLvglModule::apply_requests() {
             if (state_get("airplay.enabled").has_value()) state_set("airplay.enabled", it.value != 0);
             break;
         case Req::AIRPLAY_MODE:
-            if ((it.value == 0 || it.value == 1) && state_get("airplay.mode").has_value())
+            if (it.value >= AIRPLAY_MODE_MIN && it.value <= AIRPLAY_MODE_MAX && state_get("airplay.mode").has_value())
                 state_set("airplay.mode", it.value);
             break;
         case Req::DLNA_ON:
@@ -1101,26 +1167,9 @@ void UiLvglModule::apply_requests() {
             else          shell_sb_dirty_ = true;
             break;
         case Req::TRANSPORT:
-            if (read_int("audio.source",0)==5) {
-                int cmd=it.value==2?3:it.value==3?2:it.value==4?4:it.value==5?5:0;
-                if(it.value==6) { char state[24]{}; read_string("dlna.state",state,sizeof(state)); cmd=!strcmp(state,"PLAYING")?3:1; }
-                if(cmd) post_command_to("dlna", "dlna.cmd", (int32_t)cmd);
-            } else if (read_int("audio.source",0)==3) {
-                // Bluetooth takes the codes unchanged: bt.cmd is spelled in player.cmd's
-                // vocabulary for exactly this reason, and the toggle is resolved by the bt
-                // module, which is the side that knows what the phone is doing.
-                if (it.value >= 1 && it.value <= 6)
-                    post_command_to("bt", "bt.cmd", (int32_t)it.value);
-            } else if (read_int("audio.source",0)==6) {
-                // AirPlay takes the codes unchanged as well, and sends what it can over DACP
-                // to a sender that gave it a remote. One that gave none — a phone in
-                // AirPlay 2 mode, whose remote commands ride MRP (UPSTREAM.md) — gets nothing,
-                // and the press must not fall through either: the card player would take
-                // it, start the card and take the output away from the phone.
-                if (it.value >= 1 && it.value <= 6)
-                    post_command_to("airplay", "airplay.cmd", (int32_t)it.value);
-            } else if (it.value >= 2 && it.value <= 6)
-                post_command_to("player", "player.cmd", (int32_t)it.value);
+            // The audio module takes it to whatever plays, in that module's codes, and drops what
+            // the source does not take (transport_route.h).
+            post_command_to("audio", "audio.transport", it.value);
             break;
         case Req::REPEAT: {
             int32_t r = (it.value < 0) ? (read_int("player.repeat", 0) + 1) % 3 : it.value;
@@ -1164,8 +1213,8 @@ void UiLvglModule::apply_requests() {
             // file decoder jump to a position it was told about by a phone.
             const int32_t src = read_int("audio.source", 0);
             if (it.value < 0) break;
-            if (src == 5)      state_set("radio.seek_s", it.value);
-            else if (src == 4) state_set("player.seek_s", it.value);
+            if (src == AUDIO_SOURCE_RADIO)     state_set("radio.seek_s", it.value);
+            else if (src == AUDIO_SOURCE_FILE) state_set("player.seek_s", it.value);
             break;
         }
         case Req::PLAY_QUEUE: {
@@ -1245,9 +1294,9 @@ void UiLvglModule::rebuild_look() {
 /// Hearing it and keeping it are no longer this module's: the audio module, the owner, hands
 /// the bands to the audio core as soon as the store moves and writes eq.json at a moment that
 /// is not in the way — not while this page is in front (ui.screen says so), because every
-/// LittleFS write stops both cores' caches and the speakers click (customer, 04.10.2026). The
-/// web edits the same document, so the page takes the store's version back when it moved
-/// (screen_eq.cpp, pull_from_store).
+/// LittleFS write stops both cores' caches and the speakers click. The web edits the same
+/// document, so the page takes the store's version back when it moved (screen_eq.cpp,
+/// pull_from_store).
 ///
 /// The document is copied out under the LVGL lock into static room: it is over a kilobyte,
 /// and this runs on the main task.
@@ -1264,7 +1313,7 @@ void UiLvglModule::persist_eq() {
 }
 
 /// Sleep dims the panel rather than switching it off: the backlight driver is PWM and a
-/// zero duty is indistinguishable from a dead panel when the customer looks at it. The
+/// zero duty is indistinguishable from a dead panel to anyone looking at it. The
 /// user's brightness setting is left alone — apply_backlight() picks the level either way.
 void UiLvglModule::set_standby(bool on) {
     if (standby_ == on) return;

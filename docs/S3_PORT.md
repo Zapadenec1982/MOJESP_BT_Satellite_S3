@@ -53,7 +53,8 @@ Pins as on the DevKitC-1 headers; every one of them can move — they are data i
   outputs then, driven from I2S0) and the stream plays bit-exact; an older satellite clocks it
   itself and gets a rebuffer every few minutes, as on the P4 (`MODESP_AUDIO_BT_DIRECT_CONTINUOUS`,
   [AUDIO.md](AUDIO.md)). GPIO17 feeds both I2S0 RX and I2S1 RX: one wire, two readers.
-- **microSD:** 4-bit at 20 MHz. Fit 10 kΩ pull-ups on CMD and D0–D3 — the internal ones are too
+- **microSD:** slot 1 of the SDMMC controller, which reaches any GPIO through the matrix;
+  4-bit at 20 MHz. Fit 10 kΩ pull-ups on CMD and D0–D3 — the internal ones are too
   weak at that speed (the driver says so in the log when a card mounts only at 400 kHz). FAT32.
 - **Not used, on purpose:** 0, 3, 45, 46 (strapping), 26–32 (flash), 33–37 (octal PSRAM),
   38 and 48 (the DevKit's RGB LED, depending on its revision).
@@ -78,8 +79,9 @@ idf.py -B build_s3 -D SDKCONFIG=build_s3/sdkconfig -p /dev/ttyACM0 flash monitor
   (`generated/project_info.h` is a configure input), so **alternating** P4 and S3 builds is safe.
   Two builds running **at the same time** are not: use a second worktree for that.
 - The first start has no Wi-Fi credentials: the player opens an access point `ModESP-XXXX`
-  (open, the last two bytes of the MAC); join it, open `http://192.168.4.1` and set the network
-  on the Wi-Fi page (System → Wi-Fi), as on the P4.
+  (the last two bytes of the MAC; open until an access-point password of 8–63 characters is
+  saved, WPA2 from then on — [NETWORK.md](NETWORK.md)); join it, open `http://192.168.4.1` and set
+  the network on the Wi-Fi page (System → Wi-Fi), as on the P4.
 
 ## What runs differently, and why
 
@@ -184,14 +186,14 @@ The player calls itself **S3 Player** — on Bluetooth, AirPlay, DLNA and as the
 until it is renamed (`project.json`, `boards.s3_player.system.device_name`; generated into
 `generated/project_info.h`).
 
-## Checked on the board (25.10.2026)
+## Checked on the board
 
 - Boots, all modules start, main loop at 100 Hz; Wi-Fi radio up (access point visible).
 - USB: enumerates as a UAC2 device at full speed (Linux: 44.1/48 kHz, S16_LE and S32_LE/24 bit);
   48 kHz/16-bit, 44.1 kHz/16-bit and 48 kHz/24-bit played with the source switching to USB by
   itself, the output retuning between rates (clock stopped 130–230 µs), every frame arriving
   (48000/48000, 44100/44100) and no late audio blocks.
-- On the home network (26.10.2026; Wi-Fi station, RSSI −46 dBm, 7 h up without a restart):
+- On the home network (Wi-Fi station, RSSI −46 dBm, 7 h up without a restart):
   - DLNA, `tools/dlna_acceptance.py --renderer-only --rate-switches` against the renderer: SOAP
     faults, SetNext/Next/Previous, automatic advancement, end of track, metadata, Pause/Resume/
     Stop, GENA events, 44.1 ↔ 48 kHz switches both ways — all pass. Its "ranged GET after a Seek"

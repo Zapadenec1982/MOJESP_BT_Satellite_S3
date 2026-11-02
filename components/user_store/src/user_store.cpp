@@ -146,7 +146,7 @@ void UserStore::begin() {
     // Left on the default deliberately - LITTLEFS_MALLOC_STRATEGY_SPIRAM would move it off
     // internal RAM, but it would put buffers used during flash operations in PSRAM, and
     // internal RAM is the thing this board is short of for reasons that are cheaper to fix
-    // elsewhere (stage 7). Worth measuring on the bench next to the stage 7 numbers.
+    // elsewhere (docs/CONCEPT.md, "Board constraints"). Worth measuring on the bench.
 
     const esp_err_t err = esp_vfs_littlefs_register(&conf);
     if (err != ESP_OK) {
@@ -157,8 +157,8 @@ void UserStore::begin() {
             // only warning anyone gets.
             ESP_LOGW(TAG, "no 'userdata' partition — this panel still has the old table");
             ESP_LOGW(TAG, "user files stay in %s and a full flash will erase them; "
-                          "a full flash (table included) is what fixes it - see CLAUDE.md, "
-                          "'Moving an existing panel to this layout'", IMAGE_DIR);
+                          "a full flash (table included) is what fixes it - see "
+                          "tools/user_data.py, 'THE ONE-TIME MOVE'", IMAGE_DIR);
         } else {
             ESP_LOGE(TAG, "userdata mount failed: %s — falling back to %s",
                      esp_err_to_name(err), IMAGE_DIR);

@@ -102,8 +102,8 @@ what was left of it. Four settings make it fit (all in `boards/s3_player/sdkconf
 - **A 40 ms I2S ring** (4 × 10 ms) instead of the P4's 80 ms: the margin was for a flash erase
   holding the cores, which does not happen here (`drivers/i2s_std`, `TX_DMA_DESCS`).
 
-Measured on the board: 71 KB of internal heap free after start (22 KB before the last two steps),
-4.6 MB of PSRAM free.
+Measured on the board: 82 KB of internal heap free after start (22 KB before the last two steps),
+4.75 MB of PSRAM free; the lowest the internal heap goes is ~40 KB, during start-up.
 
 ### Audio clock
 
@@ -198,14 +198,17 @@ until it is renamed (`project.json`, `boards.s3_player.system.device_name`; gene
     faults, SetNext/Next/Previous, automatic advancement, end of track, metadata, Pause/Resume/
     Stop, GENA events, 44.1 ↔ 48 kHz switches both ways — all pass. Its "ranged GET after a Seek"
     check does not: the firmware refuses to seek a WAV over HTTP on purpose (radio_module.cpp,
-    seek_stream), and the fixtures are WAV.
+    seek_stream), and the fixtures are WAV. The rate-switch fixtures are 48 kHz WAV, 192 KB/s:
+    a board whose Wi-Fi carries less (40–150 KB/s measured on a second board, with the firmware
+    before and after the same) underruns on them, and the test times out.
   - AirPlay 1 (RAOP), `tools/airplay_send.py` with a quiet tone and a JPEG cover: RECORD,
     metadata, progress and artwork accepted, the source switches itself to AirPlay, no underruns,
     no resend requests, ui.cover and its colour published; three sessions in a row return the
     memory they took. The AirPlay 2 half (pairing, PTP, buffered AAC) needs a real Apple sender.
   - Internet radio over HTTPS, pushed through DLNA: Radio France FIP as MP3 128 kbit/s and as AAC
     192 kbit/s — TLS, decoding and buffering hold (buffer 50–60 %, no underruns), the DSP at
-    11.5 % of a core, 43 KB of internal RAM free while TLS runs.
+    11.5–19 % of a core depending on how many EQ bands are on (19 % with ten), 57 KB of internal
+    RAM free while TLS runs.
 - Not connected at the time, so not checked: the DAC and amplifier, the satellite, the microSD
   card, the encoder; MQTT was not exercised.
 

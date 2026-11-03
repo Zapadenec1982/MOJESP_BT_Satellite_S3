@@ -55,10 +55,11 @@ to it. Every pin can move — they are data in `boards/s3_player/board.json`, no
   then, driven from I2S0) and the stream plays bit-exact; an older satellite clocks it itself and
   gets a rebuffer every few minutes, as on the P4 (`MODESP_AUDIO_BT_DIRECT_CONTINUOUS`,
   [AUDIO.md](AUDIO.md)). GPIO10 feeds both I2S0 RX and I2S1 RX: one wire, two readers.
-  BCLK reaches the module's GPIO25, as the board was built, while modesp-bt-satellite takes BCLK on
-  its GPIO13 (`main/board.h`): Bluetooth sound has not been tried yet, and one of the two has to
-  move for it. To flash the satellite, the S3 runs a UART bridge in the player's place for a while:
-  [`tools/sat_bridge`](../tools/sat_bridge/README.md).
+  BCLK reaches the module's GPIO25, as the board was built, where modesp-bt-satellite's DevKitC
+  build reads it on GPIO13, so the satellite is built with BCLK on 25 (`SAT_I2S_BCLK_GPIO`, the
+  overlay `sdkconfig.bclk25`). Measured with the satellite as the master: its 2.82 MHz on GPIO25
+  and 44.1 kHz on GPIO26 arrive on the S3's GPIO8 and GPIO9. To flash the satellite, the S3 runs a
+  UART bridge in the player's place for a while: [`tools/sat_bridge`](../tools/sat_bridge/README.md).
 - **No microSD slot and no encoder** on this board. The firmware supports both (`drivers/sdmmc_card`,
   the optional `encoder_main` and `encoder_sw` roles of `ui_headless`); a board that has them
   declares them in its `board.json` and binds them in `bindings.json`.
@@ -206,7 +207,9 @@ until it is renamed (`project.json`, `boards.s3_player.system.device_name`; gene
     check does not: the firmware refuses to seek a WAV over HTTP on purpose (radio_module.cpp,
     seek_stream), and the fixtures are WAV. The rate-switch fixtures are 48 kHz WAV, 192 KB/s:
     a board whose Wi-Fi carries less (40–150 KB/s measured on a second board, with the firmware
-    before and after the same) underruns on them, and the test times out.
+    before and after the same) underruns on them, and the test times out. On that board the link
+    stays associated through it (no beacon timeout) while data and pings are lost for seconds;
+    20 MHz instead of 40 made it worse, 10 dBm of transmit power instead of 20 no better.
   - AirPlay 1 (RAOP), `tools/airplay_send.py` with a quiet tone and a JPEG cover: RECORD,
     metadata, progress and artwork accepted, the source switches itself to AirPlay, no underruns,
     no resend requests, ui.cover and its colour published; three sessions in a row return the
@@ -217,8 +220,10 @@ until it is renamed (`project.json`, `boards.s3_player.system.device_name`; gene
     RAM free while TLS runs.
 - The satellite soldered to the board, with the bare-module build: the link comes up at protocol
   1.10 with the S3 clocking the I2S line, SBC, AAC, aptX, aptX HD and LHDC V5 offered, the
-  satellite discoverable; 40 frames without a CRC error, a 9 ms round trip.
-- Not checked yet: Bluetooth sound from a phone, the DAC's analogue output, MQTT.
+  satellite discoverable; 40 frames without a CRC error, a 9 ms round trip. A phone (Pixel 6 Pro)
+  paired and streamed LHDC V5 at 44.1 kHz through it — codec, metadata and play state reached the
+  S3, the samples did not while the satellite read BCLK on GPIO13 (zeros at the S3's input).
+- Not checked yet: Bluetooth sound with the satellite on BCLK 25, the DAC's analogue output, MQTT.
 
 The first AirPlay session found one more S3 limit: upstream creates its receiver with a 12 KB
 internal-RAM stack, and with Wi-Fi up the S3 had no 12 KB in one piece — RECORD answered 500. On
